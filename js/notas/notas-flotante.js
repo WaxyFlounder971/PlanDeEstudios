@@ -397,7 +397,11 @@ async function abrirPiP(id) {
 /* ===================== PiP estático (Android y otros sin Document PiP) =====================
    La nota se dibuja en un canvas, se emite como video silencioso y se envía al PiP de video del navegador.
    Es solo para ver: la ventana no es interactiva y se vuelve a dibujar sola cuando la nota cambia. */
-const VP_ANCHO = 700, VP_TITULO = 52, VP_MAX_ALTO = 1600, VP_MIN_ALTO = 220;
+// VP_ANCHO es el ancho en píxeles del video. Android obliga a que la ventana PiP tenga una proporción de 2.39:1 como máximo; con un video más
+// ancho (700x220 = 3.2:1) el sistema lo aplasta y el texto sale "condensado". Por eso VP_MIN_ALTO = 700/2.3 ≈ 305.
+// VP_ANCHO_TEXTO: las notas de solo texto se maquetan más angostas (como una tarjeta) y se escalan, para que se lean grandes como en la app.
+const VP_ANCHO = 700, VP_ANCHO_TEXTO = 300, VP_TITULO = 52, VP_MAX_ALTO = 1600, VP_MIN_ALTO = 305;
+const familiaApp = () => getComputedStyle(document.body).fontFamily || 'system-ui,-apple-system,"Segoe UI",sans-serif';
 let sesionVideoPiP = null;
 
 const puedeVideoPiP = () => !!(document.pictureInPictureEnabled && typeof HTMLVideoElement.prototype.requestPictureInPicture === "function" && typeof HTMLCanvasElement.prototype.captureStream === "function");
@@ -405,10 +409,10 @@ const puedeVideoPiP = () => !!(document.pictureInPictureEnabled && typeof HTMLVi
 const esperarImagen = (img) => (img.decode ? img.decode().catch(() => {}) : Promise.resolve());
 
 // Maquetea la nota en un contenedor oculto de 700 px (el mismo ancho base de la tinta) y lee posiciones reales.
-async function medirNotaVideo(nota, colorTexto) {
+async function medirNotaVideo(nota, colorTexto, ancho = VP_ANCHO) {
   const cont = document.createElement("div");
-  cont.className = "notas-cuerpo";
-  cont.style.cssText = `position:fixed;left:-10000px;top:0;width:${VP_ANCHO}px;box-sizing:border-box;padding:12px;margin:0;border:0;min-height:0;height:auto;background:none;font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif;color:${colorTexto};overflow-wrap:anywhere;visibility:hidden;pointer-events:none`;
+  cont.className = ancho === VP_ANCHO ? "notas-cuerpo" : "notas-cuerpo nt-pip-video-medida"; // solo texto: sangría compacta igual que las tarjetas
+  cont.style.cssText = `position:fixed;left:-10000px;top:0;width:${ancho}px;box-sizing:border-box;padding:12px;margin:0;border:0;min-height:0;height:auto;background:none;font:16px/1.45 ${familiaApp().replace(/"/g, "'")};color:${colorTexto};overflow-wrap:anywhere;visibility:hidden;pointer-events:none`;
   document.body.append(cont);
   try {
     const html = nota.contenido || "";
@@ -468,23 +472,25 @@ async function medirNotaVideo(nota, colorTexto) {
       ops.imagenes.push({ img, cx: (r.l + r.r) / 2, cy: (r.t + r.b) / 2, w, h, rot: Number(img.dataset.rot) || 0, fh: img.dataset.flipH === "1", fv: img.dataset.flipV === "1", z: img.dataset.z !== "" && img.dataset.z != null && Number.isFinite(z) ? z : 10 });
       maxY = Math.max(maxY, r.b);
     });
-    for (const t of nota.tinta || []) for (const q of t.p || []) maxY = Math.max(maxY, q[1] * VP_ANCHO + Math.max(2, (Number(t.w) || 0.004) * VP_ANCHO));
+    for (const t of nota.tinta || []) for (const q of t.p || []) maxY = Math.max(maxY, q[1] * ancho + Math.max(2, (Number(t.w) || 0.004) * ancho));
     return { ops, maxY };
   } finally { cont.remove(); }
 }
 
-function pintarNotaVideo(canvas, nota, med, color, colorTexto) {
-  const tituloAlto = nota.titulo ? VP_TITULO : 0;
-  const alto = Math.min(VP_MAX_ALTO, Math.max(VP_MIN_ALTO, Math.ceil(med.maxY + 16) + tituloAlto));
+function pintarNotaVideo(canvas, nota, med, color, colorTexto, ancho = VP_ANCHO) {
+  const esc = VP_ANCHO / ancho, compacto = esc !== 1, familia = familiaApp();
+  const tituloAlto = nota.titulo ? (compacto ? 34 : VP_TITULO) : 0;
+  const alto = Math.min(VP_MAX_ALTO, Math.max(VP_MIN_ALTO, Math.ceil((med.maxY + 16 + tituloAlto) * esc)));
   if (canvas.width !== VP_ANCHO) canvas.width = VP_ANCHO;
   if (canvas.height !== alto) canvas.height = alto;
   const ctx = canvas.getContext("2d");
   ctx.clearRect(0, 0, VP_ANCHO, alto);
   ctx.fillStyle = color; ctx.fillRect(0, 0, VP_ANCHO, alto);
+  ctx.save(); ctx.scale(esc, esc); // todo lo que sigue se dibuja en unidades de maquetación y se escala al video
   if (nota.titulo) {
-    ctx.fillStyle = colorTexto; ctx.textBaseline = "alphabetic"; ctx.font = '700 26px system-ui,-apple-system,"Segoe UI",sans-serif';
-    let t = String(nota.titulo); while (t.length > 1 && ctx.measureText(t).width > VP_ANCHO - 36) t = t.slice(0, -2) + "…";
-    ctx.fillText(t, 18, 36);
+    ctx.fillStyle = colorTexto; ctx.textBaseline = "alphabetic"; ctx.font = `700 ${compacto ? 17 : 26}px ${familia}`;
+    let t = String(nota.titulo); while (t.length > 1 && ctx.measureText(t).width > ancho - (compacto ? 24 : 36)) t = t.slice(0, -2) + "…";
+    ctx.fillText(t, compacto ? 12 : 18, compacto ? 23 : 36);
   }
   ctx.save(); ctx.translate(0, tituloAlto);
   ctx.textBaseline = "alphabetic";
@@ -498,7 +504,7 @@ function pintarNotaVideo(canvas, nota, med, color, colorTexto) {
     if (f.k === "check") {
       const cx = (f.l + f.r) / 2, cy = (f.t + f.b) / 2, rad = Math.max(3, Math.min(f.r - f.l, f.b - f.t) / 2 - 1);
       ctx.beginPath(); ctx.arc(cx, cy, rad, 0, Math.PI * 2);
-      if (f.marcado) { ctx.fillStyle = f.color || "#b7a5f4"; ctx.fill(); ctx.strokeStyle = "#1b1530"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); ctx.moveTo(cx - rad * 0.42, cy + rad * 0.02); ctx.lineTo(cx - rad * 0.1, cy + rad * 0.34); ctx.lineTo(cx + rad * 0.45, cy - rad * 0.3); ctx.stroke(); }
+      if (f.marcado) { if (f.color) ctx.fillStyle = f.color; else { const g = ctx.createLinearGradient(cx - rad, cy - rad, cx + rad, cy + rad); g.addColorStop(0, "#f5a9d3"); g.addColorStop(1, "#b7a5f4"); ctx.fillStyle = g; } ctx.fill(); ctx.strokeStyle = "#1b1530"; ctx.lineWidth = 2; ctx.lineCap = "round"; ctx.lineJoin = "round"; ctx.beginPath(); ctx.moveTo(cx - rad * 0.42, cy + rad * 0.02); ctx.lineTo(cx - rad * 0.1, cy + rad * 0.34); ctx.lineTo(cx + rad * 0.45, cy - rad * 0.3); ctx.stroke(); }
       else { ctx.strokeStyle = f.color || f.texto; ctx.globalAlpha = 0.85; ctx.lineWidth = 2; ctx.stroke(); ctx.globalAlpha = 1; }
     } else if (f.k === "punto") { ctx.fillStyle = f.color; ctx.beginPath(); ctx.arc(f.x, f.y, 3.2, 0, Math.PI * 2); ctx.fill(); }
     else if (f.k === "num") { ctx.font = f.fuente; ctx.fillStyle = f.color; ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(f.s, f.x, f.y); ctx.textAlign = "left"; ctx.textBaseline = "alphabetic"; }
@@ -512,9 +518,9 @@ function pintarNotaVideo(canvas, nota, med, color, colorTexto) {
     ctx.restore();
   };
   imagenes.filter((i) => i.z < nivelTinta).forEach(dibujarImagen);
-  if (nota.tinta?.length) dibujarTrazos(ctx, nota.tinta, VP_ANCHO, 0, 1);
+  if (nota.tinta?.length) dibujarTrazos(ctx, nota.tinta, ancho, 0, 1);
   imagenes.filter((i) => i.z >= nivelTinta).forEach(dibujarImagen);
-  ctx.restore();
+  ctx.restore(); ctx.restore();
 }
 
 async function redibujarVideoPiP(s) {
@@ -523,9 +529,13 @@ async function redibujarVideoPiP(s) {
   if (!nota) { if (sesionVideoPiP === s) cerrarVideoPiP(); return; }
   const color = resolverColorNota(nota.color || COLOR_DEFECTO);
   const colorTexto = nota.color_texto || colorTextoNota(nota, color);
-  const med = await medirNotaVideo(nota, colorTexto);
+  // Solo texto (sin tinta ni imágenes): maqueta angosta y escalada = texto grande y legible. Con tinta o imágenes se conserva la maqueta de 700 px,
+  // porque el dibujo está anclado a esa geometría.
+  const soloTexto = !(nota.tinta && nota.tinta.length) && !/<img\b/i.test(nota.contenido || "");
+  const ancho = soloTexto ? VP_ANCHO_TEXTO : VP_ANCHO;
+  const med = await medirNotaVideo(nota, colorTexto, ancho);
   if (sesionVideoPiP !== s || n !== s.n) return;
-  pintarNotaVideo(s.canvas, nota, med, color, colorTexto);
+  pintarNotaVideo(s.canvas, nota, med, color, colorTexto, ancho);
 }
 
 function cerrarVideoPiP() {

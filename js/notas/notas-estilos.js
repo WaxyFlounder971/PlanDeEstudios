@@ -500,6 +500,16 @@ html:not([data-mode="dark"]):not([data-mode="true-dark"]) .notas-seccion .nt-btn
 .nt-sticky .nota-composicion,.nt-sticky-composicion,.nt-flotante .nota-composicion,.nt-pip-nota .nota-composicion{max-height:none!important}.nt-flotante.nt-flot-editando{cursor:default;outline:2px solid #8b72e8;outline-offset:2px}.nt-flotante.nt-flot-editando .nt-flot-barra{cursor:grab;min-height:34px}.nt-flotante.nt-flot-editando .nt-flot-asa{opacity:.85}.nt-flot-herr-btn:disabled{opacity:.35;cursor:default}.nt-flotante .nt-flot-herramientas,.nt-pip-nota .nt-flot-herramientas{flex-wrap:wrap;max-width:100%;row-gap:4px}
 .notas-editor .nt-lienzo-viewport{flex:1 1 60vh;max-height:none}
 @media(max-width:560px){.notas-overlay{padding:0!important}.notas-editor{width:100vw!important;max-width:100vw!important;height:100dvh!important;max-height:100dvh!important}.notas-editor .nt-lienzo-viewport{flex:1 1 0;min-height:0;max-height:none}}
+/* Teléfono (barra inferior en dos filas): el slider de grosor del lápiz ocupa todo el ancho libre de su fila.
+   Con la barra en una sola fila (computadora) no se aplica nada de esto. */
+.notas-editor .nt-tools-dos-filas>.nt-zoom-grupo{width:100%!important;max-width:100%!important;justify-self:stretch!important;justify-content:flex-start}
+.notas-editor .nt-tools-dos-filas>.nt-zoom-grupo .nt-tinta-tamanos{flex:1 1 0!important;min-width:0!important;margin-left:0!important}
+.notas-editor .nt-tools-dos-filas>.nt-zoom-grupo .nt-tinta-tamanos input[type=range]{flex:1 1 auto;width:auto!important;min-width:40px!important;max-width:none!important}
+.notas-editor .nt-tools-dos-filas>.nt-zoom-grupo .nt-tinta-valor{flex:none}
+/* PiP de video (teléfono), notas de solo texto: misma sangría compacta que las tarjetas. */
+.nt-pip-video-medida :is(ul,ol){padding-left:1.15em;margin:.2em 0}
+.nt-pip-video-medida :is(ul,ol):has(input[data-nota-check]){padding-left:0}
+.nt-pip-video-medida li:has(input[data-nota-check]){margin-left:0}
 `;
 
 function inyectarEstilosNotas() {
