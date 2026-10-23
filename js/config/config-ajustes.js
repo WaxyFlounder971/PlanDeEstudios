@@ -14,6 +14,7 @@ import { aplicarLogoApp, inicializarSelectorLogo } from "../core/marca.js";
 import { coloresDePaletaActual, coloresIntroEfectivos, espejarColoresIntroLocal, espejarIntroAperturaLocal, introAperturaActivada, modoColoresIntro, verAnimacionIntro } from "../core/intro-apertura.js";
 import { obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
 import { renderizarMarkdownSimple } from "../core/onboarding.js";
+import { renderizarModulosFinanzasAjustes } from "../finanzas/finanzas-modulos-ui.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoTemaLocal, guardarModoDisenoLocal } from "../ui/tema.js";
@@ -1658,6 +1659,9 @@ function renderizarAjustes() {
 
   // Ajustes — ocultar botones de navegación principal
   renderizarNavegacionOculta();
+
+  // Ajustes — Finanzas: perfil + interruptores de los 4 módulos (0C)
+  renderizarModulosFinanzasAjustes();
 
   // Ajustes — backup de seguridad rotativo a Drive (frecuencia + estado)
   renderizarSeccionBackupDrive();
