@@ -7,6 +7,8 @@
    ========================================================================= */
 
 import { MODULOS_FINANZAS_DEFAULT, migrarFinanzasAMovimientos } from "./finanzas-modelo.js";
+import { migrarFinanzas2V1 } from "./finanzas-compromisos.js";
+import { migrarCategoriasV1 } from "./finanzas-categorias.js";
 
 /**
  * Devuelve el objeto de datos "vacío" para un usuario que recién inicia
@@ -196,6 +198,14 @@ function crearDatosUsuarioNuevo() {
       racha_ultimo_inicio_avisado: null,
       // Finanzas 2.0: módulos activables. Apagar solo oculta, no borra.
       finanzas_modulos: { ...MODULOS_FINANZAS_DEFAULT },
+      // Finanzas 2.0 (sesión 1, registro rápido). Preferencias por cuenta:
+      //  - plantillas_rapidas: mostrar las plantillas recientes en el registro rápido.
+      //  - horizonte_disponible_dias: 30 | "fin_periodo". Lo usa "Disponible" (F2); aquí solo se reserva.
+      //  - bloqueo_finanzas: reservado para el bloqueo opcional (F8, aplazado). Sin uso:
+      //    hoy siempre null. Sería por dispositivo (la excepción a la regla de por cuenta).
+      plantillas_rapidas: true,
+      horizonte_disponible_dias: 30,
+      bloqueo_finanzas: null,
     },
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
@@ -378,6 +388,14 @@ function crearDatosUsuarioNuevo() {
     metas: [],
     _eliminados_movimientos: [],
     _eliminados_metas: [],
+    // Finanzas 2.0 (sesión 2): compromisos del Plan (cuotas de matrícula, desembolsos esperados). Ver finanzas-compromisos.js.
+    compromisos: [],
+    _eliminados_compromisos: [],
+    // Finanzas 2.0 (sesión 5): categorías y sobres. Ver finanzas-categorias.js y finanzas-sobres.js.
+    categorias_finanzas: [],
+    _eliminados_categorias_finanzas: [],
+    sobres: [],
+    _eliminados_sobres: [],
 
     // Tiempo de Estudio (Parte 1): colección plana de nivel superior, mismo
     // patrón exacto que finanzas_semestre/gastos_u/agenda — una sesión de
@@ -3777,7 +3795,16 @@ function migrarDatosAntiguos(datos) {
   // Va al final, cuando semestres y gastos_u ya quedaron normalizados.
   if (!datos.configuracion) datos.configuracion = {};
   datos.configuracion.finanzas_modulos = { ...MODULOS_FINANZAS_DEFAULT, ...(datos.configuracion.finanzas_modulos || {}) };
+  // Sesión 1: relleno defensivo y idempotente de los campos nuevos (solo si faltan, nunca pisa un valor elegido).
+  // Sin sellarTimestamp a propósito: todos los dispositivos rellenan lo mismo, así que no hay conflicto que fusionar.
+  if (datos.configuracion.plantillas_rapidas === undefined) datos.configuracion.plantillas_rapidas = true;
+  if (datos.configuracion.horizonte_disponible_dias === undefined) datos.configuracion.horizonte_disponible_dias = 30;
+  if (datos.configuracion.bloqueo_finanzas === undefined) datos.configuracion.bloqueo_finanzas = null;
   migrarFinanzasAMovimientos(datos);
+  // Sesión 2: colecciones del Plan + flag (migracion_finanzas2_v1). No toca movimientos ni metas.
+  migrarFinanzas2V1(datos);
+  // Sesión 5: colecciones de categorías y sobres + juego básico (una sola vez, flag migracion_finanzas2_categorias_v1).
+  migrarCategoriasV1(datos);
 
   return datos;
 }
