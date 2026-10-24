@@ -12,17 +12,21 @@ import { hoyIso, montoEfectivoMovimiento } from "../core/finanzas-modelo.js";
 import { movimientoVisible, obtenerModulosFinanzas } from "../core/finanzas-derivados.js";
 import { estado } from "../core/storage.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
-import { construirPillSwitchBinario } from "../ui/componentes.js";
+import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
+import { quitarMovimiento } from "../core/finanzas-registro.js";
+import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
 import { obtenerTodosLosSemestres } from "./finanzas-gastos.js";
 import { abrirModalMovimiento, nombreMostradoMovimiento } from "./finanzas-movimiento-modal.js";
 import { formatearFrecuenciaRecurrente } from "./finanzas-recurrencia.js";
+import { abrirRegistroRapido } from "./finanzas-registro-rapido.js";
 
 const SECCIONES_POR_TIPO = [
   { tipo: "gasto", titulo: "Gastos", icono: "🧾", conSubtotal: true },
   { tipo: "ingreso", titulo: "Ingresos", icono: "💵", conSubtotal: true },
   { tipo: "ahorro", titulo: "Ahorros", icono: "🎯", conSubtotal: true },
   { tipo: "transferencia", titulo: "Transferencias", icono: "🔁", conSubtotal: false },
+  { tipo: "ajuste", titulo: "Ajustes de saldo", icono: "⚖️", conSubtotal: false },
 ];
 
 const AZUL_INGRESO = "background:rgba(59,130,246,0.16); border-color:rgba(59,130,246,0.45); color:#3b82f6;";
@@ -74,6 +78,7 @@ function describirTipo(m) {
       : { etiqueta: "Ingreso", signo: "+", clase: "badge-neutral", estilo: AZUL_INGRESO };
   }
   if (m.tipo === "ahorro") return { etiqueta: "Ahorro", signo: "↗ ", clase: "badge-warning", estilo: "" };
+  if (m.tipo === "ajuste") return { etiqueta: "Ajuste de saldo", signo: m.sentido === "resta" ? "−" : "+", clase: "badge-neutral", estilo: "" };
   return { etiqueta: "Transferencia", signo: m.sentido === "desde_meta" ? "← " : "→ ", clase: "badge-neutral", estilo: "" };
 }
 
@@ -136,8 +141,24 @@ function construirFilaMovimiento(m, refrescar) {
   btnEditar.type = "button";
   btnEditar.className = "btn btn-secondary";
   btnEditar.style.cssText = "white-space:nowrap; flex-shrink:0; font-size:clamp(0.72rem,2.6vw,0.9rem); padding:clamp(4px,1.4vw,8px) clamp(8px,2.5vw,14px);";
-  btnEditar.textContent = t("Editar");
-  btnEditar.addEventListener("click", () => abrirModalMovimiento({ movimiento: m, alGuardar: refrescar }));
+  if (m.tipo === "ajuste") {
+    // Un ajuste no se edita (se corrige con otro "Ajustar saldo"); se puede quitar.
+    btnEditar.textContent = t("Quitar");
+    btnEditar.addEventListener("click", () => abrirConfirmacion({
+      titulo: t("¿Quitar este ajuste?"),
+      mensaje: t("Mi dinero vuelve a como estaba antes del ajuste. Esto no afecta tus gastos ni ingresos."),
+      textoConfirmar: t("Quitar"),
+      claseConfirmar: "btn-danger",
+      onConfirmar: () => {
+        if (quitarMovimiento(estado.datos, m.id)) marcarCambioPendiente();
+        mostrarToast(t("Ajuste quitado"));
+        refrescar();
+      },
+    }));
+  } else {
+    btnEditar.textContent = t("Editar");
+    btnEditar.addEventListener("click", () => abrirModalMovimiento({ movimiento: m, alGuardar: refrescar }));
+  }
   der.append(badge, btnEditar);
   fila.appendChild(der);
   return fila;
@@ -202,7 +223,11 @@ function renderizarPestanaMovimientos(contenedor) {
   btnAgregar.type = "button";
   btnAgregar.className = "btn btn-primary";
   btnAgregar.textContent = t("+ Añadir movimiento");
-  btnAgregar.addEventListener("click", () => abrirModalMovimiento({ alGuardar: refrescar }));
+  // Registro rápido primero (monto y listo); el formulario completo queda en "Más opciones".
+  btnAgregar.addEventListener("click", () => abrirRegistroRapido({
+    alGuardar: refrescar,
+    abrirFormularioCompleto: () => abrirModalMovimiento({ alGuardar: refrescar }),
+  }));
   cabecera.append(h3, btnAgregar);
   contenedor.appendChild(cabecera);
 

@@ -6,6 +6,7 @@
 
 import { MODULOS_INFO, PERFILES_FINANZAS, aplicarModulosFinanzas, aplicarPerfilFinanzas, perfilDeModulos } from "../core/finanzas-perfiles.js";
 import { obtenerModulosFinanzas } from "../core/finanzas-derivados.js";
+import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
@@ -112,6 +113,16 @@ function renderizarModulosFinanzasAjustes() {
       repintarFinanzasSiVisible();
     }));
   });
+
+  // Registro rápido (sesión 1): plantillas recientes como atajos. Preferencia por cuenta.
+  const plantillas = { id: "plantillas_rapidas", etiqueta: "Plantillas rápidas", detalle: "Muestra tus movimientos recientes como atajos al registrar" };
+  const activas = !estado.datos.configuracion || estado.datos.configuracion.plantillas_rapidas !== false;
+  cont.appendChild(construirFilaInterruptor(plantillas, activas, (encendido) => {
+    if (!estado.datos.configuracion) estado.datos.configuracion = {};
+    estado.datos.configuracion.plantillas_rapidas = encendido;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+  }));
 }
 
 export { construirSelectorPerfil, renderizarModulosFinanzasAjustes };

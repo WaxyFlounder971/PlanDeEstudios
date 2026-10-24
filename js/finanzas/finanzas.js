@@ -10,14 +10,20 @@
 import { MONEDAS_DISPONIBLES } from "../core/schema.js";
 import { calcularTotalesMovimientos, obtenerModulosFinanzas } from "../core/finanzas-derivados.js";
 import { aplicarPerfilFinanzas, debeMostrarOnboardingFinanzas, omitirOnboardingFinanzas, pestanasVisiblesFinanzas } from "../core/finanzas-perfiles.js";
+import { puedeAjustarSaldo, tiposDisponiblesRegistroRapido } from "../core/finanzas-registro.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { construirGraficasResumenFinanzas } from "./finanzas-graficas.js";
 import { renderizarPestanaBeneficios } from "./finanzas-gastos.js";
+import { abrirModalMovimiento } from "./finanzas-movimiento-modal.js";
 import { renderizarPestanaMovimientos } from "./finanzas-movimientos.js";
 import { construirAnilloMeta, renderizarPestanaMetas } from "./finanzas-metas.js";
+import { renderizarPestanaPlan } from "./finanzas-plan.js";
 import { construirSelectorPerfil } from "./finanzas-modulos-ui.js";
+import { construirBloquesInicio, hayProximos, montoVisible, privacidadActiva } from "./finanzas-inicio.js";
+import { construirBloqueSobresEnRiesgo, pestanaPresupuestoVisible, renderizarPestanaPresupuesto } from "./finanzas-presupuesto.js";
+import { abrirAjustarSaldo, abrirRegistroRapido, construirPasoSaldoInicial } from "./finanzas-registro-rapido.js";
 import { renderizarPestanaSemestresFinanzas, abrirSelectorSemestreParaFinanzas, iniciarEdicionMovimientoFinanzas } from "./finanzas-semestres.js";
 
 /**
@@ -43,10 +49,12 @@ function inicializarEstadoFinanzasSiHaceFalta() {
 // quedado con ese valor guardado en memoria/sesión, sin ninguna ganancia
 // real ya que el id nunca se muestra, solo la etiqueta.
 const PESTANAS_FINANZAS = [
-  { id: "resumen", etiqueta: "Resumen" },
+  { id: "resumen", etiqueta: "Inicio" }, // antes "Resumen" (sesión 3); el id interno no cambia
   { id: "semestres", etiqueta: "Semestres" },
+  { id: "plan", etiqueta: "Plan" },
   { id: "gastos-u", etiqueta: "Movimientos" },
   { id: "metas", etiqueta: "Metas" },
+  { id: "presupuesto", etiqueta: "Presupuesto" }, // sesión 5: sobres y categorías (con Gastos e ingresos encendido)
   { id: "gastos-estudiantiles", etiqueta: "Beneficios" },
 ];
 
@@ -130,6 +138,12 @@ function calcularTotalesResumenFinanzas() {
   return { totalGastado: r.totalGastado, totalBecas: r.totalBecas, totalIngresos: r.totalIngresos, balanceNeto: r.balanceNeto, saldoLiquido: r.saldoLiquido, enMetas: r.enMetas };
 }
 
+/** Pestañas visibles: las de perfiles.js más Presupuesto cuando Gastos e ingresos está encendido (sesión 5). */
+function pestanasVisiblesConPresupuesto(modulos) {
+  const base = pestanasVisiblesFinanzas(modulos);
+  return pestanaPresupuestoVisible(modulos) && !base.includes("presupuesto") ? [...base, "presupuesto"] : base;
+}
+
 function construirTabsFinanzas() {
   // v2.9.1: antes esto dependía de .finanzas-tabs-contenedor (container-type:
   // inline-size) + .pill-group-finanzas apilándose en columna cuando no
@@ -142,7 +156,7 @@ function construirTabsFinanzas() {
   const grupo = document.createElement("div");
   grupo.className = "pill-group-finanzas";
   grupo.style.cssText = "display:flex; flex-direction:row; flex-wrap:nowrap; gap:clamp(4px,1.5vw,8px); width:100%;";
-  const visibles = pestanasVisiblesFinanzas(obtenerModulosFinanzas(estado.datos));
+  const visibles = pestanasVisiblesConPresupuesto(obtenerModulosFinanzas(estado.datos));
   PESTANAS_FINANZAS.filter((p) => visibles.includes(p.id)).forEach((pestana) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -176,20 +190,32 @@ function construirTarjetaPrincipalResumen(totales, modulos) {
   etiqueta.textContent = traducirTextoInterfaz(usaPatrimonio ? "Lo que tienes en total" : "Balance");
   const cifra = document.createElement("div");
   cifra.className = "resumen-hero-cifra" + (cifraValor < 0 ? " negativo" : "");
-  cifra.textContent = formatearMonto(cifraValor);
+  cifra.textContent = montoVisible(cifraValor);
   tarjeta.append(etiqueta, cifra);
 
-  if (usaPatrimonio) {
+  // Mi dinero y En metas como en 0C (con Ahorros); sin Ahorros, Mi dinero aparece si hay Gastos, Matrícula o Beca.
+  const verMiDinero = puedeAjustarSaldo(estado.datos);
+  if (usaPatrimonio || verMiDinero) {
     const desglose = document.createElement("div");
     desglose.className = "resumen-hero-desglose";
     const chip = (clase, texto, monto) => {
       const c = document.createElement("span");
       c.className = "badge " + clase;
-      c.textContent = `${texto}: ${formatearMonto(monto)}`;
+      c.textContent = `${texto}: ${montoVisible(monto)}`;
       return c;
     };
-    desglose.append(chip("badge-info", traducirTextoInterfaz("Mi dinero"), totales.saldoLiquido), chip("badge-success", traducirTextoInterfaz("En metas"), totales.enMetas));
+    desglose.appendChild(chip("badge-info", traducirTextoInterfaz("Mi dinero"), totales.saldoLiquido));
+    if (usaPatrimonio) desglose.appendChild(chip("badge-success", traducirTextoInterfaz("En metas"), totales.enMetas));
     tarjeta.appendChild(desglose);
+  }
+  if (verMiDinero) {
+    const ajustar = document.createElement("button");
+    ajustar.type = "button";
+    ajustar.className = "btn-discreto";
+    ajustar.style.cssText = "align-self:center; font-size:0.85rem;";
+    ajustar.textContent = traducirTextoInterfaz("Ajustar saldo");
+    ajustar.addEventListener("click", () => abrirAjustarSaldo());
+    tarjeta.appendChild(ajustar);
   }
   return tarjeta;
 }
@@ -233,7 +259,7 @@ function construirResumenFinanzas() {
   sec.className = "stack";
 
   const hayMetas = modulos.ahorros && (estado.datos.metas || []).some((m) => !m.archivada);
-  if (totalBecas === 0 && totalGastado === 0 && totalIngresos === 0 && !hayMetas) {
+  if (totalBecas === 0 && totalGastado === 0 && totalIngresos === 0 && totales.saldoLiquido === 0 && !hayMetas && !hayProximos()) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
     vacio.style.margin = "0";
@@ -244,8 +270,14 @@ function construirResumenFinanzas() {
     return sec;
   }
 
+  // Inicio (sesión 3): privacidad, Disponible y Próximos van arriba; "Lo que tienes en total" y lo demás, debajo.
+  construirBloquesInicio().forEach((bloque) => sec.appendChild(bloque));
+  // Sesión 5: sobres por agotarse (solo ámbar y rojos; sin ninguno no ocupa lugar). Con Gastos apagado no hay sobres.
+  const sobresRiesgo = construirBloqueSobresEnRiesgo();
+  if (sobresRiesgo) sec.appendChild(sobresRiesgo);
   sec.appendChild(construirTarjetaPrincipalResumen(totales, modulos));
-  if (totalBecas !== 0 || totalGastado !== 0 || totalIngresos !== 0) {
+  // Con el modo privacidad las gráficas (que dibujan importes) se ocultan.
+  if (!privacidadActiva() && (totalBecas !== 0 || totalGastado !== 0 || totalIngresos !== 0)) {
     sec.appendChild(construirGraficasResumenFinanzas(totalBecas, totalIngresos, totalGastado));
   }
   if (modulos.ahorros) {
@@ -271,6 +303,8 @@ function construirOnboardingFinanzas() {
     aplicarPerfilFinanzas(estado.datos, id);
     marcarCambioPendiente();
     estado.finanzasVistaActiva = "resumen";
+    // Segundo paso: saldo inicial, solo si el perfil tiene "Mi dinero" (Gastos, Matrícula o Beca).
+    estado.finanzasPasoSaldoInicial = puedeAjustarSaldo(estado.datos);
     renderizarFinanzas();
   }));
   const omitir = document.createElement("button");
@@ -294,7 +328,7 @@ function renderizarContenidoFinanzasActivo() {
   contenido.innerHTML = "";
 
   // Si la pestaña activa quedó oculta por un módulo apagado, se vuelve al Resumen.
-  if (!pestanasVisiblesFinanzas(obtenerModulosFinanzas(estado.datos)).includes(estado.finanzasVistaActiva)) {
+  if (!pestanasVisiblesConPresupuesto(obtenerModulosFinanzas(estado.datos)).includes(estado.finanzasVistaActiva)) {
     estado.finanzasVistaActiva = "resumen";
   }
 
@@ -302,10 +336,14 @@ function renderizarContenidoFinanzasActivo() {
     contenido.appendChild(construirResumenFinanzas());
   } else if (estado.finanzasVistaActiva === "semestres") {
     renderizarPestanaSemestresFinanzas(contenido);
+  } else if (estado.finanzasVistaActiva === "plan") {
+    renderizarPestanaPlan(contenido);
   } else if (estado.finanzasVistaActiva === "gastos-u") {
     renderizarPestanaMovimientos(contenido);
   } else if (estado.finanzasVistaActiva === "metas") {
     renderizarPestanaMetas(contenido);
+  } else if (estado.finanzasVistaActiva === "presupuesto") {
+    renderizarPestanaPresupuesto(contenido);
   } else if (estado.finanzasVistaActiva === "gastos-estudiantiles") {
     renderizarPestanaBeneficios(contenido);
   }
@@ -323,13 +361,21 @@ function renderizarFinanzas() {
   if (!cont) return;
   cont.innerHTML = "";
 
+  if (estado.finanzasPasoSaldoInicial) {
+    cont.appendChild(construirPasoSaldoInicial(() => {
+      estado.finanzasPasoSaldoInicial = false;
+      renderizarFinanzas();
+    }));
+    return;
+  }
+
   if (debeMostrarOnboardingFinanzas(estado.datos)) {
     cont.appendChild(construirOnboardingFinanzas());
     return;
   }
 
   // Resolver la pestaña activa ANTES de pintar el tab bar (si quedó oculta, vuelve al Resumen).
-  if (!pestanasVisiblesFinanzas(obtenerModulosFinanzas(estado.datos)).includes(estado.finanzasVistaActiva)) {
+  if (!pestanasVisiblesConPresupuesto(obtenerModulosFinanzas(estado.datos)).includes(estado.finanzasVistaActiva)) {
     estado.finanzasVistaActiva = "resumen";
   }
   cont.appendChild(construirTabsFinanzas());
@@ -338,6 +384,14 @@ function renderizarFinanzas() {
   const accesosRapidos = document.createElement("div");
   accesosRapidos.className = "row";
   accesosRapidos.style.cssText = "display:grid; grid-template-columns:repeat(auto-fit, minmax(0, 1fr)); gap:8px; width:100%;";
+  if (tiposDisponiblesRegistroRapido(estado.datos).length) {
+    const rapido = document.createElement("button");
+    rapido.type = "button";
+    rapido.className = "btn btn-primary";
+    rapido.textContent = "＋ " + traducirTextoInterfaz("Añadir movimiento");
+    rapido.addEventListener("click", () => abrirRegistroRapido({ abrirFormularioCompleto: () => abrirModalMovimiento({ alGuardar: renderizarFinanzas }) }));
+    accesosRapidos.appendChild(rapido);
+  }
   [
     { tipo: "matricula", texto: "Pago de matrícula" },
     { tipo: "beca", texto: "Ingreso de beca" },
