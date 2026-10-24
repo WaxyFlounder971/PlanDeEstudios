@@ -6,8 +6,12 @@
 
 import { sellarTimestamp, calcularPagosRecurrentesTranscurridos } from "./schema.js";
 
-/** gasto | ingreso | ahorro (aporte a una meta) | transferencia (entre Mi dinero y una meta). */
-const TIPOS_MOVIMIENTO = ["gasto", "ingreso", "ahorro", "transferencia"];
+/**
+ * gasto | ingreso | ahorro (aporte a una meta) | transferencia (entre Mi dinero y una meta)
+ * | ajuste (corrige Mi dinero para que coincida con la realidad: saldo inicial o diferencia).
+ * Un ajuste NUNCA es gasto ni ingreso: solo mueve Mi dinero y no entra en ningún total de gastos/ingresos.
+ */
+const TIPOS_MOVIMIENTO = ["gasto", "ingreso", "ahorro", "transferencia", "ajuste"];
 /** Qué módulo gobierna la visibilidad del movimiento. */
 const ORIGENES_MOVIMIENTO = ["manual", "matricula", "beca"];
 const MODULOS_FINANZAS_DEFAULT = { matricula: true, beca: true, gastos: true, ahorros: true };
@@ -26,13 +30,14 @@ function hoyIso() {
  *   "nuevo" (dinero nuevo directo a la meta, no toca Mi dinero).
  * - transferencia: `meta_id` + `sentido` "a_meta" | "desde_meta". Nunca cuenta
  *   como gasto ni ingreso.
+ * - ajuste: `sentido` "suma" | "resta" sobre Mi dinero. Nunca cuenta como gasto ni ingreso.
  * - `recurrente` conserva la forma de gastos_u (monto_por_pago, fecha_inicio...).
  * - `fecha_registro` null = sin fecha (datos migrados que nunca la tuvieron).
  * `id` explícito solo lo usa la migración (ids deterministas).
  */
 function crearMovimiento({
   id, tipo, nombre, monto, fechaRegistro, nota, semestreId, origen,
-  metaId, fuente, sentido, pagadoConMetaId, recurrente,
+  metaId, fuente, sentido, pagadoConMetaId, recurrente, compromisoId, categoriaId,
 }) {
   const tipoValido = TIPOS_MOVIMIENTO.includes(tipo) ? tipo : "gasto";
   const esMeta = tipoValido === "ahorro" || tipoValido === "transferencia";
@@ -47,9 +52,16 @@ function crearMovimiento({
     origen: ORIGENES_MOVIMIENTO.includes(origen) && (tipoValido === "gasto" || tipoValido === "ingreso") ? origen : "manual",
     meta_id: esMeta ? metaId || null : null,
     fuente: tipoValido === "ahorro" ? (fuente === "nuevo" ? "nuevo" : "liquido") : null,
-    sentido: tipoValido === "transferencia" ? (sentido === "desde_meta" ? "desde_meta" : "a_meta") : null,
+    // transferencia: "a_meta" | "desde_meta". ajuste: "suma" | "resta" (sobre Mi dinero).
+    sentido: tipoValido === "transferencia"
+      ? (sentido === "desde_meta" ? "desde_meta" : "a_meta")
+      : tipoValido === "ajuste" ? (sentido === "resta" ? "resta" : "suma") : null,
     pagado_con_meta_id: tipoValido === "gasto" ? pagadoConMetaId || null : null,
     recurrente: recurrente || null,
+    // Si nació de confirmar un compromiso del Plan (referencia de vuelta; el vínculo principal vive en el compromiso).
+    compromiso_id: compromisoId || null,
+    // Finanzas 2.0 (sesión 5): categoría opcional. Solo gastos e ingresos se categorizan; el movimiento viejo queda sin categoría.
+    categoria_id: tipoValido === "gasto" || tipoValido === "ingreso" ? categoriaId || null : null,
   });
 }
 

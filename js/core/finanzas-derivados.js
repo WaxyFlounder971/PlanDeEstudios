@@ -14,6 +14,8 @@ function obtenerModulosFinanzas(datos) {
 /** ¿Este movimiento cuenta/se ve con los módulos actuales? */
 function movimientoVisible(mov, modulos) {
   if (mov.tipo === "ahorro" || mov.tipo === "transferencia") return !!modulos.ahorros;
+  // Un ajuste corrige Mi dinero: se ve si cualquier módulo de dinero diario/universidad está encendido.
+  if (mov.tipo === "ajuste") return !!(modulos.gastos || modulos.matricula || modulos.beca);
   if (mov.origen === "matricula") return !!modulos.matricula;
   if (mov.origen === "beca") return !!modulos.beca;
   return !!modulos.gastos;
@@ -40,21 +42,28 @@ function calcularTotalesMovimientos(datos, hasta) {
   let liquido = 0;     // Mi dinero
   let enMetas = 0;     // suma de saldos de metas
 
+  // Una meta archivada no cuenta en "En metas" (ni su saldo inicial ni sus aportes):
+  // el dinero que sacaste de Mi dinero para ella sí queda fuera de Mi dinero, pero ya no se suma al patrimonio visible.
+  const archivadas = new Set((datos.metas || []).filter((x) => x.archivada).map((x) => x.id));
+  const sumaMeta = (metaId, delta) => { if (!archivadas.has(metaId)) enMetas += delta; };
+
   lista.forEach((m) => {
     const v = montoEfectivoMovimiento(m);
     if (m.tipo === "gasto") {
       gastos += v;
-      if (m.pagado_con_meta_id) enMetas -= v; else liquido -= v;
+      if (m.pagado_con_meta_id) sumaMeta(m.pagado_con_meta_id, -v); else liquido -= v;
     } else if (m.tipo === "ingreso") {
       ingresos += v;
       if (m.origen === "beca") becas += v;
       liquido += v;
     } else if (m.tipo === "ahorro") {
-      enMetas += v;
+      sumaMeta(m.meta_id, v);
       if (m.fuente !== "nuevo") liquido -= v;
     } else if (m.tipo === "transferencia") {
-      if (m.sentido === "desde_meta") { liquido += v; enMetas -= v; }
-      else { liquido -= v; enMetas += v; }
+      if (m.sentido === "desde_meta") { liquido += v; sumaMeta(m.meta_id, -v); }
+      else { liquido -= v; sumaMeta(m.meta_id, v); }
+    } else if (m.tipo === "ajuste") {
+      liquido += m.sentido === "resta" ? -v : v;
     }
   });
 
