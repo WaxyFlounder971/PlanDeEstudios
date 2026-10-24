@@ -6177,3 +6177,87 @@ html,body,#app-shell,.glass-card,.glass-panel,#app-sidebar,.mobile-topbar { tran
 .resumen-leyenda-marca.disponible { background: #10b981; border-radius: 50%; }
 .resumen-metas-tira { display: flex; gap: 14px; overflow-x: auto; padding-bottom: 4px; }
 .resumen-meta-mini { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 84px; text-align: center; font-size: 0.78rem; }
+
+/* ===== finanzas-S1.css ===== */
+/* =========================================================================
+   FINANZAS 2.0 — Sesión 1: registro rápido, Ajustar saldo y Deshacer.
+   PEGAR AL FINAL de css/design-system.css (después de finanzas-0C.css).
+   Solo variables del tema; el estado nunca se comunica solo con color.
+   ========================================================================= */
+
+/* ---- Registro rápido ---- */
+.rr-tipos { display: grid; gap: 8px; }
+.rr-tipos .pill-item { min-height: 44px; text-align: center; }
+.rr-monto { font-size: 1.6rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; padding-block: 12px; }
+.rr-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rr-chip {
+  min-height: 40px; max-width: 100%; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border-glass); background: transparent; color: inherit;
+  font: inherit; font-size: 0.88rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.rr-chip:focus-visible, .rr-deshacer-boton:focus-visible { outline: 2px solid var(--accent-1); outline-offset: 2px; }
+.rr-mas > summary { cursor: pointer; padding: 6px 0; min-height: 32px; }
+
+/* ---- Aviso "Deshacer" (abajo, sobre la barra de navegación) ---- */
+.rr-deshacer {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 310;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 84px);
+  display: flex; align-items: center; gap: 12px; max-width: min(92vw, 440px);
+  padding: 10px 12px 10px 16px; border-radius: 14px;
+  background: var(--bg-glass, rgba(20, 20, 28, 0.96)); color: var(--text-primary);
+  border: 1px solid var(--border-glass); box-shadow: 0 6px 22px rgba(0, 0, 0, 0.35);
+}
+.rr-deshacer-texto { font-size: 0.88rem; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.rr-deshacer-boton { flex-shrink: 0; white-space: nowrap; }
+@media (prefers-reduced-motion: no-preference) {
+  [data-rendimiento="normal"] .rr-deshacer { animation: rr-sube 0.18s ease-out; }
+  @keyframes rr-sube { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+}
+
+/* ===== finanzas-S2.css ===== */
+/* =========================================================================
+   FINANZAS 2.0: Sesión 2, pestaña Plan.
+   PEGAR AL FINAL de css/design-system.css (después de finanzas-S1.css).
+   Solo variables del tema; el estado nunca se comunica solo con color.
+   ========================================================================= */
+
+.plan-fila { min-width: 0; overflow: hidden; }
+.plan-fila .badge { max-width: 100%; white-space: normal; text-align: left; }
+.plan-fila button:focus-visible { outline: 2px solid var(--accent-1); outline-offset: 2px; }
+
+/* ===== finanzas-S3.css ===== */
+/* =========================================================================
+   FINANZAS 2.0: Sesión 3, Inicio (Disponible y Próximos).
+   PEGAR AL FINAL de css/design-system.css (después de finanzas-S2.css) y subir el ?v=.
+   El nivel del semáforo SIEMPRE lleva glifo y texto; el color solo refuerza.
+   Los var(--success|--warning|--danger, #...) tienen respaldo: cámbialos por los tokens reales del tema.
+   ========================================================================= */
+
+.disponible-hero { text-align: center; align-items: center; }
+.disponible-cifra:focus-visible,
+.proximo-fila button:focus-visible { outline: 2px solid var(--accent-1); outline-offset: 2px; }
+
+.disponible-chip {
+  --nivel: var(--success, #2e7d32);
+  display: inline-block; max-width: 100%; padding: 4px 12px; border-radius: 999px;
+  border: 1.5px solid var(--nivel); font-size: 0.9rem; font-weight: 600; color: inherit;
+  background: color-mix(in srgb, var(--nivel) 14%, transparent);
+}
+.disponible-chip[data-nivel="ambar"] { --nivel: var(--warning, #b26a00); }
+.disponible-chip[data-nivel="rojo"] { --nivel: var(--danger, #c62828); border-style: double; border-width: 3px; }
+
+.proximo-fila {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--border-glass); min-width: 0;
+}
+.proximo-fila:last-child { border-bottom: 0; }
+.proximo-info { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+.proximo-nombre { overflow-wrap: anywhere; }
+.proximo-detalle { font-size: 0.8rem; }
+.proximo-monto { flex: 0 0 auto; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+
+.desglose-termino { border-bottom: 1px solid var(--border-glass); padding: 6px 0; }
+.desglose-cabecera { cursor: default; gap: 12px; }
+summary.desglose-cabecera { cursor: pointer; }
+.desglose-total { padding-top: 8px; font-size: 1.05rem; }
+
