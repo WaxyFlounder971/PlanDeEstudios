@@ -354,6 +354,7 @@ window.addEventListener("DOMContentLoaded", () => {
             onLoginExitoso(tokenCache.token, Math.round((tokenCache.expiraEn - Date.now()) / 1000));
           }
         } else {
+         let reintentosRecuperacion = 0;
           const recuperarSesionGuardada = () => asegurarTokenValido().then((ok) => {
             resolverAuthListo();
             if (ok) {
@@ -363,7 +364,7 @@ window.addEventListener("DOMContentLoaded", () => {
                 if (tokenRenovado) onLoginExitoso(tokenRenovado.token, Math.round((tokenRenovado.expiraEn - Date.now()) / 1000));
               }
             } else if (!habiaCacheAlCargar) {
-              if (haySesionGuardada()) {
+               if (haySesionGuardada() && reintentosRecuperacion++ < 4) {
                 // Un fallo temporal del Worker/red NO equivale a cerrar la
                 // sesión. Mantener la pantalla de recuperación y reintentar
                 // sin obligar a autorizar Google otra vez.
