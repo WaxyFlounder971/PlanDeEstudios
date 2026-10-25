@@ -637,7 +637,8 @@ async function refrescarAccessTokenViaWorker(refreshToken) {
       if (!respuesta.ok) {
         const error = new Error(datos.error || `El Worker respondió ${respuesta.status} al refrescar.`);
         error.status = respuesta.status;
-        error.invalidGrant = Boolean(datos.error && /invalid_grant/i.test(String(datos.error)));
+        const textoMotivo = [datos.error, datos.error_description, datos.message].filter(Boolean).join(" ");
+        error.invalidGrant = /invalid_grant|expired or revoked|token has been (expired|revoked)/i.test(textoMotivo);
         if (error.invalidGrant || (respuesta.status < 500 && respuesta.status !== 429)) throw error;
         ultimoError=error;
       } else {
