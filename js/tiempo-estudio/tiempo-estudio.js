@@ -122,6 +122,7 @@ function obtenerPlanPorId(planId) {
  * orden relativo dentro de cada grupo.
  */
 function obtenerMateriasParaTiempoEstudio() {
+  if (!estado.datos) return [];
   const items = [];
   const semestres = (estado.datos.semestres || []).slice().sort((a, b) => (a.fecha_inicio || "").localeCompare(b.fecha_inicio || ""));
   const semestreActivo = obtenerSemestresActuales().slice().sort((a, b) => (b.fecha_inicio || "").localeCompare(a.fecha_inicio || ""))[0];
