@@ -11,7 +11,7 @@ let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };
 const crearDatos = schema.crearDatosUsuarioNuevo;
 const migrar = schema.migrarDatosAntiguos;
-const hoyReal = () => new Date().toISOString().slice(0, 10);
+const hoyReal = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }; // fecha LOCAL, igual que la app (con UTC fallaba cada noche)
 const nuevo = () => migrar(JSON.parse(JSON.stringify(crearDatos())));
 
 console.log("Migración");
