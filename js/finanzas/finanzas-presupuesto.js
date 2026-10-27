@@ -157,6 +157,13 @@ function construirResumenMensual() {
     const barra = hijo("div", ""); barra.style.cssText = "height:6px; border-radius:3px; background:var(--border-glass, rgba(128,128,128,.25)); overflow:hidden;";
     const relleno = hijo("div", ""); relleno.style.cssText = `height:100%; width:${Math.max(2, f.porcentaje)}%; background:${f.color || "var(--accent, #4c8bf5)"};`; barra.appendChild(relleno); fila.append(txt, barra); sec.appendChild(fila);
   });
+  // Esencial y Flexible: solo si la persona marcó al menos una categoría. Informativo, sin juicio.
+  if (r.gastos.prioridad.esencial > 0 || r.gastos.prioridad.flexible > 0) {
+    const p = r.gastos.prioridad;
+    const partes = [`${t("Esencial")}: ${fmt(p.esencial)}`, `${t("Flexible")}: ${fmt(p.flexible)}`];
+    if (p.sinMarcar > 0) partes.push(`${t("Sin marcar")}: ${fmt(p.sinMarcar)}`);
+    const l = hijo("p", "muted", partes.join(" · ")); l.style.margin = "0"; l.setAttribute("data-prioridad", "1"); sec.appendChild(l);
+  }
   if (r.comparacion) {
     const d = r.comparacion.diferencia; const plant = d === 0 ? "Gastaste lo mismo que en {mes}" : d < 0 ? "Gastaste {monto} menos que en {mes}" : "Gastaste {monto} más que en {mes}";
     const p = hijo("p", "muted", llenarPlantilla(t(plant), { monto: Math.abs(d) }, fmt).replace("{mes}", nombreMes(r.comparacion.mesAnterior))); p.style.margin = "0"; sec.appendChild(p);

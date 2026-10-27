@@ -9,6 +9,7 @@
 import { calcularDisponible, fijarHorizonteDias, OPCIONES_HORIZONTE } from "../core/finanzas-disponible.js";
 import { obtenerModulosFinanzas } from "../core/finanzas-derivados.js";
 import { pestanasVisiblesFinanzas } from "../core/finanzas-perfiles.js";
+import { posponerRecordatorio, recordatoriosDeMetas } from "../core/finanzas-recordatorios.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
@@ -272,16 +273,55 @@ function construirTarjetaProximos(calculo) {
 }
 
 /**
+ * Recordatorios de aporte a metas (sesión 8): uno por meta, solo dentro de la app. Se quedan hasta que aportes
+ * o digas "Ahora no". Tono sin culpa: avisan y proponen. Nada mueve dinero: "Aportar" abre el formulario ya lleno.
+ */
+function construirTarjetaRecordatorios() {
+  const lista = recordatoriosDeMetas(estado.datos);
+  if (!lista.length) return null;
+  const tarjeta = document.createElement("section");
+  tarjeta.className = "glass-card stack";
+  tarjeta.setAttribute("data-recordatorios", "1");
+  const h = document.createElement("h3");
+  h.className = "texto-encabezado-seccion"; h.style.margin = "0";
+  h.textContent = t("Te toca aportar");
+  tarjeta.appendChild(h);
+  lista.forEach((r) => {
+    const fila = document.createElement("div");
+    fila.className = "stack"; fila.style.gap = "6px";
+    const texto = document.createElement("p");
+    texto.style.margin = "0";
+    texto.textContent = t("{meta}: aporte sugerido de {monto} (te tocaba el {fecha})")
+      .replace("{meta}", `${r.emoji} ${r.nombre}`).replace("{monto}", montoVisible(r.monto)).replace("{fecha}", formatearFechaLarga(r.fecha));
+    const botones = document.createElement("div");
+    botones.className = "row"; botones.style.cssText = "gap:8px; flex-wrap:wrap;";
+    botones.append(
+      crearBoton(t("Aportar"), "btn btn-primary", () => {
+        import("./finanzas-movimiento-modal.js").then((m) => m.abrirModalMovimiento({ tipoInicial: "ahorro", prefill: { monto: r.monto, metaId: r.metaId }, alGuardar: renderizarFinanzas })).catch(() => {});
+      }),
+      crearBoton(t("Ahora no"), "btn btn-secondary", () => {
+        if (posponerRecordatorio(estado.datos, r.metaId, r.fecha)) { marcarCambioPendiente(); renderizarFinanzas(); }
+      }),
+    );
+    fila.append(texto, botones);
+    tarjeta.appendChild(fila);
+  });
+  return tarjeta;
+}
+
+/**
  * Bloques que abren el Inicio: [barra de privacidad, Disponible, Próximos]. Disponible solo existe con
  * "Mi dinero" (Gastos, Matrícula o Beca encendidos); sin él, solo queda la barra de privacidad.
  */
 function construirBloquesInicio() {
   const bloques = [construirBarraPrivacidad()];
   const calculo = calcularDisponible(estado.datos);
-  if (!calculo.aplica) return bloques;
+  const recordatorios = construirTarjetaRecordatorios();
+  if (!calculo.aplica) { if (recordatorios) bloques.push(recordatorios); return bloques; }
   bloques.push(construirTarjetaDisponible(calculo));
   const proximos = construirTarjetaProximos(calculo);
   if (proximos) bloques.push(proximos);
+  if (recordatorios) bloques.push(recordatorios);
   return bloques;
 }
 

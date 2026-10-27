@@ -89,6 +89,15 @@ function abrirGestorCategorias({ alCambiar } = {}) {
   nombre.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); agregar.click(); } });
   formNueva.append(fila, error, agregar);
 
+  // Marca opcional Esencial o Flexible (solo gastos). "Sin marcar" quita la marca.
+  function selectorPrioridad(c) {
+    const sel = document.createElement("select"); sel.className = "form-input"; sel.style.cssText = "width:auto; padding:4px 6px;"; sel.setAttribute("aria-label", `${t("Prioridad")}: ${c.nombre}`);
+    [["", "Sin marcar"], ["esencial", "Esencial"], ["flexible", "Flexible"]].forEach(([v, x]) => { const o = document.createElement("option"); o.value = v; o.textContent = t(x); sel.appendChild(o); });
+    sel.value = c.prioridad || "";
+    sel.addEventListener("change", () => { const r = editarCategoriaFinanzas(estado.datos, c.id, { prioridad: sel.value || null }); if (r.ok) { guardarCambios(alCambiar); pintar(); } });
+    return sel;
+  }
+
   function filaCategoria(c) {
     const f = document.createElement("div"); f.className = "row-between"; f.style.cssText = "gap:8px; align-items:center;";
     const nom = document.createElement("span"); nom.style.cssText = "flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;";
@@ -105,6 +114,7 @@ function abrirGestorCategorias({ alCambiar } = {}) {
         input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); guardarNombre(); } if (e.key === "Escape") { e.stopPropagation(); pintar(); } });
         f.replaceChildren(input, boton(t("Guardar"), "btn btn-primary", guardarNombre), boton(t("Cancelar"), "btn btn-secondary", pintar)); input.focus();
       }),
+      ...(c.tipo === "gasto" ? [selectorPrioridad(c)] : []),
       boton(t(c.archivada ? "Mostrar" : "Archivar"), "btn btn-secondary", () => {
         const r = archivarCategoriaFinanzas(estado.datos, c.id, !c.archivada); if (!r.ok) { mostrar(error, MOTIVOS[r.motivo] || MOTIVOS.repetida); return; }
         error.classList.add("oculto"); guardarCambios(alCambiar); pintar();

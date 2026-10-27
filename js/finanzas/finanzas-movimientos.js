@@ -15,6 +15,7 @@ import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { quitarMovimiento } from "../core/finanzas-registro.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { sellarTimestamp } from "../core/schema.js";
 import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
 import { obtenerTodosLosSemestres } from "./finanzas-gastos.js";
 import { abrirModalMovimiento, nombreMostradoMovimiento } from "./finanzas-movimiento-modal.js";
@@ -27,6 +28,8 @@ const SECCIONES_POR_TIPO = [
   { tipo: "ahorro", titulo: "Ahorros", icono: "🎯", conSubtotal: true },
   { tipo: "transferencia", titulo: "Transferencias", icono: "🔁", conSubtotal: false },
   { tipo: "ajuste", titulo: "Ajustes de saldo", icono: "⚖️", conSubtotal: false },
+  { tipo: "prestamo", titulo: "Préstamos", icono: "🤝", conSubtotal: false },
+  { tipo: "traspaso", titulo: "Traspasos entre cuentas", icono: "⇄", conSubtotal: false },
 ];
 
 const AZUL_INGRESO = "background:rgba(59,130,246,0.16); border-color:rgba(59,130,246,0.45); color:#3b82f6;";
@@ -78,8 +81,21 @@ function describirTipo(m) {
       : { etiqueta: "Ingreso", signo: "+", clase: "badge-neutral", estilo: AZUL_INGRESO };
   }
   if (m.tipo === "ahorro") return { etiqueta: "Ahorro", signo: "↗ ", clase: "badge-warning", estilo: "" };
+  if (m.tipo === "traspaso") return { etiqueta: "Traspaso", signo: "⇄ ", clase: "badge-neutral", estilo: "" };
+  if (m.tipo === "prestamo") return { etiqueta: m.sentido === "entra" ? "Préstamo: entra" : "Préstamo: sale", signo: m.sentido === "entra" ? "+" : "−", clase: "badge-neutral", estilo: "" };
   if (m.tipo === "ajuste") return { etiqueta: "Ajuste de saldo", signo: m.sentido === "resta" ? "−" : "+", clase: "badge-neutral", estilo: "" };
   return { etiqueta: "Transferencia", signo: m.sentido === "desde_meta" ? "← " : "→ ", clase: "badge-neutral", estilo: "" };
+}
+
+function nombreCuentaMov(id) {
+  if (!id) return t("Sin asignar");
+  const c = (estado.datos.cuentas || []).find((x) => x.id === id);
+  return c ? c.nombre : t("cuenta eliminada");
+}
+
+function nombrePrestamo(id) {
+  const p = (estado.datos.prestamos || []).find((x) => x.id === id);
+  return p ? p.persona : t("persona eliminada");
 }
 
 function nombreSemestre(id) {
@@ -122,6 +138,13 @@ function construirFilaMovimiento(m, refrescar) {
   if (m.tipo === "ahorro" || m.tipo === "transferencia") extras.push(nombreMeta(m.meta_id));
   if (m.tipo === "ahorro") extras.push(t(m.fuente === "nuevo" ? "Dinero nuevo" : "De mi dinero"));
   if (m.tipo === "gasto" && m.pagado_con_meta_id) extras.push(`${t("Pagado con")} ${nombreMeta(m.pagado_con_meta_id)}`);
+  if (m.categoria_id && (m.tipo === "gasto" || m.tipo === "ingreso")) {
+    const cat = (estado.datos.categorias_finanzas || []).find((c) => c.id === m.categoria_id);
+    if (cat) extras.push(`${cat.emoji || "🏷️"} ${cat.nombre}`);
+  }
+  if (m.cuenta_id) extras.push(`🏦 ${nombreCuentaMov(m.cuenta_id)}${m.tipo === "traspaso" ? ` → ${nombreCuentaMov(m.cuenta_destino_id)}` : ""}`);
+  else if (m.tipo === "traspaso") extras.push(`🏦 ${t("Sin asignar")} → ${nombreCuentaMov(m.cuenta_destino_id)}`);
+  if (m.tipo === "gasto" && m.pagado_por_prestamo_id) extras.push(`${t("Lo pagó")} ${nombrePrestamo(m.pagado_por_prestamo_id)}`);
   if (m.semestre_id && m.origen === "manual") extras.push(`📚 ${nombreSemestre(m.semestre_id)}`);
   if (!m.recurrente && m.fecha_registro && m.fecha_registro > hoyIso()) extras.push(t("Aún no cuenta"));
   if (extras.length) izq.appendChild(lineaDetalle(extras.join(" · ")));
@@ -141,7 +164,21 @@ function construirFilaMovimiento(m, refrescar) {
   btnEditar.type = "button";
   btnEditar.className = "btn btn-secondary";
   btnEditar.style.cssText = "white-space:nowrap; flex-shrink:0; font-size:clamp(0.72rem,2.6vw,0.9rem); padding:clamp(4px,1.4vw,8px) clamp(8px,2.5vw,14px);";
-  if (m.tipo === "ajuste") {
+  if (m.tipo === "prestamo" || m.tipo === "traspaso" || (m.tipo === "gasto" && m.pagado_por_prestamo_id)) {
+    // Lo de Me deben y debo no se edita desde aquí (su saldo depende de él): se quita y se vuelve a registrar.
+    btnEditar.textContent = t("Quitar");
+    btnEditar.addEventListener("click", () => abrirConfirmacion({
+      titulo: t("¿Quitar este movimiento?"),
+      mensaje: t("Cambia saldos de cuentas, lo que te deben o debes y Mi dinero. Para corregirlo, quítalo y vuelve a registrarlo."),
+      textoConfirmar: t("Quitar"),
+      claseConfirmar: "btn-danger",
+      onConfirmar: () => {
+        if (quitarMovimiento(estado.datos, m.id)) marcarCambioPendiente();
+        mostrarToast(t("Movimiento quitado"));
+        refrescar();
+      },
+    }));
+  } else if (m.tipo === "ajuste") {
     // Un ajuste no se edita (se corrige con otro "Ajustar saldo"); se puede quitar.
     btnEditar.textContent = t("Quitar");
     btnEditar.addEventListener("click", () => abrirConfirmacion({
@@ -157,7 +194,18 @@ function construirFilaMovimiento(m, refrescar) {
     }));
   } else {
     btnEditar.textContent = t("Editar");
-    btnEditar.addEventListener("click", () => abrirModalMovimiento({ movimiento: m, alGuardar: refrescar }));
+    btnEditar.addEventListener("click", () => {
+      // El formulario completo no conoce las cuentas (sesión 7B): si al guardar la cuenta se perdió, se devuelve.
+      const cuentaPrevia = m.cuenta_id || null;
+      abrirModalMovimiento({
+        movimiento: m,
+        alGuardar: () => {
+          const actual = (estado.datos.movimientos || []).find((x) => x.id === m.id);
+          if (cuentaPrevia && actual && !actual.cuenta_id) { actual.cuenta_id = cuentaPrevia; sellarTimestamp(actual); marcarCambioPendiente(); }
+          refrescar();
+        },
+      });
+    });
   }
   der.append(badge, btnEditar);
   fila.appendChild(der);

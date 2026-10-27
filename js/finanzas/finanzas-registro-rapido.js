@@ -8,7 +8,8 @@
    ========================================================================= */
 
 import { hoyIso } from "../core/finanzas-modelo.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
+import { calcularTotalesMovimientos, obtenerModulosFinanzas } from "../core/finanzas-derivados.js";
+import { listarCuentas, ultimaCuentaUsada } from "../core/finanzas-cuentas.js";
 import {
   ajustarSaldo, calcularDiferenciaSaldo, crearGuardReentrada, parsearMonto, plantillasRecientes,
   puedeAjustarSaldo, quitarMovimiento, registrarMovimientoRapido, tiposDisponiblesRegistroRapido, ultimoTipoUsado,
@@ -204,7 +205,7 @@ function abrirRegistroRapido({ alGuardar, abrirFormularioCompleto } = {}) {
   nombre.autocomplete = "off";
 
   // ----- Meta (solo ahorro) -----
-  const metasActivas = (datos.metas || []).filter((m) => !m.archivada);
+  const metasActivas = (datos.metas || []).filter((m) => !m.archivada && m.tipo !== "gasto");
   const selectMeta = document.createElement("select");
   selectMeta.className = "form-input";
   metasActivas.forEach((m) => {
@@ -214,6 +215,17 @@ function abrirRegistroRapido({ alGuardar, abrirFormularioCompleto } = {}) {
     selectMeta.appendChild(o);
   });
   const campoMeta = crearCampo("¿A qué meta?", selectMeta);
+
+  // ----- Cuenta (sesión 7B: solo con el módulo Cuentas encendido y al menos una cuenta; gasto e ingreso) -----
+  const cuentasLista = obtenerModulosFinanzas(datos).cuentas ? listarCuentas(datos) : [];
+  const selectCuenta = document.createElement("select");
+  selectCuenta.className = "form-input";
+  [["", t("Sin asignar")], ...cuentasLista.map((c) => [c.id, `${c.emoji || ""} ${c.nombre} (${c.moneda})`.trim()])].forEach(([v, x]) => {
+    const o = document.createElement("option"); o.value = v; o.textContent = x; selectCuenta.appendChild(o);
+  });
+  selectCuenta.value = ultimaCuentaUsada(datos) || "";
+  const campoCuenta = crearCampo("Cuenta", selectCuenta);
+  if (!cuentasLista.length) campoCuenta.classList.add("oculto");
 
   // ----- Plantillas -----
   const usaPlantillas = !datos.configuracion || datos.configuracion.plantillas_rapidas !== false;
@@ -304,6 +316,19 @@ function abrirRegistroRapido({ alGuardar, abrirFormularioCompleto } = {}) {
       abrirFormularioCompleto();
     }));
   }
+  // Sesión 6: pegar el mensaje del banco (carga perezosa para no crear un ciclo de imports con la pantalla de mensajes).
+  cuerpoMas.appendChild(crearBoton(t("Pegar mensaje del banco"), "btn btn-secondary", () => {
+    cerrar();
+    import("./finanzas-mensajes-ui.js").then((m) => m.abrirPegarMensaje({ alGuardar }));
+  }));
+  // Sesión 7A: dividir el gasto con otras personas (solo con Me deben y debo encendido; carga perezosa).
+  if (obtenerModulosFinanzas(estado.datos).deudas) {
+    cuerpoMas.appendChild(crearBoton(t("Dividir este gasto con otras personas"), "btn btn-secondary", () => {
+      const n = nombre.value, m = monto.value;
+      cerrar();
+      import("./finanzas-deudas-ui.js").then((x) => x.abrirDividirGasto({ nombre: n, total: m, alGuardar }));
+    }));
+  }
   mas.append(resumenMas, cuerpoMas);
 
   const error = crearLineaError();
@@ -321,6 +346,7 @@ function abrirRegistroRapido({ alGuardar, abrirFormularioCompleto } = {}) {
       metaId: p ? p.metaId : selectMeta.value,
       fuente: p ? p.fuente : selectFuente.value,
       semestreId: selectSemestre.value || null,
+      cuentaId: selectCuenta.value || null,
     });
     if (!r.ok) {
       mostrarError(error, t(r.motivo === "meta" ? "Elige una meta para el ahorro." : "Escribe un monto mayor que cero."));
@@ -338,6 +364,8 @@ function abrirRegistroRapido({ alGuardar, abrirFormularioCompleto } = {}) {
     cerrar();
     (alGuardar || renderizarFinanzas)();
     mostrarBarraDeshacer(r.movimiento, resumenGuardado(r.movimiento));
+    // Sesión 8: si alguna meta pide separar un porcentaje de los ingresos, se propone (nunca se mueve solo).
+    if (r.movimiento.tipo === "ingreso") import("./finanzas-reparto-ui.js").then((m) => m.abrirPropuestaReparto(r.movimiento)).catch(() => {});
   });
 
   function usarPlantilla(p) {
@@ -358,6 +386,7 @@ function abrirRegistroRapido({ alGuardar, abrirFormularioCompleto } = {}) {
       b.setAttribute("aria-pressed", k === tipo ? "true" : "false");
     });
     campoMeta.classList.toggle("oculto", tipo !== "ahorro");
+    campoCuenta.classList.toggle("oculto", tipo === "ahorro" || !cuentasLista.length);
     campoFuente.classList.toggle("oculto", tipo !== "ahorro");
     campoSemestre.classList.toggle("oculto", tipo === "ahorro");
     campoCategoria.classList.toggle("oculto", tipo === "ahorro" || !usaCategorias());
@@ -376,7 +405,7 @@ function abrirRegistroRapido({ alGuardar, abrirFormularioCompleto } = {}) {
   [monto, nombre].forEach((el) => el.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); guardar(null); } }));
   monto.addEventListener("input", () => error.classList.add("oculto"));
 
-  caja.append(grupoTipos, crearCampo("Monto", monto), crearCampo("Nombre (opcional)", nombre), campoMeta);
+  caja.append(grupoTipos, crearCampo("Monto", monto), crearCampo("Nombre (opcional)", nombre), campoCuenta, campoMeta);
   if (plantillas.length) caja.appendChild(filaPlantillas);
   caja.append(mas, error, botones);
   elegirTipo(tipoActual);

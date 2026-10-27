@@ -10,11 +10,14 @@
 
 import { crearMeta, crearMovimiento, hoyIso } from "../core/finanzas-modelo.js";
 import { obtenerModulosFinanzas } from "../core/finanzas-derivados.js";
+import { buscarCuenta, listarCuentas, ultimaCuentaUsada } from "../core/finanzas-cuentas.js";
+import { listarCategorias } from "../core/finanzas-categorias.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { obtenerTodosLosSemestres } from "./finanzas-gastos.js";
+import { construirSelectorCategoria } from "./finanzas-categorias-ui.js";
 import { construirSeccionRecurrencia } from "./finanzas-recurrencia.js";
 import { construirSelectorFinanzas } from "./finanzas-selector.js";
 
@@ -37,7 +40,7 @@ function nombreMostradoMovimiento(mov) {
 }
 
 function obtenerMetasActivas(incluirId) {
-  return (estado.datos.metas || []).filter((m) => !m.archivada || m.id === incluirId);
+  return (estado.datos.metas || []).filter((m) => m.tipo !== "gasto" && (!m.archivada || m.id === incluirId));
 }
 
 function crearCampo(etiqueta, control) {
@@ -70,7 +73,7 @@ function crearInputMonto(valor) {
  * @param {{movimiento?: object|null, tipoInicial?: string, alGuardar?: () => void}} cfg
  *   movimiento: objeto existente (editar) o null (crear).
  */
-function abrirModalMovimiento({ movimiento = null, tipoInicial = "gasto", alGuardar = () => {} } = {}) {
+function abrirModalMovimiento({ movimiento = null, tipoInicial = "gasto", alGuardar = () => {}, prefill = null } = {}) {
   const modulos = obtenerModulosFinanzas(estado.datos);
   const esExistente = !!movimiento;
   const esDeModulo = esExistente && movimiento.origen && movimiento.origen !== "manual"; // matrícula / beca
@@ -133,7 +136,7 @@ function abrirModalMovimiento({ movimiento = null, tipoInicial = "gasto", alGuar
   caja.appendChild(bloqueTipo);
 
   // ----- Monto y nombre (siempre arriba) -----
-  const inputMonto = crearInputMonto(esExistente && !movimiento.recurrente ? movimiento.monto : "");
+  const inputMonto = crearInputMonto(esExistente && !movimiento.recurrente ? movimiento.monto : prefill && prefill.monto > 0 ? prefill.monto : "");
   const bloqueMonto = crearCampo("Monto", inputMonto);
   caja.appendChild(bloqueMonto);
 
@@ -165,7 +168,7 @@ function abrirModalMovimiento({ movimiento = null, tipoInicial = "gasto", alGuar
       ...metasSelect.map((m) => ({ valor: m.id, texto: `${m.emoji || "🎯"} ${m.nombre}` })),
       { valor: NUEVA_META, texto: t("+ Nueva meta") },
     ],
-    valorInicial: (movimiento && movimiento.meta_id) || (metasSelect[0] ? metasSelect[0].id : NUEVA_META),
+    valorInicial: (movimiento && movimiento.meta_id) || (prefill && prefill.metaId && metasSelect.some((m) => m.id === prefill.metaId) ? prefill.metaId : metasSelect[0] ? metasSelect[0].id : NUEVA_META),
     onCambiar: () => actualizarVisibilidad(),
   });
   const bloqueMeta = crearCampo("Meta", selectorMeta.elemento);
@@ -206,6 +209,44 @@ function abrirModalMovimiento({ movimiento = null, tipoInicial = "gasto", alGuar
     (v) => { sentido = v; }
   );
   caja.appendChild(bloqueSentido);
+
+  // ----- Categoría (sesión 5: gasto e ingreso; recategorizar un movimiento ya clasificado) -----
+  // Se reconstruye al cambiar entre gasto e ingreso: una categoría solo vale para su tipo, así que al cambiar se limpia.
+  const categoriaPrevia = (movimiento && movimiento.categoria_id) || null;
+  let tipoCategoria = tipo;
+  let selectCategoria = construirSelectorCategoria({ tipo: tipo === "ingreso" ? "ingreso" : "gasto", valor: categoriaPrevia || "" });
+  const bloqueCategoria = crearCampo("Categoría", selectCategoria);
+  caja.appendChild(bloqueCategoria);
+  const hayCategorias = (t2) => listarCategorias(estado.datos, { tipo: t2 === "ingreso" ? "ingreso" : "gasto" }).length > 0 || !!categoriaPrevia;
+  function sincronizarCategoria() {
+    if (tipo !== "gasto" && tipo !== "ingreso") return;
+    if (tipoCategoria !== tipo) {
+      const nuevo = construirSelectorCategoria({ tipo, valor: movimiento && movimiento.tipo === tipo ? categoriaPrevia || "" : "" });
+      bloqueCategoria.replaceChild(nuevo, selectCategoria);
+      selectCategoria = nuevo;
+      tipoCategoria = tipo;
+    }
+  }
+
+  // ----- Cuenta (sesión 7B: solo con el módulo Cuentas encendido; gasto e ingreso) -----
+  // Una cuenta archivada o ya inexistente que el movimiento usa se conserva como opción, para no perderla al editar.
+  const cuentaPrevia = (movimiento && movimiento.cuenta_id) || null;
+  const cuentasLista = modulos.cuentas ? listarCuentas(estado.datos) : [];
+  const cuentaPreviaFuera = cuentaPrevia && !cuentasLista.some((c) => c.id === cuentaPrevia);
+  const selectCuenta = document.createElement("select");
+  selectCuenta.className = "form-input";
+  const opcionesCuenta = [["", t("Sin asignar")], ...cuentasLista.map((c) => [c.id, `${c.emoji || ""} ${c.nombre} (${c.moneda})`.trim()])];
+  if (cuentaPreviaFuera) {
+    const previa = buscarCuenta(estado.datos, cuentaPrevia);
+    opcionesCuenta.push([cuentaPrevia, previa ? `${previa.nombre} (${previa.moneda}) · ${t("archivada")}` : t("Cuenta eliminada")]);
+  }
+  opcionesCuenta.forEach(([v, x]) => {
+    const o = document.createElement("option"); o.value = v; o.textContent = x; selectCuenta.appendChild(o);
+  });
+  selectCuenta.value = esExistente ? cuentaPrevia || "" : ultimaCuentaUsada(estado.datos) || "";
+  const bloqueCuenta = crearCampo("Cuenta", selectCuenta);
+  caja.appendChild(bloqueCuenta);
+  const hayCampoCuenta = modulos.cuentas && (cuentasLista.length > 0 || !!cuentaPrevia);
 
   // ----- Fecha -----
   const inputFecha = crearInput("date", esExistente ? (movimiento.recurrente ? "" : movimiento.fecha_registro || "") : hoyIso());
@@ -253,6 +294,9 @@ function abrirModalMovimiento({ movimiento = null, tipoInicial = "gasto", alGuar
     bloqueFuente.classList.toggle("oculto", tipo !== "ahorro");
     bloqueSentido.classList.toggle("oculto", tipo !== "transferencia");
     bloqueSemestre.classList.toggle("oculto", !esMov || esDeModulo);
+    bloqueCuenta.classList.toggle("oculto", !esMov || !hayCampoCuenta);
+    sincronizarCategoria();
+    bloqueCategoria.classList.toggle("oculto", !esMov || !hayCategorias(tipo));
     inputNombre.placeholder = t(
       tipo === "gasto" ? "Ej. Almuerzo, pasaje, materiales..." : tipo === "ingreso" ? "Ej. Trabajo de medio tiempo, mesada..." : "Opcional"
     );
@@ -348,6 +392,10 @@ function abrirModalMovimiento({ movimiento = null, tipoInicial = "gasto", alGuar
       sentido,
       pagadoConMetaId: tipo === "gasto" ? selectorPagarCon.obtenerValor() || null : null,
       recurrente,
+      // Lo que este formulario no edita se conserva tal cual (antes se perdía al guardar).
+      categoriaId: esMov ? selectCategoria.value || null : null,
+      compromisoId: movimiento ? movimiento.compromiso_id : null,
+      cuentaId: esMov && hayCampoCuenta ? selectCuenta.value || null : cuentaPrevia,
     });
 
     const indice = esExistente ? estado.datos.movimientos.findIndex((m) => m.id === movimiento.id) : -1;
@@ -357,6 +405,8 @@ function abrirModalMovimiento({ movimiento = null, tipoInicial = "gasto", alGuar
     marcarCambioPendiente();
     cerrar();
     alGuardar();
+    // Sesión 8: un ingreso nuevo puede proponer repartirse hacia metas (nunca se mueve solo).
+    if (!esExistente && nuevo.tipo === "ingreso") import("./finanzas-reparto-ui.js").then((m) => m.abrirPropuestaReparto(nuevo)).catch(() => {});
   });
   filaBotones.appendChild(btnGuardar);
   caja.appendChild(filaBotones);

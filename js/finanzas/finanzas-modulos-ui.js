@@ -6,10 +6,21 @@
 
 import { MODULOS_INFO, PERFILES_FINANZAS, aplicarModulosFinanzas, aplicarPerfilFinanzas, perfilDeModulos } from "../core/finanzas-perfiles.js";
 import { obtenerModulosFinanzas } from "../core/finanzas-derivados.js";
+import { activarDeudas } from "../core/finanzas-deudas.js";
+import { activarCuentas } from "../core/finanzas-cuentas.js";
+import { activarConsejos, consejoDe, consejosActivos } from "../core/finanzas-consejos.js";
 import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage-sync.js";
 import { estado } from "../core/storage.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
+import { mostrarToast } from "../ui/componentes.js";
+
+/** Al encender un módulo, un consejo de una línea (opcional: se apaga en Ajustes). */
+function avisarConsejo(modulo, encendido) {
+  if (!encendido) return;
+  const c = consejoDe(estado.datos, modulo);
+  if (c) mostrarToast(t(c));
+}
 
 /** Repinta Finanzas si ya está en pantalla. Import dinámico para no crear ciclos con finanzas.js. */
 async function repintarFinanzasSiVisible() {
@@ -109,6 +120,7 @@ function renderizarModulosFinanzasAjustes() {
     cont.appendChild(construirFilaInterruptor(info, !!modulos[info.id], (encendido) => {
       aplicarModulosFinanzas(estado.datos, { [info.id]: encendido });
       marcarCambioPendiente();
+      avisarConsejo(info.id, encendido);
       renderizarModulosFinanzasAjustes();
       repintarFinanzasSiVisible();
     }));
@@ -123,6 +135,38 @@ function renderizarModulosFinanzasAjustes() {
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
   }));
+
+  // Sesión 7A: módulo opcional Me deben y debo (apagado por defecto; no forma parte de los perfiles).
+  const deudas = { id: "deudas", etiqueta: "Me deben y debo", detalle: "Dinero que prestas o te prestan, y gastos divididos. Opcional" };
+  cont.appendChild(construirFilaInterruptor(deudas, !!modulos.deudas, (encendido) => {
+    activarDeudas(estado.datos, encendido);
+    marcarCambioPendiente();
+    avisarConsejo("deudas", encendido);
+    renderizarModulosFinanzasAjustes();
+    repintarFinanzasSiVisible();
+  }));
+
+  // Sesión 7B: módulo opcional Cuentas (cada una con su divisa; apagado por defecto, fuera de los perfiles).
+  const cuentasInfo = { id: "cuentas", etiqueta: "Cuentas", detalle: "Separa dónde está tu dinero (efectivo, banco, tarjetas), cada cuenta con su divisa. Opcional" };
+  cont.appendChild(construirFilaInterruptor(cuentasInfo, !!modulos.cuentas, (encendido) => {
+    activarCuentas(estado.datos, encendido);
+    marcarCambioPendiente();
+    avisarConsejo("cuentas", encendido);
+    renderizarModulosFinanzasAjustes();
+    repintarFinanzasSiVisible();
+  }));
+
+  // Sesión 8: consejos de una línea al encender un módulo (opcionales; preferencia por cuenta).
+  const consejosInfo = { id: "consejos", etiqueta: "Consejos al activar módulos", detalle: "Una línea de ayuda al encender cada parte de Finanzas" };
+  cont.appendChild(construirFilaInterruptor(consejosInfo, consejosActivos(estado.datos), (encendido) => {
+    activarConsejos(estado.datos, encendido);
+    marcarCambioPendiente();
+  }));
+
+  // Sesión 6: exportar, importar y mensajes del banco. Import dinámico: la pantalla de datos importa finanzas.js.
+  const huecoDatos = document.createElement("div");
+  cont.appendChild(huecoDatos);
+  import("./finanzas-datos-ui.js").then((m) => huecoDatos.appendChild(m.construirBloqueDatosFinanzas())).catch(() => {});
 }
 
 export { construirSelectorPerfil, renderizarModulosFinanzasAjustes };

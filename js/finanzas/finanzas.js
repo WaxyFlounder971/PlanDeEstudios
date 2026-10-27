@@ -54,6 +54,8 @@ const PESTANAS_FINANZAS = [
   { id: "plan", etiqueta: "Plan" },
   { id: "gastos-u", etiqueta: "Movimientos" },
   { id: "metas", etiqueta: "Metas" },
+  { id: "cuentas", etiqueta: "Cuentas" }, // sesión 7B: módulo opcional, apagado por defecto
+  { id: "deudas", etiqueta: "Deudas" }, // sesión 7A: módulo opcional, apagado por defecto
   { id: "presupuesto", etiqueta: "Presupuesto" }, // sesión 5: sobres y categorías (con Gastos e ingresos encendido)
   { id: "gastos-estudiantiles", etiqueta: "Beneficios" },
 ];
@@ -140,8 +142,10 @@ function calcularTotalesResumenFinanzas() {
 
 /** Pestañas visibles: las de perfiles.js más Presupuesto cuando Gastos e ingresos está encendido (sesión 5). */
 function pestanasVisiblesConPresupuesto(modulos) {
-  const base = pestanasVisiblesFinanzas(modulos);
-  return pestanaPresupuestoVisible(modulos) && !base.includes("presupuesto") ? [...base, "presupuesto"] : base;
+  let base = pestanasVisiblesFinanzas(modulos);
+  if (pestanaPresupuestoVisible(modulos) && !base.includes("presupuesto")) base = [...base, "presupuesto"];
+  if (modulos.cuentas && !base.includes("cuentas")) base = [...base, "cuentas"];
+  return modulos.deudas && !base.includes("deudas") ? [...base, "deudas"] : base;
 }
 
 function construirTabsFinanzas() {
@@ -222,7 +226,7 @@ function construirTarjetaPrincipalResumen(totales, modulos) {
 
 /** Tira de anillos pequeños con las metas activas (solo si Ahorros está encendido y hay metas). */
 function construirTiraMetasResumen() {
-  const activas = (estado.datos.metas || []).filter((m) => !m.archivada);
+  const activas = (estado.datos.metas || []).filter((m) => !m.archivada && m.tipo !== "gasto");
   if (!activas.length) return null;
   const sec = document.createElement("section");
   sec.className = "glass-card stack";
@@ -258,7 +262,7 @@ function construirResumenFinanzas() {
   const sec = document.createElement("section");
   sec.className = "stack";
 
-  const hayMetas = modulos.ahorros && (estado.datos.metas || []).some((m) => !m.archivada);
+  const hayMetas = modulos.ahorros && (estado.datos.metas || []).some((m) => !m.archivada && m.tipo !== "gasto");
   if (totalBecas === 0 && totalGastado === 0 && totalIngresos === 0 && totales.saldoLiquido === 0 && !hayMetas && !hayProximos()) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
@@ -344,6 +348,11 @@ function renderizarContenidoFinanzasActivo() {
     renderizarPestanaMetas(contenido);
   } else if (estado.finanzasVistaActiva === "presupuesto") {
     renderizarPestanaPresupuesto(contenido);
+  } else if (estado.finanzasVistaActiva === "cuentas") {
+    import("./finanzas-cuentas-ui.js").then((m) => { if (estado.finanzasVistaActiva === "cuentas" && contenido.isConnected) m.renderizarPestanaCuentas(contenido); });
+  } else if (estado.finanzasVistaActiva === "deudas") {
+    // Carga perezosa: con el módulo apagado esta pantalla ni se descarga (y no hay ciclo de imports con finanzas.js).
+    import("./finanzas-deudas-ui.js").then((m) => { if (estado.finanzasVistaActiva === "deudas" && contenido.isConnected) m.renderizarPestanaDeudas(contenido); });
   } else if (estado.finanzasVistaActiva === "gastos-estudiantiles") {
     renderizarPestanaBeneficios(contenido);
   }

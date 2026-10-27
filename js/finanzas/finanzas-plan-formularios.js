@@ -224,6 +224,8 @@ function confirmarYAvisar(c, opciones, alGuardar) {
   if (r.creado) {
     const signo = r.movimiento.tipo === "gasto" ? "−" : "+";
     mostrarBarraDeshacer(r.movimiento, `${t("Confirmado")}: ${c.nombre} ${signo}${formatearMonto(r.movimiento.monto)}`, () => deshacerConfirmacion(estado.datos, c.id));
+    // Sesión 8: un ingreso o desembolso confirmado también puede proponer repartirse hacia metas.
+    if (r.movimiento.tipo === "ingreso") import("./finanzas-reparto-ui.js").then((m) => m.abrirPropuestaReparto(r.movimiento)).catch(() => {});
   }
   return r;
 }
