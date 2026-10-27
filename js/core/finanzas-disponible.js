@@ -25,6 +25,7 @@ import { hoyIso } from "./finanzas-modelo.js";
 import { calcularTotalesMovimientos, movimientoVisible, obtenerModulosFinanzas } from "./finanzas-derivados.js";
 import { estadoVisibleCompromiso, obtenerCompromisosVisibles, describirMovimientoDe } from "./finanzas-compromisos.js";
 import { puedeAjustarSaldo } from "./finanzas-registro.js";
+import { contextoCuentas, movimientoAfectaMiDinero, movimientoEnMonedaPrincipal } from "./finanzas-cuentas-base.js";
 import { huboAporteHoy, listarAportesProgramados } from "./finanzas-metas-plan.js";
 import { sellarTimestamp } from "./schema.js";
 
@@ -138,6 +139,7 @@ function listarProximos(datos, { hoy = hoyIso(), horizonteDias } = {}) {
   (datos.movimientos || []).forEach((m) => {
     if (!m.recurrente || (m.tipo !== "gasto" && m.tipo !== "ingreso")) return;
     if (!movimientoVisible(m, modulos)) return;
+    if (!movimientoEnMonedaPrincipal(datos, m)) return; // otra divisa: no se mezcla con la de la app
     if (m.semestre_id && !semestres.has(m.semestre_id)) return;
     const monto = Number(m.recurrente.monto_por_pago) || 0;
     if (!(monto > 0)) return;
@@ -184,8 +186,10 @@ function calcularRitmoDiario(datos, hoy = hoyIso()) {
   const modulos = obtenerModulosFinanzas(datos);
   const desde = sumarDias(hoy, -(VENTANA_RITMO_DIAS - 1));
   // Inicio del historial = primer gasto o ingreso manual (un saldo inicial o un ajuste no es uso de la app).
-  const todos = (datos.movimientos || []).filter((m) => (m.tipo === "gasto" || m.tipo === "ingreso") && m.origen === "manual" && !m.recurrente && m.fecha_registro && m.fecha_registro <= hoy && movimientoVisible(m, modulos));
-  const propios = todos.filter((m) => m.tipo === "gasto" && !m.recurrente && !m.pagado_con_meta_id && m.fecha_registro >= desde);
+  const ctx = contextoCuentas(datos);
+  const todos = (datos.movimientos || []).filter((m) => (m.tipo === "gasto" || m.tipo === "ingreso") && m.origen === "manual" && !m.recurrente && m.fecha_registro && m.fecha_registro <= hoy && movimientoVisible(m, modulos) && movimientoEnMonedaPrincipal(datos, m, ctx));
+  // Un gasto que pagó otra persona (tarjeta de un familiar, o un préstamo) no baja Mi dinero: no cuenta para el ritmo.
+  const propios = todos.filter((m) => m.tipo === "gasto" && !m.recurrente && !m.pagado_con_meta_id && !(m.pagado_por_prestamo_id && modulos.deudas) && movimientoAfectaMiDinero(datos, m, ctx) && m.fecha_registro >= desde);
   if (!propios.length) return null;
   const primero = todos.reduce((min, m) => (m.fecha_registro < min ? m.fecha_registro : min), hoy);
   const ventana = Math.min(VENTANA_RITMO_DIAS, dias(hoy) - dias(primero) + 1);

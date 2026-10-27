@@ -47,7 +47,8 @@ function configurarPlanMeta(datos, metaId, { fechaObjetivo, aporte } = {}) {
     if (!(monto > 0)) return { ok: false, motivo: "monto" };
     if (!FRECUENCIAS_APORTE.includes(aporte.frecuencia)) return { ok: false, motivo: "frecuencia" };
     if (!esIso(aporte.fechaInicio)) return { ok: false, motivo: "inicio" };
-    nuevoAporte = { monto, frecuencia: aporte.frecuencia, fecha_inicio: aporte.fechaInicio };
+    // `recordar` solo existe cuando está encendido (sesión 8): los aportes de siempre conservan su forma.
+    nuevoAporte = { monto, frecuencia: aporte.frecuencia, fecha_inicio: aporte.fechaInicio, ...(aporte.recordar === true ? { recordar: true } : {}) };
   }
   if (fechaObjetivo !== undefined) meta.fecha_objetivo = fechaObjetivo;
   if (aporte !== undefined) meta.aporte_programado = aporte === null ? null : nuevoAporte;

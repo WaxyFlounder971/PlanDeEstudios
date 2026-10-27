@@ -250,7 +250,13 @@ function totalesDelMes(datos, tipo, mes, hoy) {
   const modulos = obtenerModulosFinanzas(datos);
   const tope = hasta < hoy ? hasta : hoy;
   const porCat = new Map(); let total = 0, sin = 0;
-  const sumar = (catId, monto) => { total += monto; if (!catId || !buscarCategoria(datos, catId)) sin += monto; else porCat.set(catId, (porCat.get(catId) || 0) + monto); };
+  const prio = { esencial: 0, flexible: 0, sinMarcar: 0 }; // Esencial o Flexible según la marca de la categoría; lo demás, sin marcar
+  const sumar = (catId, monto) => {
+    total += monto;
+    const cat = catId ? buscarCategoria(datos, catId) : null;
+    prio[cat && (cat.prioridad === "esencial" || cat.prioridad === "flexible") ? cat.prioridad : "sinMarcar"] += monto;
+    if (!cat) sin += monto; else porCat.set(catId, (porCat.get(catId) || 0) + monto);
+  };
   movimientosVigentes(datos, hoy).forEach((mov) => {
     if (mov.tipo !== tipo || !movimientoVisible(mov, modulos)) return;
     if (mov.recurrente) ocurrenciasRecurrente(mov.recurrente, sumarDias(desde, -1), tope).forEach(() => sumar(mov.categoria_id, Number(mov.recurrente.monto_por_pago) || 0));
@@ -259,7 +265,8 @@ function totalesDelMes(datos, tipo, mes, hoy) {
   total = redondear(total); sin = redondear(sin);
   const categorias = [...porCat.entries()].map(([id, monto]) => { const c = buscarCategoria(datos, id); return { id, nombre: c.nombre, emoji: c.emoji, color: c.color, archivada: !!c.archivada, monto: redondear(monto), porcentaje: total > 0 ? Math.round((monto / total) * 100) : 0 }; })
     .sort((x, y) => y.monto - x.monto);
-  return { total, categorias, sinCategoria: { monto: sin, porcentaje: total > 0 ? Math.round((sin / total) * 100) : 0 } };
+  return { total, categorias, sinCategoria: { monto: sin, porcentaje: total > 0 ? Math.round((sin / total) * 100) : 0 },
+    prioridad: { esencial: redondear(prio.esencial), flexible: redondear(prio.flexible), sinMarcar: redondear(prio.sinMarcar) } };
 }
 
 /**

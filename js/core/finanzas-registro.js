@@ -9,6 +9,7 @@
 
 import { crearMovimiento, hoyIso } from "./finanzas-modelo.js";
 import { calcularTotalesMovimientos, movimientoVisible, obtenerModulosFinanzas } from "./finanzas-derivados.js";
+import { cuentaUsable } from "./finanzas-cuentas.js";
 
 /** Los 3 tipos que ofrece el registro rápido. */
 const TIPOS_REGISTRO_RAPIDO = ["gasto", "ingreso", "ahorro"];
@@ -79,7 +80,7 @@ function ultimoTipoUsado(datos) {
 /** Quién puede usar cada tipo con los módulos actuales (ahorro necesita Ahorros + al menos una meta activa). */
 function tiposDisponiblesRegistroRapido(datos) {
   const modulos = obtenerModulosFinanzas(datos);
-  const hayMetaActiva = (datos.metas || []).some((x) => !x.archivada);
+  const hayMetaActiva = (datos.metas || []).some((x) => !x.archivada && x.tipo !== "gasto");
   const tipos = [];
   if (modulos.gastos) tipos.push("gasto", "ingreso");
   if (modulos.ahorros && hayMetaActiva) tipos.push("ahorro");
@@ -91,13 +92,16 @@ function tiposDisponiblesRegistroRapido(datos) {
  * Devuelve { ok:true, movimiento } o { ok:false, motivo } (motivo: "monto" | "meta" | "tipo").
  * El llamador marca el cambio pendiente.
  */
-function registrarMovimientoRapido(datos, { tipo, monto, nombre, fecha, nota, metaId, fuente, semestreId }) {
+function registrarMovimientoRapido(datos, { tipo, monto, nombre, fecha, nota, metaId, fuente, semestreId, cuentaId }) {
   if (!TIPOS_REGISTRO_RAPIDO.includes(tipo)) return { ok: false, motivo: "tipo" };
   const valor = redondear(Math.abs(parsearMonto(monto)));
   if (!(valor > 0)) return { ok: false, motivo: "monto" };
-  if (tipo === "ahorro" && !(datos.metas || []).some((x) => x.id === metaId && !x.archivada)) return { ok: false, motivo: "meta" };
+  if (tipo === "ahorro" && !(datos.metas || []).some((x) => x.id === metaId && !x.archivada && x.tipo !== "gasto")) return { ok: false, motivo: "meta" };
+  const conCuenta = (tipo === "gasto" || tipo === "ingreso") && cuentaId ? cuentaId : null;
+  if (conCuenta && !cuentaUsable(datos, conCuenta)) return { ok: false, motivo: "cuenta" };
   if (!Array.isArray(datos.movimientos)) datos.movimientos = [];
   const movimiento = crearMovimiento({
+    cuentaId: conCuenta,
     tipo, monto: valor, nombre: String(nombre || "").trim(),
     fechaRegistro: fecha || hoyIso(), nota: String(nota || "").trim() || null,
     semestreId: semestreId || null, metaId: tipo === "ahorro" ? metaId : null, fuente: tipo === "ahorro" ? fuente : null,

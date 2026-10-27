@@ -12,6 +12,8 @@ import { movimientosVigentes } from "./finanzas-derivados.js";
 import { sellarTimestamp } from "./schema.js";
 
 const TIPOS_CATEGORIA = ["gasto", "ingreso"];
+/** Marca opcional de una categoría de gasto. La clave solo existe cuando se elige: las categorías de siempre no cambian de forma. */
+const PRIORIDADES_CATEGORIA = ["esencial", "flexible"];
 const JUEGO_BASICO = [
   { id: "cat_comida", nombre: "Comida", emoji: "🍽️", color: "#e8a33d", tipo: "gasto" },
   { id: "cat_transporte", nombre: "Transporte", emoji: "🚌", color: "#4c8bf5", tipo: "gasto" },
@@ -92,6 +94,11 @@ function editarCategoriaFinanzas(datos, id, cambios = {}) {
   }
   if (cambios.emoji !== undefined) cat.emoji = cambios.emoji;
   if (cambios.color !== undefined) cat.color = cambios.color;
+  if (cambios.prioridad !== undefined) {
+    if (cambios.prioridad === null) delete cat.prioridad;
+    else if (cat.tipo === "gasto" && PRIORIDADES_CATEGORIA.includes(cambios.prioridad)) cat.prioridad = cambios.prioridad;
+    else return { ok: false, motivo: "prioridad" };
+  }
   sellarTimestamp(cat);
   return { ok: true, categoria: cat };
 }
@@ -195,7 +202,7 @@ function sugerirCategoria(datos, nombre, tipo = "gasto") {
 }
 
 export {
-  FLAG_MIGRACION_CATEGORIAS, JUEGO_BASICO, TIPOS_CATEGORIA, normalizar,
+  FLAG_MIGRACION_CATEGORIAS, JUEGO_BASICO, PRIORIDADES_CATEGORIA, TIPOS_CATEGORIA, normalizar,
   agruparSinCategoriaPorNombre, archivarCategoriaFinanzas, asignarCategoria, buscarCategoria, categorizable, categorizarEnLote,
   crearCategoriaFinanzas, editarCategoriaFinanzas, eliminarCategoriaFinanzas, listarCategorias, movimientosSinCategoria, migrarCategoriasV1, sembrarCategoriasBasicas,
   sugerirCategoria, validarCategoria,
