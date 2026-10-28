@@ -46,7 +46,7 @@
   }
 </script>
 <link rel="stylesheet" href="css/design-system.css?v=3.22.34">
-<link rel="icon" type="image/png" href="imagenes/LogoAppFolder.png" data-app-favicon>
+<link rel="icon" type="image/png" href="imagenes/LogoAppFolder-512.png" data-app-favicon>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2563EB">
 <script>
@@ -108,7 +108,7 @@
      ui/componentes.js). -->
 <div id="overlay-carga-sesion" class="overlay-carga-sesion" aria-hidden="true">
   <div class="carga-sesion-anillo-wrap">
-    <img src="imagenes/LogoAppFolder.png" alt="" class="carga-sesion-logo" data-app-logo>
+    <img src="imagenes/LogoAppFolder-512.png" alt="" class="carga-sesion-logo" data-app-logo>
     <div class="carga-sesion-anillo"></div>
   </div>
   <p class="carga-sesion-texto">Cargando tu sesión…</p>
@@ -118,7 +118,7 @@
 <div id="pantalla-login" class="login-pantalla oculto">
   <div class="login-pagina">
   <div class="login-contenido stack">
-    <h1 style="font-size:1.6rem; display:flex; align-items:center; justify-content:center; gap:8px;"><img src="imagenes/LogoAppFolder.png" alt="Logo App Académica" data-app-logo style="height:1.4em; width:auto; vertical-align:middle;"> App Académica</h1>
+    <h1 style="font-size:1.6rem; display:flex; align-items:center; justify-content:center; gap:8px;"><img src="imagenes/LogoAppFolder-512.png" alt="Logo App Académica" data-app-logo style="height:1.4em; width:auto; vertical-align:middle;"> App Académica</h1>
     <p>Toda tu carrera en un solo lugar disponible en todos tus dispositivos</p>
     <button id="btn-login-google" class="btn btn-primary btn-block">Iniciar sesión con Google</button>
     <p id="aviso-navegador-integrado" class="muted oculto" style="font-size:.85rem;margin:0;">Si el acceso con Google no se abre aquí, abre esta página en Chrome o Safari e inténtalo de nuevo.</p>
@@ -176,7 +176,7 @@
        ni columna derecha ni barra superior); la de >=1500px vive dentro de
        .columna-derecha (más abajo) y la de <900px dentro de .mobile-topbar.
        Ya no lleva aria-hidden: es un botón real y lo anuncia su aria-label. -->
-  <button type="button" id="badge-tiempo-estudio" class="timer-indicador timer-indicador--flotante oculto"></button>
+  <div id="badge-tiempo-estudio" class="timer-indicador timer-indicador--flotante oculto"></div>
 
   <!-- Barra superior solo-móvil -->
   <div class="mobile-topbar">
@@ -207,8 +207,8 @@
         </svg>
         <span>Sin conexión</span>
       </button>
-      <h3 style="display:flex; align-items:center; gap:6px; justify-content:center;"><img src="imagenes/LogoAppFolder.png" alt="Logo App Académica" data-app-logo style="height:1.2em; width:auto; vertical-align:middle;"> App Académica</h3>
-      <button type="button" id="timer-linea-topbar" class="timer-indicador timer-indicador--linea oculto"></button>
+      <h3 style="display:flex; align-items:center; gap:6px; justify-content:center;"><img src="imagenes/LogoAppFolder-512.png" alt="Logo App Académica" data-app-logo style="height:1.2em; width:auto; vertical-align:middle;"> App Académica</h3>
+      <div id="timer-linea-topbar" class="timer-indicador timer-indicador--linea oculto"></div>
     </div>
     <!-- Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes solo se
          llegaba entrando a Ajustes. Mismo estilo "símbolo limpio" sin borde
@@ -244,7 +244,7 @@
     <!-- Sidebar -->
     <nav id="app-sidebar" class="glass-panel app-sidebar">
       <button id="btn-colapsar-sidebar" class="btn-colapsar sidebar-cerrar-movil" title="Colapsar menú">⟨⟨</button>
-      <h3 class="sidebar-titulo" style="display:flex; align-items:center; gap:8px;"><img id="logo-app-header" src="imagenes/LogoAppFolder.png" alt="Logo App Académica" data-app-logo style="height:1.3em; width:auto; vertical-align:middle;"> <span class="texto">App Académica</span></h3>
+      <h3 class="sidebar-titulo" style="display:flex; align-items:center; gap:8px;"><img id="logo-app-header" src="imagenes/LogoAppFolder-512.png" alt="Logo App Académica" data-app-logo style="height:1.3em; width:auto; vertical-align:middle;"> <span class="texto">App Académica</span></h3>
 
       <div class="sidebar-scroll">
         <button id="nav-resumen" class="btn btn-secondary btn-block btn-nav" data-seccion="resumen" title="Resumen">🏠 <span class="texto-nav">Resumen</span></button>
@@ -501,7 +501,7 @@
           <div id="selector-logo-app" class="stack">
             <div class="logo-selector-encabezado"><span class="form-label">Logo de la app</span><label class="logo-selector-personalizado" for="input-logo-app-archivo">Personalizado</label></div>
             <div class="onboarding-logos">
-              <button type="button" data-logo-app="folder" aria-label="Logo carpeta"><img src="imagenes/LogoAppFolder.png" alt="Logo con carpeta"></button>
+              <button type="button" data-logo-app="folder" aria-label="Logo carpeta"><img src="imagenes/LogoAppFolder-512.png" alt="Logo con carpeta"></button>
               <button type="button" data-logo-app="birrete" aria-label="Logo birrete"><img src="imagenes/LogoAppBirrete.png" alt="Logo con birrete"></button>
             </div>
             <input id="input-logo-app-archivo" class="oculto" type="file" accept="image/png,image/jpeg,image/webp">
@@ -848,7 +848,7 @@
         <h3 style="margin:0 0 10px;">Enlaces rápidos</h3>
         <div id="lista-enlaces-lateral" class="stack" style="gap:8px;"></div>
       </aside>
-      <button type="button" id="timer-tarjeta-lateral" class="timer-indicador timer-indicador--lateral oculto"></button>
+      <div id="timer-tarjeta-lateral" class="timer-indicador timer-indicador--lateral oculto"></div>
     </div>
   </div>
 </div>
@@ -1383,7 +1383,7 @@
 
     <!-- Adjuntar archivos/imágenes/enlaces a este evento/tarea — mismo
          sistema unificado que Cronograma (Drive del usuario, ver
-         core/storage-adjuntos.js + ui/adjuntos-ui.js), ya no base64. Un
+         core/storage/storage-adjuntos.js + ui/adjuntos-ui.js), ya no base64. Un
          evento nuevo (sin id todavía) usa un id "pendiente" generado al
          abrir el modal — ver comentario en agenda-modal.js. -->
     <div>

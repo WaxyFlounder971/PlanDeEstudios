@@ -1,18 +1,18 @@
 // Pruebas de la sesión 7B (Node, sin DOM): Cuentas con divisa propia, con schema.js, storage-merge.js y los derivados reales.
 import assert from "node:assert/strict";
-import * as schema from "../core/schema.js";
-import { fusionarDatos } from "../core/storage-merge.js";
-import { crearMovimiento } from "../core/finanzas-modelo.js";
-import { calcularTotalesMovimientos, movimientosVigentes } from "../core/finanzas-derivados.js";
-import { quitarMovimiento, registrarMovimientoRapido, ajustarSaldo } from "../core/finanzas-registro.js";
-import { calcularDisponible, calcularRitmoDiario } from "../core/finanzas-disponible.js";
-import { activarDeudas, crearPrestamo, dividirGasto } from "../core/finanzas-deudas.js";
-import { crearSobre, resumirSobre } from "../core/finanzas-sobres.js";
+import * as schema from "../js/core/schema.js";
+import { fusionarDatos } from "../js/core/storage/storage-merge.js";
+import { crearMovimiento } from "../js/core/finanzas/finanzas-modelo.js";
+import { calcularTotalesMovimientos, movimientosVigentes } from "../js/core/finanzas/finanzas-derivados.js";
+import { quitarMovimiento, registrarMovimientoRapido, ajustarSaldo } from "../js/core/finanzas/finanzas-registro.js";
+import { calcularDisponible, calcularRitmoDiario } from "../js/core/finanzas/finanzas-disponible.js";
+import { activarDeudas, crearPrestamo, dividirGasto } from "../js/core/finanzas/finanzas-deudas.js";
+import { crearSobre, resumirSobre } from "../js/core/finanzas/finanzas-sobres.js";
 import {
   activarCuentas, archivarCuenta, crearCuenta, crearTraspaso, cuentaUsable, editarCuenta, eliminarCuenta, listarCuentas, movimientosDeCuenta,
   resumirCuentas, ultimaCuentaUsada,
-} from "../core/finanzas-cuentas.js";
-import { exportarMovimientosCsv, exportarRespaldoJson } from "../core/finanzas-importar.js";
+} from "../js/core/finanzas/finanzas-cuentas.js";
+import { exportarMovimientosCsv, exportarRespaldoJson } from "../js/core/finanzas/finanzas-importar.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

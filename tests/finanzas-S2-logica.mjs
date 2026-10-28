@@ -1,16 +1,16 @@
 // Pruebas de lógica de la sesión 2 (Node, sin DOM): compromisos, generador de cuotas, confirmar sin duplicar, migración sin tocar datos.
 import assert from "node:assert/strict";
-import { crearMeta, crearMovimiento, hoyIso } from "../core/finanzas-modelo.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { aplicarModulosFinanzas, pestanasVisiblesFinanzas } from "../core/finanzas-perfiles.js";
-import { ajustarSaldo, quitarMovimiento } from "../core/finanzas-registro.js";
-import { migrarDatosAntiguos } from "../core/schema.js";
-import { construirRegistroDesdeMovimientos } from "../finanzas/finanzas-registro-semestre.js";
+import { crearMeta, crearMovimiento, hoyIso } from "../js/core/finanzas/finanzas-modelo.js";
+import { calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { aplicarModulosFinanzas, pestanasVisiblesFinanzas } from "../js/core/finanzas/finanzas-perfiles.js";
+import { ajustarSaldo, quitarMovimiento } from "../js/core/finanzas/finanzas-registro.js";
+import { migrarDatosAntiguos } from "../js/core/schema.js";
+import { construirRegistroDesdeMovimientos } from "../js/finanzas/finanzas-registro-semestre.js";
 import {
   FLAG_MIGRACION_FINANZAS2, confirmarCompromiso, construirCuotas, crearCompromiso, deshacerConfirmacion, editarCompromiso,
   eliminarCompromiso, estadoVisibleCompromiso, fechasDePagos, generarCuotas, migrarFinanzas2V1, obtenerCompromisosVisibles,
   omitirCompromiso, ordenarCompromisos, reabrirCompromiso, reajustarSerie, repartirMonto, resumirCompromisos,
-} from "../core/finanzas-compromisos.js";
+} from "../js/core/finanzas/finanzas-compromisos.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

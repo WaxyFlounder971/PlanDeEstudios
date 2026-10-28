@@ -1,14 +1,14 @@
 // Pruebas de lógica de la sesión 5 (Node, sin DOM): categorías, categorizar en lote, sobres y resumen mensual.
 import assert from "node:assert/strict";
-import { crearMovimiento } from "../core/finanzas-modelo.js";
-import { fusionarDatos } from "../core/storage-merge.js";
+import { crearMovimiento } from "../js/core/finanzas/finanzas-modelo.js";
+import { fusionarDatos } from "../js/core/storage/storage-merge.js";
 import {
   agruparSinCategoriaPorNombre, archivarCategoriaFinanzas, asignarCategoria, categorizarEnLote, crearCategoriaFinanzas, editarCategoriaFinanzas, eliminarCategoriaFinanzas,
   listarCategorias, movimientosSinCategoria, sembrarCategoriasBasicas, sugerirCategoria,
-} from "../core/finanzas-categorias.js";
+} from "../js/core/finanzas/finanzas-categorias.js";
 import {
   archivarSobre, calcularArrastre, crearSobre, editarSobre, eliminarSobre, gastosEnPeriodo, listarSobres, periodoDelSobre, resumenMensual, resumirSobre, sobresEnRiesgo,
-} from "../core/finanzas-sobres.js";
+} from "../js/core/finanzas/finanzas-sobres.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

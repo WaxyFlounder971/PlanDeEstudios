@@ -2,7 +2,7 @@
 
 ### semestres.js
 Propósito: Alta/edición/listado de semestres — formulario completo (nombre, fecha, duración, Modo Hardcore, buscador + filtro por estado, checklist de materias), sincronía Matrícula↔Plan, modo edición (editar/borrar semestres), y el render del listado (dashboard + actuales + pasados) con mecanismo anti-scroll-fantasma.
-Depende de: core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, plan/plan-gestionar.js, semestres/semestres-tarjetas.js, semestres/semestres-dashboard.js, main.js (import circular intencional, mismo patrón que ui/componentes.js)
+Depende de: core/schema.js, core/storage/storage-sync.js, core/storage/storage.js, core/utils.js, ui/componentes.js, plan/plan-gestionar.js, semestres/semestres-tarjetas.js, semestres/semestres-dashboard.js, main.js (import circular intencional, mismo patrón que ui/componentes.js)
 Exporta:
 
 * `abrirModalAltaSemestre(semestreExistente = null)` — abre el modal de alta (o edición, si se pasa un semestre) de un semestre.
@@ -17,14 +17,14 @@ Exporta:
 
 ### semestres-dashboard.js
 Propósito: Pestaña contraíble "Historial académico" al inicio de la sección Semestres — estadísticas de aprobación (barra dividida + detalle por estado) y promedio ponderado (por semestre+universidad y por plan/carrera); colapsada por default para no empujar el resto del contenido.
-Depende de: core/storage.js, core/utils.js, core/schema.js
+Depende de: core/storage/storage.js, core/utils.js, core/schema.js
 Exporta:
 
 * `construirDashboardAcademico(onCambiar)` — arma la tarjeta completa del dashboard (encabezado + selector de vista + vista activa); si está colapsado devuelve solo el encabezado, sin empujar nada hacia abajo.
 
 ### semestres-tarjetas.js
 Propósito: Tarjetas de semestre y de materia matriculada — motor de notas completo (criterios, asignaciones, cálculo de nota final en vivo, proyecciones/objetivos, resolución de conflictos de sync) y drag-and-drop de reordenamiento. Es el archivo más grande del proyecto (~3540 líneas); casi todo su contenido son funciones privadas del modal de notas, solo 3 quedan expuestas afuera.
-Depende de: core/storage.js, core/utils.js, ui/componentes.js, core/schema.js, core/storage-sync.js, plan/plan-vista-lista-tarjetas.js, plan/plan-detalle.js, plan/plan-vista-lista.js
+Depende de: core/storage/storage.js, core/utils.js, ui/componentes.js, core/schema.js, core/storage/storage-sync.js, plan/plan-vista-lista-tarjetas.js, plan/plan-detalle.js, plan/plan-vista-lista.js
 Exporta:
 
 * `construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEditar, onBorrar, anidada = false)` — construye la tarjeta completa de un semestre (encabezado + sus materias matriculadas), expandible/colapsable.

@@ -1,11 +1,11 @@
 // Pruebas de integración de la sesión 6: schema.js y storage-merge.js reales (migración y sincronización entre dispositivos).
 import assert from "node:assert/strict";
-import * as schema from "../core/schema.js";
-import { fusionarDatos } from "../core/storage-merge.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { quitarMovimiento } from "../core/finanzas-registro.js";
-import { aplicarImportacion, candidatosDeCsv, clasificarCandidatos, exportarMovimientosCsv, prepararImportacion } from "../core/finanzas-importar.js";
-import { crearPatron, editarPatron, eliminarPatron, leerMensajes, migrarPatronesMensajesV1 } from "../core/finanzas-mensajes.js";
+import * as schema from "../js/core/schema.js";
+import { fusionarDatos } from "../js/core/storage/storage-merge.js";
+import { calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { quitarMovimiento } from "../js/core/finanzas/finanzas-registro.js";
+import { aplicarImportacion, candidatosDeCsv, clasificarCandidatos, exportarMovimientosCsv, prepararImportacion } from "../js/core/finanzas/finanzas-importar.js";
+import { crearPatron, editarPatron, eliminarPatron, leerMensajes, migrarPatronesMensajesV1 } from "../js/core/finanzas/finanzas-mensajes.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

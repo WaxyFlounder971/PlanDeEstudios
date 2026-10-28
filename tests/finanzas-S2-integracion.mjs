@@ -1,8 +1,8 @@
-// Integración de la sesión 2 con el motor real de fusión (core/storage-merge.js): dos dispositivos, sin DOM.
+// Integración de la sesión 2 con el motor real de fusión (core/storage/storage-merge.js): dos dispositivos, sin DOM.
 import assert from "node:assert/strict";
-import { fusionarDatos } from "../core/storage-merge.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { confirmarCompromiso, deshacerConfirmacion, eliminarCompromiso, generarCuotas, omitirCompromiso, reabrirCompromiso } from "../core/finanzas-compromisos.js";
+import { fusionarDatos } from "../js/core/storage/storage-merge.js";
+import { calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { confirmarCompromiso, deshacerConfirmacion, eliminarCompromiso, generarCuotas, omitirCompromiso, reabrirCompromiso } from "../js/core/finanzas/finanzas-compromisos.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

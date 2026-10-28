@@ -1,11 +1,11 @@
 // Pruebas de lógica de la sesión 4 (Node, sin DOM): metas con fecha, aporte sugerido, fecha estimada y aporte programado en Disponible.
 import assert from "node:assert/strict";
-import { crearMeta, crearMovimiento } from "../core/finanzas-modelo.js";
-import { aplicarModulosFinanzas } from "../core/finanzas-perfiles.js";
-import { ajustarSaldo } from "../core/finanzas-registro.js";
-import { calcularSaldoMeta, calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { calcularDisponible, listarProximos, sumarDias } from "../core/finanzas-disponible.js";
-import { calcularRitmoMeta, configurarPlanMeta, listarAportesProgramados, resumirMeta } from "../core/finanzas-metas-plan.js";
+import { crearMeta, crearMovimiento } from "../js/core/finanzas/finanzas-modelo.js";
+import { aplicarModulosFinanzas } from "../js/core/finanzas/finanzas-perfiles.js";
+import { ajustarSaldo } from "../js/core/finanzas/finanzas-registro.js";
+import { calcularSaldoMeta, calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { calcularDisponible, listarProximos, sumarDias } from "../js/core/finanzas/finanzas-disponible.js";
+import { calcularRitmoMeta, configurarPlanMeta, listarAportesProgramados, resumirMeta } from "../js/core/finanzas/finanzas-metas-plan.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

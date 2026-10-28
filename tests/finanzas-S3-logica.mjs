@@ -1,14 +1,14 @@
 // Pruebas de lógica de la sesión 3 (Node, sin DOM): Disponible, Próximos, horizonte, semáforo y ritmo.
 import assert from "node:assert/strict";
-import { crearMovimiento } from "../core/finanzas-modelo.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { aplicarModulosFinanzas } from "../core/finanzas-perfiles.js";
-import { ajustarSaldo } from "../core/finanzas-registro.js";
-import { confirmarCompromiso, crearCompromiso, generarCuotas, omitirCompromiso } from "../core/finanzas-compromisos.js";
+import { crearMovimiento } from "../js/core/finanzas/finanzas-modelo.js";
+import { calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { aplicarModulosFinanzas } from "../js/core/finanzas/finanzas-perfiles.js";
+import { ajustarSaldo } from "../js/core/finanzas/finanzas-registro.js";
+import { confirmarCompromiso, crearCompromiso, generarCuotas, omitirCompromiso } from "../js/core/finanzas/finanzas-compromisos.js";
 import {
   calcularDisponible, calcularRitmoDiario, calcularSemaforo, esDiaDePago, fijarHorizonteDias, listarProximos,
   obtenerHorizonteDias, ocurrenciasRecurrente, sumarDias,
-} from "../core/finanzas-disponible.js";
+} from "../js/core/finanzas/finanzas-disponible.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

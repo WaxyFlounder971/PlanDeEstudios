@@ -1,8 +1,8 @@
 // Pruebas de lógica 0C (Node, sin DOM): perfiles, pestañas, onboarding y resumen de metas.
 import assert from "node:assert/strict";
-import { migrarFinanzasAMovimientos, crearMeta, crearMovimiento } from "../core/finanzas-modelo.js";
-import { calcularTotalesMovimientos, calcularSaldoMeta, obtenerModulosFinanzas } from "../core/finanzas-derivados.js";
-import { PERFILES_FINANZAS, aplicarModulosFinanzas, aplicarPerfilFinanzas, debeMostrarOnboardingFinanzas, omitirOnboardingFinanzas, perfilDeModulos, pestanasVisiblesFinanzas } from "../core/finanzas-perfiles.js";
+import { migrarFinanzasAMovimientos, crearMeta, crearMovimiento } from "../js/core/finanzas/finanzas-modelo.js";
+import { calcularTotalesMovimientos, calcularSaldoMeta, obtenerModulosFinanzas } from "../js/core/finanzas/finanzas-derivados.js";
+import { PERFILES_FINANZAS, aplicarModulosFinanzas, aplicarPerfilFinanzas, debeMostrarOnboardingFinanzas, omitirOnboardingFinanzas, perfilDeModulos, pestanasVisiblesFinanzas } from "../js/core/finanzas/finanzas-perfiles.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

@@ -1,22 +1,22 @@
 // Pruebas de la sesión 8 (Node, sin DOM): Esencial o Flexible, micro-consejos, metas sugeridas, reparto de ingresos,
 // recordatorio por meta y metas de gasto, con schema.js, storage-merge.js y los derivados reales.
 import assert from "node:assert/strict";
-import * as schema from "../core/schema.js";
-import { fusionarDatos } from "../core/storage-merge.js";
-import { aplicarModulosFinanzas } from "../core/finanzas-perfiles.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { crearMeta, crearMovimiento } from "../core/finanzas-modelo.js";
-import { calcularDisponible } from "../core/finanzas-disponible.js";
-import { crearCategoriaFinanzas, editarCategoriaFinanzas, listarCategorias } from "../core/finanzas-categorias.js";
-import { resumenMensual } from "../core/finanzas-sobres.js";
-import { CONSEJOS, activarConsejos, consejoDe, consejosActivos } from "../core/finanzas-consejos.js";
-import { fechaEnMeses, sugerirMetas } from "../core/finanzas-metas-sugeridas.js";
-import { aplicarReparto, configurarReparto, proponerReparto } from "../core/finanzas-reparto.js";
-import { posponerRecordatorio, recordatoriosDeMetas } from "../core/finanzas-recordatorios.js";
-import { configurarPlanMeta } from "../core/finanzas-metas-plan.js";
-import { archivarMetaGasto, crearMetaGasto, editarMetaGasto, eliminarMetaGasto, listarMetasGasto, resumirMetaGasto } from "../core/finanzas-metas-gasto.js";
-import { registrarMovimientoRapido, tiposDisponiblesRegistroRapido } from "../core/finanzas-registro.js";
-import { exportarRespaldoJson } from "../core/finanzas-importar.js";
+import * as schema from "../js/core/schema.js";
+import { fusionarDatos } from "../js/core/storage/storage-merge.js";
+import { aplicarModulosFinanzas } from "../js/core/finanzas/finanzas-perfiles.js";
+import { calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { crearMeta, crearMovimiento } from "../js/core/finanzas/finanzas-modelo.js";
+import { calcularDisponible } from "../js/core/finanzas/finanzas-disponible.js";
+import { crearCategoriaFinanzas, editarCategoriaFinanzas, listarCategorias } from "../js/core/finanzas/finanzas-categorias.js";
+import { resumenMensual } from "../js/core/finanzas/finanzas-sobres.js";
+import { CONSEJOS, activarConsejos, consejoDe, consejosActivos } from "../js/core/finanzas/finanzas-consejos.js";
+import { fechaEnMeses, sugerirMetas } from "../js/core/finanzas/finanzas-metas-sugeridas.js";
+import { aplicarReparto, configurarReparto, proponerReparto } from "../js/core/finanzas/finanzas-reparto.js";
+import { posponerRecordatorio, recordatoriosDeMetas } from "../js/core/finanzas/finanzas-recordatorios.js";
+import { configurarPlanMeta } from "../js/core/finanzas/finanzas-metas-plan.js";
+import { archivarMetaGasto, crearMetaGasto, editarMetaGasto, eliminarMetaGasto, listarMetasGasto, resumirMetaGasto } from "../js/core/finanzas/finanzas-metas-gasto.js";
+import { registrarMovimientoRapido, tiposDisponiblesRegistroRapido } from "../js/core/finanzas/finanzas-registro.js";
+import { exportarRespaldoJson } from "../js/core/finanzas/finanzas-importar.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

@@ -496,6 +496,47 @@ a { color: var(--accent-1); }
   transition: color var(--transition-fast);
 }
 
+/* Pista horizontal de las vistas de Tiempo de Estudio. El viewport solo
+   captura gestos horizontales dentro de esta sección; el resto de la app
+   conserva el scroll táctil vertical. */
+.te-vistas-viewport {
+  width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+  overflow-y: visible;
+  touch-action: pan-y;
+}
+.te-vistas-pista {
+  display: flex;
+  width: 100%;
+  align-items: flex-start;
+  transition: transform 360ms cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+}
+.nav-vistas-pista { width: 300%; }
+.nav-vista-pane { flex: 0 0 33.333333%; width: 33.333333%; min-width: 0; }
+.nav-vistas-pista--dos { width: 200%; }
+.nav-vista-pane--dos { flex-basis: 50%; width: 50%; }
+.pill-switch-binario .pill-switch-thumb[style*="--nav-pill-progreso"] {
+  transform: translateX(calc(var(--nav-pill-progreso) * 100%));
+  transition: none;
+}
+.te-vista-pane {
+  flex: 0 0 100%;
+  width: 100%;
+  min-width: 0;
+}
+.te-vista-pane[aria-hidden="true"] {
+  pointer-events: none;
+}
+.pill-switch-binario .pill-switch-thumb[style*="--te-pill-progreso"] {
+  transform: translateX(calc(var(--te-pill-progreso) * 100%));
+  transition: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .te-vistas-pista { transition-duration: 1ms; }
+}
+
 /* Fila "Modo" / "Calidad" + su pill switch de ancho completo, apilados
    (caption arriba, switch abajo) — reemplaza la fila anterior en línea de
    "etiqueta ..... switch chico a la derecha" (ver montarPillSwitch en
@@ -2905,10 +2946,25 @@ img, svg { max-width: 100%; }
    translúcido + borde + texto en el color propio). */
 .agenda-filtro-estados {
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: flex-start;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 7px;
   margin-top: 8px;
+}
+.agenda-filtro-grupo { display:flex; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; }
+.agenda-filtro-separador { display:block; flex:none; width:1px; height:18px; margin:0 2px; background:var(--border-glass); opacity:.8; }
+.agenda-filtro-estado-menu { position:relative; }
+.agenda-filtro-estado-trigger { min-height:24px; padding-inline:12px; }
+.agenda-filtro-estado-trigger.active { border-color:var(--accent-1); color:var(--accent-1); background:color-mix(in srgb,var(--accent-1) 14%,transparent); }
+.agenda-filtro-estado-popover { position:absolute; right:0; bottom:calc(100% + 8px); z-index:60; display:flex; flex-direction:column; align-items:stretch; gap:5px; min-width:132px; padding:8px; border:1px solid var(--border-glass); border-radius:12px; background:var(--bg-card,var(--bg-panel)); box-shadow:var(--shadow-float,0 8px 24px #0005); }
+.agenda-filtro-estado-popover.oculto { display:none; }
+.agenda-filtro-estado-popover .agenda-filtro-estado-btn { justify-content:flex-start; min-height:28px; text-align:left; }
+@media (max-width:520px) {
+  .agenda-filtro-estados { gap:6px; }
+  .agenda-filtro-grupo { gap:5px; }
+  .agenda-filtro-separador { height:16px; margin-inline:0; }
+  .agenda-filtro-estado-btn { padding:3px 8px; }
 }
 .agenda-filtro-colapsable { margin: 0 0 10px; }
 .agenda-filtro-colapsable > summary { cursor: pointer; color: var(--text-secondary); font-size: .84rem; padding: 7px 2px; }
@@ -3458,77 +3514,37 @@ html[data-rendimiento="normal"] #app-shell .btn { transition:background-color .1
   white-space: nowrap;
 }
 
-/* ---- Finanzas: pestañas responsivas (Resumen/Semestres/Gastos generales
-   U/Beneficios) — v2.8.8, 2026-08-11 ----
-   A diferencia de .pill-group genérico (trunca con "…" y se vuelve
-   scrolleable horizontal si no caben) y de .pill-group-vista (conserva el
-   ancho natural pero también resuelve el desborde con scroll horizontal),
-   acá el pedido es explícito: el texto JAMÁS se corta, ni con "…" ni
-   apretado ni recortado — si no entran cómodas en una fila, las 4
-   pestañas pasan a apilarse en una columna, cada una ocupando el ancho
-   completo del contenedor, creciendo en alto lo que haga falta.
-
-   Se usa una @container en vez de un @media de viewport porque el ancho
-   real disponible para este grupo depende del layout (sidebar colapsada o
-   expandida, con o sin panel lateral) y no del viewport completo — un
-   @media fijo podría no activarse (o activarse tarde) según ese contexto
-   aunque las pestañas ya estén apretadas ahí adentro. */
-.finanzas-tabs-contenedor {
-  container-type: inline-size;
-  container-name: finanzas-tabs;
-}
-
+/* ---- Finanzas: pestañas y accesos responsivos ----
+   Las pestañas conservan el nombre completo y permiten desplazamiento
+   horizontal en pantallas angostas. Los accesos principales se reorganizan
+   en columnas con ancho mínimo legible. */
+.finanzas-tabs-contenedor { min-width:0; width:100%; }
 .pill-group-finanzas {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 6px;
-  background: rgba(0, 0, 0, 0.18);
-  padding: 4px;
-  border-radius: var(--radius-pill);
+  display:flex; flex-flow:row nowrap; gap:6px; width:100%; max-width:100%;
+  overflow-x:auto; overflow-y:hidden; padding:4px;
+  border-radius:var(--radius-pill); scrollbar-width:thin;
+  -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain;
 }
-[data-mode="light"] .pill-group-finanzas { background: rgba(0, 0, 0, 0.05); }
-
+[data-mode="light"] .pill-group-finanzas { background:rgba(0,0,0,.05); }
 .pill-group-finanzas .pill-item {
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: visible;
-  text-overflow: unset;
-  white-space: nowrap;
-  text-align: center;
+  flex:0 0 auto; width:max-content; min-width:max-content; max-width:none;
+  overflow:visible; text-overflow:unset; white-space:nowrap; text-align:center;
+  padding:8px 14px; font-size:.85rem;
 }
-
-/* Ancho insuficiente para una fila cómoda -> columna, ancho completo por
-   botón, alto libre (el texto decide cuánto crece el botón, nunca al
-   revés). 560px cubre con margen el peor caso ("Gastos generales U" es la
-   etiqueta más larga de las 4) sin activarse de más en anchos donde en
-   realidad sí entrarían bien. */
-@container finanzas-tabs (max-width: 560px) {
-  .pill-group-finanzas {
-    flex-direction: column;
-    border-radius: var(--radius-lg);
-  }
-  .pill-group-finanzas .pill-item {
-    width: 100%;
-    white-space: normal;
-    height: auto;
-    padding: 10px 14px;
-  }
+.finanzas-accesos-rapidos {
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));
+  gap:8px; width:100%; min-width:0;
 }
-
-/* Fallback para navegadores sin soporte de container queries (Safari <16 —
-   poco frecuente ya en 2026, pero de costo casi nulo cubrirlo dado que acá
-   el requisito de "nunca cortar texto" es duro): un @media de viewport
-   conservador que como mínimo evita el corte, aunque no sea tan preciso
-   como la container query de arriba frente a un sidebar colapsado/expandido. */
-@supports not (container-type: inline-size) {
-  @media (max-width: 480px) {
-    .pill-group-finanzas { flex-direction: column; }
-    .pill-group-finanzas .pill-item {
-      width: 100%;
-      white-space: normal;
-      height: auto;
-    }
-  }
+.finanzas-accesos-rapidos > .btn {
+  min-width:0; min-height:44px; white-space:normal; line-height:1.25;
+}
+#pill-formato-texto {
+  display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; overflow:visible;
+}
+#pill-formato-texto > .pill-item {
+  width:100%; min-width:0; min-height:38px; height:auto; padding:7px 6px;
+  overflow:visible; text-overflow:unset; white-space:normal; line-height:1.15;
+  overflow-wrap:normal; word-break:normal; hyphens:none; font-size:.75rem;
 }
 
 .mapa-zoom-controles {
@@ -4140,6 +4156,7 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
   outline: none;
   cursor: pointer;
 }
+.ppz-slider:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
 /* Thumb: EXACTO mismo lenguaje que .ppz-rueda-perilla (círculo de 18px
    tintado con el color elegido del degradado, anillo blanco de 2px,
    shadow-float) — antes era un círculo blanco genérico de navegador que
@@ -4831,6 +4848,23 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
 .timer-indicador:hover { border-color: color-mix(in srgb, var(--te-color) 80%, transparent); }
 .timer-indicador:active { transform: scale(0.98); }
 .timer-indicador:focus-visible { outline: 2px solid var(--te-color); outline-offset: 2px; }
+.timer-indicador .timer-pip-boton {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 29px;
+  height: 29px;
+  margin-left: auto;
+  border: 1px solid color-mix(in srgb, var(--te-color) 35%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--te-color) 10%, transparent);
+  color: var(--text-secondary);
+  font-size: .9rem;
+  line-height: 1;
+  cursor: pointer;
+}
+.timer-indicador .timer-pip-boton:hover { color: var(--text-primary); background: color-mix(in srgb, var(--te-color) 20%, transparent); }
+.timer-indicador--linea .timer-pip-boton { width: 23px; height: 23px; margin-left: 2px; border: 0; background: transparent; }
 [data-rendimiento="reducido"] .timer-indicador {
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -5889,7 +5923,9 @@ html,body,#app-shell,.glass-card,.glass-panel,#app-sidebar,.mobile-topbar { tran
 .agenda-busqueda-resultados { display:grid; gap:10px; margin:8px 0 14px; }
 .agenda-busqueda-grupo { min-width:0; padding:12px; gap:9px; }
 .agenda-busqueda-grupo h3 { margin:0; font-size:.94rem; }
-.agenda-busqueda-fecha { padding-left:3px; font-size:.76rem; }
+.agenda-busqueda-fecha-fila { display:flex; align-items:center; justify-content:space-between; gap:10px; min-width:0; padding:0 3px; }
+.agenda-busqueda-fecha { font-size:.76rem; }
+.agenda-busqueda-fecha-relativa { flex:none; font-size:.72rem; text-align:right; }
 .agenda-menu-rapido-evento { position:fixed; z-index:100001; display:grid; min-width:142px; gap:3px; padding:6px; border:1px solid var(--border-glass); border-radius:13px; background:var(--bg-card); box-shadow:var(--shadow-float); }
 .agenda-menu-rapido-evento > button { min-height:38px; justify-content:flex-start; text-align:left; }
 .agenda-filtros-cronograma { display:flex; flex-wrap:wrap; align-items:center; justify-content:center; gap:7px; margin:0 0 2px; }

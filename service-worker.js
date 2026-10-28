@@ -43,7 +43,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.25.19"; // Traducciones activas, onboarding y demo de Notas rápidas.
+const VERSION = "v3.26.16"; // Filtros de categoría agrupados en Agenda.
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
@@ -67,7 +67,6 @@ const CASCARON_MINIMO = [
   "demo/datos-demo.json",
   "css/design-system.css",
   "js/main.js",
-  "imagenes/LogoAppFolder.png",
   "imagenes/LogoAppFolder-192.png",
   "imagenes/LogoAppFolder-512.png",
   "imagenes/LogoAppBirrete.png",

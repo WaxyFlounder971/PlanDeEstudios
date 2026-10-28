@@ -2,7 +2,7 @@
 
 Índice de referencia rápida de qué exporta cada archivo `.js` del proyecto y para qué sirve, para no tener que leer/grepear archivos completos en cada prompt. Solo se documentan **exports** (lo que otros archivos pueden usar) — funciones privadas internas no aparecen acá.
 
-> Progreso: bloque **Core** completo (9/9). Pendientes: Plan, Semestres, Comunidad, Horario, Agenda, Config (resto), UI.
+> Alcance: inventario de exports de `js/core/`. Para el dominio financiero y su interfaz, consulta `MAPA_FUNCIONES_finanzas.md`.
 
 ---
 
@@ -45,8 +45,8 @@
 * `abrirModalCopiaManualPortapapeles(texto)` — construye (si hace falta) y muestra un modal con un textarea de solo lectura ya seleccionado, como último recurso de copia manual.
 
 ### js/core/schema.js
-**Propósito:** El mapa de referencia completo del modelo de datos de la app — factories (`crear*`) para cada entidad, migraciones de esquema, el reloj lógico (Lamport) para sincronización, y todo el motor de cálculo de notas/promedios/finanzas. Es el archivo más grande y más importado del proyecto.
-**Depende de:** ninguno (archivo base, sin imports).
+**Propósito:** Esquema de datos persistidos, factories (`crear*`), migraciones y reloj lógico (Lamport). Los cálculos del dominio financiero viven en `js/core/finanzas/`; `schema.js` importa las migraciones necesarias y conserva la forma del objeto de cuenta.
+**Depende de:** migraciones del dominio `js/core/finanzas/` para normalizar las colecciones de Finanzas; el resto del modelo sirve como capa base.
 **Exporta:**
 
 *Datos de usuario y migraciones:*
@@ -118,6 +118,7 @@
 *Finanzas:*
 * `crearRegistroFinancieroSemestre({ semestreId, costoMatricula, becaMonto })` — registro financiero de un semestre.
 * `crearGastoU({ nombre, costo, nota, semestreId, recurrente })` — gasto general de universidad, con soporte para gastos recurrentes.
+* Finanzas 2.0 se modela en `js/core/finanzas/`: movimientos, metas, compromisos, categorías, sobres, mensajes, préstamos y cuentas; `schema.js` conserva el esquema inicial y ejecuta las migraciones de sus colecciones.
 * `calcularPagosRecurrentesTranscurridos(recurrente)` — cuenta cuántos pagos de un gasto recurrente ya cayeron hasta hoy (nunca futuros).
 * `crearBackupDriveDefault()` — objeto default de `configuracion.backup_drive`.
 * `FRECUENCIAS_BACKUP_DRIVE` — opciones de frecuencia de backup rotativo (diaria..mensual, con sus días de intervalo).
@@ -149,7 +150,7 @@
 * `siguienteOrden(coleccion)` — próximo valor de `orden` para agregar algo al final (drag and drop).
 * `reordenarPorArrastre(coleccion, idsEnNuevoOrden)` — reasigna `orden` secuencial tras un drag, sellando timestamp solo en los ítems que cambiaron.
 
-### js/core/storage-adjuntos.js
+### js/core/storage/storage-adjuntos.js
 **Propósito:** Orquesta el ciclo de vida completo de un adjunto: referencia liviana en el JSON (vía schema.js) + subida/descarga/borrado del binario real en Drive (vía auth.js), con cola de subida en memoria y limpieza de archivos huérfanos.
 **Depende de:** schema.js, auth.js, storage-sync.js, storage.js
 **Exporta:**
@@ -160,7 +161,7 @@
 * `procesarTumbasDriveHuerfanas()` — recorre tumbas de adjuntos buscando archivos de Drive que quedaron huérfanos (borrado registrado pero binario no borrado) y los limpia. Se engancha como hook post-fusión.
 * `obtenerAdjuntosDe(entidadTipo, entidadId)` — helper de renderizado: adjuntos vigentes de una entidad puntual.
 
-### js/core/storage.js
+### js/core/storage/storage.js
 **Propósito:** Estado global compartido (`estado`) por toda la app, caché offline en localStorage, y manejo del access_token de Google (guardar/leer/borrar con expiración).
 **Depende de:** storage-sync.js (`ocultarAvisoReconexion`, `programarRefrescoProactivo`)
 **Exporta:**
@@ -177,9 +178,9 @@
 * `leerCacheLocal()` — lee la caché local; devuelve `null` y la descarta si está corrupta (JSON inválido).
 * `guardarRespaldoPendiente(correo, datos, fileId)` / `leerRespaldoPendiente(correo)` — conservan cambios no sincronizados en una clave aislada por cuenta para restaurarlos después de un cierre de sesión voluntario.
 
-### js/core/storage-merge.js
+### js/core/storage/storage-merge.js
 **Propósito:** Toda la lógica de fusión (merge) de datos entre dispositivos al sincronizar — resuelve conflictos usando el reloj lógico de Lamport y respeta tumbas de borrado en cada colección anidada del modelo.
-**Depende de:** schema.js (`observarRelojLogico`, `migrarDatosAntiguos`)
+**Depende de:** `js/core/schema.js` (`observarRelojLogico`, `migrarDatosAntiguos`); todas las colecciones persistidas deben agregarse explícitamente a su fusión.
 **Exporta:**
 * `fusionarDatos(datosLocal, datosRemoto)` — punto de entrada principal; toda lectura de datos externos (Drive o caché) debe pasar por acá antes de aplicarse.
 * `esMasReciente(a, b)` — compara dos entidades por su contador lógico `_actualizadoEn` (con desempate por `_dispositivoId`).
@@ -192,9 +193,10 @@
 * `fusionarSemestre(semestreLocal, semestreRemoto)` / `fusionarSemestres(local, remoto, tumbas)` — funden un semestre individual y la colección completa de semestres.
 * `fusionarMateriaMatriculada(mmLocal, mmRemoto)` / `fusionarMateriasMatriculadas(local, remoto, tumbas)` — funden una matrícula individual (con sus criterios) y la colección completa.
 * `fusionarCriterio(criterioLocal, criterioRemoto)` / `fusionarCriterios(local, remoto, tumbas)` — funden un criterio individual (con sus asignaciones) y la colección completa.
-* `fusionarBloqueHorario(bloqueLocal, bloqueRemoto)` / `fusionarBloquesHorario(local, remoto, tumbas)` — funden un bloque de horario individual (con sus excepciones de semana) y la colección completa.
+* `fusionarBloqueHorario(bloqueLocal, bloqueRemoto)` / `fusionarBloquesHorario(local, remoto, tumbas)` — funden un bloque de horario individual y su colección completa.
+* Finanzas 2.0: `movimientos`, `metas`, `compromisos`, `categorias_finanzas`, `sobres`, `patrones_mensajes`, `prestamos` y `cuentas` se fusionan por id mediante `fusionarColeccion()` y cada una conserva su `_eliminados_*`. `finanzas_semestre` conserva además su fusión anidada de pagos e ingresos.
 
-### js/core/storage-sync.js
+### js/core/storage/storage-sync.js
 **Propósito:** Orquestación completa de sincronización con Drive: login silencioso, refresco de token, subida/bajada de cambios, sondeo multi-dispositivo, pull-to-refresh, backup rotativo, indicador visual de estado y conteo de conflictos.
 **Depende de:** config-ajustes.js, config-enlaces.js, main.js, plan-gestionar.js, plan-vista-lista.js, semestres.js, semestres-tarjetas.js, finanzas.js, ui/componentes.js, ui/tema.js, auth.js, schema.js, storage-merge.js, storage.js
 **Exporta:**

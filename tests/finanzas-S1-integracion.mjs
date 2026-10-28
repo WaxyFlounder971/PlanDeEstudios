@@ -1,10 +1,10 @@
-// Pruebas de integración de la sesión 1 con el motor real de fusión (core/storage-merge.js) y el adaptador
+// Pruebas de integración de la sesión 1 con el motor real de fusión (core/storage/storage-merge.js) y el adaptador
 // de semestres (finanzas/finanzas-registro-semestre.js). Corren en Node dentro del proyecto, sin DOM.
 import assert from "node:assert/strict";
-import { fusionarDatos } from "../core/storage-merge.js";
-import { ID_SALDO_INICIAL, ajustarSaldo, quitarMovimiento, registrarMovimientoRapido } from "../core/finanzas-registro.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { confirmarRegistroEnMovimientos, crearRegistroVacio } from "../finanzas/finanzas-registro-semestre.js";
+import { fusionarDatos } from "../js/core/storage/storage-merge.js";
+import { ID_SALDO_INICIAL, ajustarSaldo, quitarMovimiento, registrarMovimientoRapido } from "../js/core/finanzas/finanzas-registro.js";
+import { calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { confirmarRegistroEnMovimientos, crearRegistroVacio } from "../js/finanzas/finanzas-registro-semestre.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

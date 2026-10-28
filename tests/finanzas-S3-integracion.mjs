@@ -2,13 +2,13 @@
 // La pieza crítica: los pagos recurrentes FUTUROS que cuenta Disponible deben seguir la misma regla que los pagos
 // recurrentes PASADOS que ya cuenta Mi dinero (calcularPagosRecurrentesTranscurridos de schema.js).
 import assert from "node:assert/strict";
-import { calcularPagosRecurrentesTranscurridos } from "../core/schema.js";
-import { fusionarDatos } from "../core/storage-merge.js";
-import { crearMovimiento, hoyIso } from "../core/finanzas-modelo.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { ajustarSaldo } from "../core/finanzas-registro.js";
-import { generarCuotas } from "../core/finanzas-compromisos.js";
-import { calcularDisponible, ocurrenciasRecurrente, sumarDias } from "../core/finanzas-disponible.js";
+import { calcularPagosRecurrentesTranscurridos } from "../js/core/schema.js";
+import { fusionarDatos } from "../js/core/storage/storage-merge.js";
+import { crearMovimiento, hoyIso } from "../js/core/finanzas/finanzas-modelo.js";
+import { calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { ajustarSaldo } from "../js/core/finanzas/finanzas-registro.js";
+import { generarCuotas } from "../js/core/finanzas/finanzas-compromisos.js";
+import { calcularDisponible, ocurrenciasRecurrente, sumarDias } from "../js/core/finanzas/finanzas-disponible.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

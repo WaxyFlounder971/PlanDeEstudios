@@ -1,15 +1,15 @@
 // Pruebas de la sesión 7A (Node, sin DOM): Me deben y debo con schema.js, storage-merge.js y los derivados reales.
 import assert from "node:assert/strict";
-import * as schema from "../core/schema.js";
-import { fusionarDatos } from "../core/storage-merge.js";
-import { aplicarModulosFinanzas } from "../core/finanzas-perfiles.js";
-import { calcularTotalesMovimientos, movimientosVigentes } from "../core/finanzas-derivados.js";
-import { quitarMovimiento } from "../core/finanzas-registro.js";
+import * as schema from "../js/core/schema.js";
+import { fusionarDatos } from "../js/core/storage/storage-merge.js";
+import { aplicarModulosFinanzas } from "../js/core/finanzas/finanzas-perfiles.js";
+import { calcularTotalesMovimientos, movimientosVigentes } from "../js/core/finanzas/finanzas-derivados.js";
+import { quitarMovimiento } from "../js/core/finanzas/finanzas-registro.js";
 import {
   activarDeudas, archivarPrestamo, calcularSaldoPrestamo, crearPrestamo, deshacerDivision, dividirGasto, editarPrestamo, eliminarPrestamo, listarPrestamos,
   movimientosDePrestamo, registrarAbono, registrarPrestamoAdicional, resumirDeudas,
-} from "../core/finanzas-deudas.js";
-import { exportarMovimientosCsv, exportarRespaldoJson } from "../core/finanzas-importar.js";
+} from "../js/core/finanzas/finanzas-deudas.js";
+import { exportarMovimientosCsv, exportarRespaldoJson } from "../js/core/finanzas/finanzas-importar.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

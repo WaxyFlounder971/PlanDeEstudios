@@ -2,7 +2,7 @@
 
 ### comunidad.js
 Propósito: Sección Comunidad completa (`#seccion-comunidad`) — profesores (alta/edición, calificación general 1-10, "¿volverías a llevarlo?", vinculación a materias por semestre) y compañeros (alta/edición, materias compartidas, importar contacto vía Contacts Picker API).
-Depende de: core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, ui/componentes.js, core/clipboard.js, semestres/semestres.js, plan/plan-detalle.js, semestres/semestres-tarjetas.js
+Depende de: core/schema.js, core/storage/storage-sync.js, core/storage/storage.js, core/utils.js, ui/componentes.js, core/clipboard.js, semestres/semestres.js, plan/plan-detalle.js, semestres/semestres-tarjetas.js
 Exporta:
 
 * `inicializarComunidad()` — se llama una vez al arranque (antes de un posible `mostrarApp()` por caché); registra en plan-detalle.js y semestres-tarjetas.js los callbacks reales de "abrir alta de profesor" y "abrir tarjeta flotante de profesor" para evitar ciclos de import. No crea nodos nuevos (el contenedor ya viene en index.html).

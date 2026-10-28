@@ -1,11 +1,11 @@
 // Pruebas de integración de la sesión 5: migración, sincronización y coherencia con los totales reales (schema.js, storage-merge.js, derivados).
 import assert from "node:assert/strict";
-import * as schema from "../core/schema.js";
-import { fusionarDatos } from "../core/storage-merge.js";
-import { crearMovimiento } from "../core/finanzas-modelo.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { archivarCategoriaFinanzas, asignarCategoria, crearCategoriaFinanzas, eliminarCategoriaFinanzas, FLAG_MIGRACION_CATEGORIAS, listarCategorias, migrarCategoriasV1 } from "../core/finanzas-categorias.js";
-import { crearSobre, gastosEnPeriodo, listarSobres, resumenMensual, resumirSobre } from "../core/finanzas-sobres.js";
+import * as schema from "../js/core/schema.js";
+import { fusionarDatos } from "../js/core/storage/storage-merge.js";
+import { crearMovimiento } from "../js/core/finanzas/finanzas-modelo.js";
+import { calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { archivarCategoriaFinanzas, asignarCategoria, crearCategoriaFinanzas, eliminarCategoriaFinanzas, FLAG_MIGRACION_CATEGORIAS, listarCategorias, migrarCategoriasV1 } from "../js/core/finanzas/finanzas-categorias.js";
+import { crearSobre, gastosEnPeriodo, listarSobres, resumenMensual, resumirSobre } from "../js/core/finanzas/finanzas-sobres.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

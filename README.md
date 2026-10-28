@@ -1,192 +1,38 @@
-/* =========================================================================
-   ESQUEMA DE DATOS — App Académica
-   Este archivo NO valida nada por ahora, solo documenta y crea la
-   estructura inicial ("de fábrica") de los datos de un usuario nuevo.
-   Todo el proyecto (iteraciones 1-7) va a ir llenando estas mismas llaves,
-   así que este archivo es el mapa de referencia de todo el modelo.
-   ========================================================================= */
+# App Académica
 
-/**
- * Devuelve el objeto de datos "vacío" para un usuario que recién inicia
- * sesión por primera vez. Esto es lo que se guarda como el archivo JSON
- * único dentro de su Google Drive (ver js/auth.js).
- */
-function crearDatosUsuarioNuevo() {
-  return {
-    version_esquema: 1,
+Aplicación web instalable (PWA) para organizar el Plan de Estudios, semestres, materias, notas, horario, agenda, notas rápidas y finanzas. Usa módulos ES nativos y guarda los datos de la cuenta como un documento sincronizado con Google Drive, con caché local para continuar sin conexión.
 
-    perfil: {
-      nombre: null,          // viene de la cuenta de Google
-      correo: null,          // viene de la cuenta de Google
-      foto_url: null,        // viene de la cuenta de Google (userinfo picture)
-      carnet: null,          // dato opcional de perfil, ya NO se usa para iniciar sesión
-    },
+## Abrir el proyecto
 
-    configuracion: {
-      paleta: "azul",              // una de las 10 paletas
-      modo: "dark",                 // "dark" | "light"
-      escala_notas_global: 100,     // 10 o 100 (1-10 ó 1-100)
-      plan_activo_id: null,         // id del Plan de Estudios seleccionado como activo
-      enlaces_rapidos: [],          // ver estructura de "enlace" abajo (máx. 20)
+La entrada es `index.html`, que carga `js/main.js` como módulo. Sirve la carpeta raíz desde un servidor web local y abre la URL en el navegador; no abras `index.html` con `file://`, porque los módulos ES, el Service Worker y varias funciones de la PWA requieren un origen web.
 
-      // --- Modo Hardcore 💀 (doble carrera) ---
-      modo_hardcore: false,          // si está activo, se combina un plan principal + uno secundario
-      plan_activo_secundario_id: null, // id del segundo Plan de Estudios (solo relevante si modo_hardcore = true)
-    },
+El proyecto no tiene paso de compilación: los módulos se cargan directamente desde `js/`.
 
-    // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
-    planes_estudio: [
-      /*
-      {
-        id: "plan_001",
-        nombre_carrera: "Ingeniería en Tecnologías de Información",
-        universidad: "TEC",              // "TEC" | "UCR" | otra
-        codigo_plan: "420501, plan 01",  // texto libre, tal cual lo trae la universidad
-        parametros_universidad: {
-          nombre_bloque: "Semestre",     // "Semestre" | "Cuatrimestre" | "Trimestre"
-          semanas_por_bloque: 16,        // 16, 18 o 20
-          escala_notas: 100,             // puede ser distinta al global si se necesita
-          formula_ponderado: "creditos", // "creditos" = Σ(nota*creditos)/Σcreditos
-          horario_inicio_default: "07:30",
-          horario_duracion_bloque_min: 50,
-        },
-        categorias: [
-          // { id, nombre, color } — 100% creadas por el usuario, nunca precargadas
-        ],
-        materias: [
-          /*
-          {
-            id: "MA1102",
-            codigo: "MA1102",
-            nombre: "Cálculo Diferencial e Integral",
-            creditos: 4,
-            horas: { teoria: 5, practica: 0, laboratorio: 0, teoria_practica: 0 },
-            bloque: 1,                      // bloque/nivel original del plan
-            requisitos: ["MA0101"],         // códigos
-            correquisitos: [],
-            categoria_id: null,             // se asigna luego manualmente
-            estado: "pendiente",            // "pendiente" | "cursando" | "aprobado" | "reprobado"
-            escala_notas_override: null,    // null = usa la global/universidad
-          }
-          *//*
-        ],
-      }
-      */
-    ],
+## Secciones principales
 
-    // Historial de semestres cursados, de cualquiera de los planes de estudio.
-    semestres: [
-      /*
-      {
-        id: "sem_001",
-        plan_estudio_id: "plan_001",
-        nombre: "I Semestre",          // o "Verano 2025", etc.
-        fecha_inicio: "2026-01-12",
-        semanas_totales: 16,
-        materias_matriculadas: [
-          {
-            materia_id: "MA1102",
-            plan_estudio_id: "plan_001", // de cuál de los dos planes viene (relevante en Modo Hardcore)
-            profesor_id: null,
-            criterios: [
-              // { id, nombre, valor_total_porcentaje }
-            ],
-            asignaciones: [
-              // { id, criterio_id, nombre, nota, agregado_a_agenda: true/false, agenda_evento_id }
-            ],
-            nota_final: null,           // calculada en JS local, redondeada al 5
-            calificacion_profesor: null // 1-10, evaluación subjetiva del usuario al profesor
-          }
-        ],
-        horario: [
-          // { materia_id, dia: "L"|"K"|"M"|"J"|"V"|"S"|"D", hora_inicio, hora_fin, aula, modalidad, color }
-        ],
-      }
-      */
-    ],
+- **Plan de Estudios:** planes, materias, requisitos, importación y mapa curricular.
+- **Semestres:** matrícula, notas, ponderados y horario asociado.
+- **Agenda y Notas rápidas:** tareas/eventos y notas locales sincronizadas con la cuenta.
+- **Finanzas:** modelo unificado para movimientos, Disponible, Plan, metas, categorías, presupuesto, importación/exportación, préstamos y cuentas. Consulta el [mapa completo de Finanzas](MAPA/MAPA_FUNCIONES_finanzas.md) y el [mapa del modelo JSON](MAPA/MAPA_JSON.md).
+- **Comunidad, Horario y Tiempo:** profesores/compañeros, horarios, seguimiento de tiempo y herramientas relacionadas.
 
-    profesores: [
-      /*
-      { id, nombre, materias_impartidas: [{ materia_id, semestre_id, nota_obtenida, calificacion_dada }] }
-      */
-    ],
+## Estructura
 
-    agenda: [
-      /*
-      { id, tipo: "tarea"|"examen"|"recordatorio", titulo, fecha, hora, materia_id, semestre_id,
-        completado: false, archivado: false, notas: "" }
-      */
-    ],
-  };
-}
+- `js/core/`: esquema, almacenamiento, sincronización, autenticación y lógica compartida.
+- `js/core/finanzas/`: reglas y cálculos del dominio financiero.
+- `js/finanzas/`: shell y pantallas de Finanzas.
+- `js/plan/`, `js/semestres/`, `js/agenda/`, `js/notas/`, `js/horario/`, `js/comunidad/`, `js/tiempo-estudio/`: secciones funcionales.
+- `idiomas/`: catálogos de idioma e interfaz.
+- `demo/`: datos ficticios para el modo de demostración.
+- `tests/`: pruebas automatizadas del proyecto.
+- `MAPA/`: documentación técnica y mapas de funciones/datos.
 
-/** Estructura de referencia de un "enlace rápido" (máx. 20 por usuario). */
-function crearEnlaceRapido({ nombre, url, icono_tipo, icono_valor }) {
-  // icono_tipo: "emoji" | "imagen" ; icono_valor: el emoji o la URL/base64 de la imagen
-  return { id: crypto.randomUUID(), nombre, url, icono_tipo, icono_valor };
-}
+## Documentación técnica
 
-const LIMITE_ENLACES_RAPIDOS = 20;
-/* Orden "azucarado": neutros primero (blanco → gris → negro) y luego el
- * espectro cromático completo (rojo → dorado → amarillo → verde → cyan →
- * azul → índigo → morado → rosado), cerrando con "azucarado" (combinación
- * de varios colores pastel) como pieza destacada al final. */
-const PALETAS_DISPONIBLES = [
-  "blanco", "gris", "negro",
-  "rojo", "dorado", "amarillo", "verde", "cyan", "azul", "indigo", "morado", "rosado",
-  "azucarado",
-];
+- [Arquitectura y decisiones de módulos](ARQUITECTURA.md)
+- [Mapa de funciones general](MAPA/MAPA_FUNCIONES.md)
+- [Mapa completo de Finanzas](MAPA/MAPA_FUNCIONES_finanzas.md)
+- [Esquema y colecciones de datos](MAPA/MAPA_JSON.md)
+- [Service Worker y caché offline](MAPA/MAPA_SERVICE_WORKER.md)
 
-/* ===================== Plan de Estudios / Materias / Categorías ===================== */
-
-/** Valores por defecto sugeridos según universidad (editables por el usuario). */
-const PARAMETROS_UNIVERSIDAD_DEFAULT = {
-  TEC: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:30", horario_duracion_bloque_min: 50 },
-  UCR: { nombre_bloque: "Semestre", semanas_por_bloque: 16, horario_inicio_default: "07:00", horario_duracion_bloque_min: 50 },
-};
-
-function crearPlanEstudio({ nombre_carrera, universidad, codigo_plan, parametros_universidad }) {
-  return {
-    id: "plan_" + crypto.randomUUID(),
-    nombre_carrera,
-    universidad,
-    codigo_plan: codigo_plan || null,
-    parametros_universidad: {
-      nombre_bloque: "Semestre",
-      semanas_por_bloque: 16,
-      escala_notas: 100,
-      formula_ponderado: "creditos",
-      horario_inicio_default: "07:30",
-      horario_duracion_bloque_min: 50,
-      ...(parametros_universidad || {}),
-    },
-    categorias: [],
-    materias: [],
-  };
-}
-
-function crearCategoria({ nombre, color }) {
-  return { id: "cat_" + crypto.randomUUID(), nombre, color };
-}
-
-/** Crea una materia a partir de una fila ya parseada del CSV (ver js/plan.js). */
-function crearMateria({ codigo, nombre, creditos, horas, bloque, requisitos, correquisitos }) {
-  return {
-    id: codigo, // el código funciona como id único dentro del plan
-    codigo,
-    nombre,
-    creditos,
-    horas: {
-      teoria: horas.teoria || 0,
-      practica: horas.practica || 0,
-      laboratorio: horas.laboratorio || 0,
-      teoria_practica: horas.teoria_practica || 0,
-    },
-    bloque,
-    requisitos: requisitos || [],
-    correquisitos: correquisitos || [],
-    categoria_id: null,
-    estado: "pendiente",
-    escala_notas_override: null,
-  };
-}
+La documentación es una guía del código vigente, no una instrucción para copiar encima archivos de versiones anteriores. Al añadir una colección sincronizada, actualiza el esquema, la migración, la fusión y estos mapas juntos.

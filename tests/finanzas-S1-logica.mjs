@@ -1,13 +1,13 @@
 // Pruebas de lógica de la sesión 1 (Node, sin DOM): ajuste de saldo, registro rápido, plantillas, deshacer.
 import assert from "node:assert/strict";
-import { crearMeta, crearMovimiento, migrarFinanzasAMovimientos, hoyIso } from "../core/finanzas-modelo.js";
-import { calcularSaldoMeta, calcularTotalesMovimientos, movimientosVigentes } from "../core/finanzas-derivados.js";
-import { aplicarModulosFinanzas } from "../core/finanzas-perfiles.js";
-import { migrarDatosAntiguos } from "../core/schema.js";
+import { crearMeta, crearMovimiento, migrarFinanzasAMovimientos, hoyIso } from "../js/core/finanzas/finanzas-modelo.js";
+import { calcularSaldoMeta, calcularTotalesMovimientos, movimientosVigentes } from "../js/core/finanzas/finanzas-derivados.js";
+import { aplicarModulosFinanzas } from "../js/core/finanzas/finanzas-perfiles.js";
+import { migrarDatosAntiguos } from "../js/core/schema.js";
 import {
   ajustarSaldo, calcularDiferenciaSaldo, crearGuardReentrada, parsearMonto, plantillasRecientes,
   puedeAjustarSaldo, quitarMovimiento, registrarMovimientoRapido, tiposDisponiblesRegistroRapido, ultimoTipoUsado,
-} from "../core/finanzas-registro.js";
+} from "../js/core/finanzas/finanzas-registro.js";
 
 let ok = 0;
 const test = async (n, f) => { await f(); ok++; console.log("  ✓", n); };

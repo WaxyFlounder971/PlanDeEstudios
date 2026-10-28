@@ -1,22 +1,22 @@
 // Pruebas de lógica de la sesión 6 (Node, sin DOM): texto, CSV, exportar, importar sin duplicados y mensajes del banco.
 import assert from "node:assert/strict";
-import * as schema from "../core/schema.js";
-import { crearMovimiento, crearMeta } from "../core/finanzas-modelo.js";
-import { calcularTotalesMovimientos } from "../core/finanzas-derivados.js";
-import { quitarMovimiento } from "../core/finanzas-registro.js";
-import { archivarCategoriaFinanzas, crearCategoriaFinanzas } from "../core/finanzas-categorias.js";
+import * as schema from "../js/core/schema.js";
+import { crearMovimiento, crearMeta } from "../js/core/finanzas/finanzas-modelo.js";
+import { calcularTotalesMovimientos } from "../js/core/finanzas/finanzas-derivados.js";
+import { quitarMovimiento } from "../js/core/finanzas/finanzas-registro.js";
+import { archivarCategoriaFinanzas, crearCategoriaFinanzas } from "../js/core/finanzas/finanzas-categorias.js";
 import {
   compararMoneda, detectarOrdenFecha, hashTexto, huellaMovimiento, normalizarTipo, parsearFechaTexto, parsearMontoTexto,
-} from "../core/finanzas-texto.js";
-import { decodificarBytes, detectarSeparador, escribirCsv, leerCsv, neutralizarFormula, restaurarFormula } from "../core/finanzas-csv.js";
+} from "../js/core/finanzas/finanzas-texto.js";
+import { decodificarBytes, detectarSeparador, escribirCsv, leerCsv, neutralizarFormula, restaurarFormula } from "../js/core/finanzas/finanzas-csv.js";
 import {
   advertenciasImportacion, aplicarImportacion, candidatosDeCsv, clasificarCandidatos, deshacerImportacion, detectarMapeo,
   exportarMovimientosCsv, exportarRespaldoJson, mapeoSuficiente, prepararImportacion, resumirCandidatos,
-} from "../core/finanzas-importar.js";
+} from "../js/core/finanzas/finanzas-importar.js";
 import {
   compilarPlantilla, crearPatron, editarPatron, eliminarPatron, leerConPlantilla, leerMensajeGenerico, leerMensajes, listarPatrones,
   separarMensajes, sugerirPlantilla, MAX_PATRONES,
-} from "../core/finanzas-mensajes.js";
+} from "../js/core/finanzas/finanzas-mensajes.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };

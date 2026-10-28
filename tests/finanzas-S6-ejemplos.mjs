@@ -1,8 +1,8 @@
 // Cada formato de ejemplo debe leer su propio mensaje neutro y poder adoptarse como patrón normal.
 import assert from "node:assert/strict";
-import * as schema from "../core/schema.js";
-import { leerMensajes, listarPatrones } from "../core/finanzas-mensajes.js";
-import { adoptarFormatoEjemplo, listarFormatosEjemplo } from "../core/finanzas-formatos-ejemplo.js";
+import * as schema from "../js/core/schema.js";
+import { leerMensajes, listarPatrones } from "../js/core/finanzas/finanzas-mensajes.js";
+import { adoptarFormatoEjemplo, listarFormatosEjemplo } from "../js/core/finanzas/finanzas-formatos-ejemplo.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };
