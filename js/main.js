@@ -846,6 +846,8 @@ function programarAvisoLoginBloqueado() {
   temporizadorAvisoLogin = setTimeout(() => {
     const aviso = document.getElementById("aviso-login-bloqueado");
     if (!aviso) return;
+    // Si auth.js ya mostró el error real de Google, no lo pisa con el genérico.
+    if (!aviso.classList.contains("oculto")) return;
     aviso.textContent =
       "Google todavía no respondió. Revisa tu conexión e inténtalo de nuevo.";
     aviso.classList.remove("oculto");
