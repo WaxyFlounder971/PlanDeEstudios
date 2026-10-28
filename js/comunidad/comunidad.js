@@ -4022,7 +4022,7 @@ function inicializarGestosComunidad(viewport) {
     const pct = -inicio.indice * 50 + dx / (viewport.clientWidth || 1) * 50;
     pistaVistasComunidad.pista.style.transform = `translate3d(${pct}%,0,0)`;
     const thumb = document.querySelector("#seccion-comunidad .pill-switch-thumb");
-    if (thumb) thumb.style.setProperty("--nav-pill-progreso", String(Math.max(0, Math.min(1, inicio.indice - dx / (viewport.clientWidth || 1))));
+    if (thumb) thumb.style.setProperty("--nav-pill-progreso", String(Math.max(0, Math.min(1, inicio.indice - dx / (viewport.clientWidth || 1)))));
   }, { passive: false });
   viewport.addEventListener("touchend", (ev) => {
     if (!inicio) return;
