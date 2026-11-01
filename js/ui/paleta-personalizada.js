@@ -7,8 +7,8 @@
    ========================================================================= */
 
 import { PALETAS_DISPONIBLES, sellarTimestamp } from "../core/schema.js";
-import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { actualizarIndicadorSync, marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import {
   COLORES_PREVIEW_PALETA,
   FONDO_PREVIEW_AZUCARADO,
@@ -319,6 +319,7 @@ function crearSeccionDegradado({ colores, refrescarPreview, marcarTocado }) {
     },
   });
   sliderIntensidad.classList.add("ppz-slider-vertical");
+  sliderIntensidad.setAttribute("aria-label", "Intensidad del degradado");
   const pistaVertical = document.createElement("div");
   pistaVertical.className = "ppz-intensidad-vertical-pista";
   pistaVertical.appendChild(sliderIntensidad);

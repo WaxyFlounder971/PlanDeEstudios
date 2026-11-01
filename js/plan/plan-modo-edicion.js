@@ -8,7 +8,7 @@
    plan-esquema.js), precargado.
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { renderizarPlanEstudios } from "./plan-vista-lista.js";
 
 /**

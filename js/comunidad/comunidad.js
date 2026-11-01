@@ -50,8 +50,8 @@ import {
   obtenerUniversidadesDeProfesor,
   sellarTimestamp,
 } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { estiloBadgeCategoria } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { abrirModalCopiaManualPortapapeles, copiarAlPortapapelesBlindado } from "../core/clipboard.js";
@@ -132,6 +132,7 @@ import { abrirModalRequisito } from "../plan/plan-detalle.js";
 // estado.modoEdicionSemestres en semestres.js: vive en memoria, se resetea
 // solo al recargar la página.
 estado.tabComunidad = "profesores"; // "profesores" | "companeros"
+let pistaVistasComunidad = null;
 estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos" (pills dicen "Fue profe"/"No fue profe")
 // Filtro de recomendación en Profesores, entre el de "Fue profe/No fue profe" y el
 // de orden (Alfabético/Por bloque) — mismo patrón que ya existía en
@@ -179,7 +180,7 @@ const LINKS_MISPROFES = {
 
 // Rediseño: el botón de "ir a MisProfes" ahora es la imagen del logo de la
 // página (imagenes/MisProfes.png, misma carpeta que el resto de assets de
-// la app — ver imagenes/LogoAppFolder.png en index.html) en vez de texto — pedido
+// la app — ver imagenes/LogoAppFolder-512.png en index.html) en vez de texto — pedido
 // explícito de no deformar su relación de aspecto (ver <img> más abajo,
 // sin width/height fijos por separado, solo height + width:auto).
 const RUTA_LOGO_MISPROFES = "imagenes/MisProfes.png";
@@ -3945,7 +3946,7 @@ function renderizarComunidad() {
   const cont = document.getElementById("seccion-comunidad");
   if (!cont || !estado.datos) return;
 
-  cont.innerHTML = "";
+  cont.replaceChildren();
 
   const encabezado = document.createElement("section");
   encabezado.className = "glass-card stack";
@@ -3953,22 +3954,92 @@ function renderizarComunidad() {
     <h2 class="texto-encabezado-seccion" style="margin:0;">Comunidad</h2>
     <p class="muted" style="margin:0;">Profesores y compañeros con los que compartiste clase.</p>
   `;
-  encabezado.appendChild(
-    construirGrupoPills(
-      [
-        { valor: "profesores", texto: "👨‍🏫 Profesores" },
-        { valor: "companeros", texto: "🧑‍🎓 Compañeros" },
-      ],
-      estado.tabComunidad,
-      (valor) => {
-        estado.tabComunidad = valor;
-        renderizarComunidad();
-      }
-    )
-  );
+  const grupo = document.createElement("div");
+  grupo.className = "pill-group pill-group-fijo pill-switch-binario";
+  grupo.dataset.opciones = "2";
+  const thumb = document.createElement("div");
+  thumb.className = "pill-switch-thumb";
+  grupo.appendChild(thumb);
+  [
+    ["profesores", "👨‍🏫 Profesores"],
+    ["companeros", "🧑‍🎓 Compañeros"],
+  ].forEach(([valor, texto]) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `pill-item${estado.tabComunidad === valor ? " active" : ""}`;
+    btn.setAttribute("aria-pressed", String(estado.tabComunidad === valor));
+    btn.textContent = texto;
+    btn.addEventListener("click", () => cambiarVistaComunidad(valor));
+    grupo.appendChild(btn);
+  });
+  thumb.classList.toggle("pill-switch-thumb--derecha", estado.tabComunidad === "companeros");
+  encabezado.appendChild(grupo);
   cont.appendChild(encabezado);
+  if (!pistaVistasComunidad) {
+    const viewport = document.createElement("div");
+    viewport.className = "te-vistas-viewport nav-vistas-viewport";
+    const pista = document.createElement("div");
+    pista.className = "te-vistas-pista nav-vistas-pista nav-vistas-pista--dos";
+    const paneles = ["profesores", "companeros"].map((vista) => {
+      const pane = document.createElement("section");
+      pane.className = "nav-vista-pane nav-vista-pane--dos";
+      pane.dataset.vista = vista;
+      pane.setAttribute("aria-hidden", String(vista !== estado.tabComunidad));
+      pista.appendChild(pane);
+      return pane;
+    });
+    viewport.appendChild(pista);
+    pistaVistasComunidad = { viewport, pista, paneles };
+    inicializarGestosComunidad(viewport);
+  }
+  const indice = estado.tabComunidad === "companeros" ? 1 : 0;
+  pistaVistasComunidad.pista.style.transform = `translate3d(-${indice * 50}%,0,0)`;
+  pistaVistasComunidad.paneles.forEach((pane, i) => pane.setAttribute("aria-hidden", String(i !== indice)));
+  const paneActivo = pistaVistasComunidad.paneles[indice];
+  paneActivo.replaceChildren(indice ? construirSeccionCompaneros() : construirSeccionProfesores());
+  cont.appendChild(pistaVistasComunidad.viewport);
+}
 
-  cont.appendChild(estado.tabComunidad === "companeros" ? construirSeccionCompaneros() : construirSeccionProfesores());
+function cambiarVistaComunidad(vista) {
+  if (!["profesores", "companeros"].includes(vista) || vista === estado.tabComunidad) return;
+  estado.tabComunidad = vista;
+  renderizarComunidad();
+}
+
+function inicializarGestosComunidad(viewport) {
+  let inicio = null;
+  viewport.addEventListener("touchstart", (ev) => {
+    const t = ev.touches[0];
+    if (ev.touches.length !== 1 || ev.target.closest("input,textarea,select,button,a,[contenteditable='true'],[data-no-swipe]")) { inicio = null; return; }
+    inicio = { x: t.clientX, y: t.clientY, activo: false, indice: estado.tabComunidad === "companeros" ? 1 : 0 };
+  }, { passive: true });
+  viewport.addEventListener("touchmove", (ev) => {
+    if (!inicio || ev.touches.length !== 1) return;
+    const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
+    if (!inicio.activo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
+    inicio.activo = true;
+    ev.preventDefault();
+    const pct = -inicio.indice * 50 + dx / (viewport.clientWidth || 1) * 50;
+    pistaVistasComunidad.pista.style.transform = `translate3d(${pct}%,0,0)`;
+    const thumb = document.querySelector("#seccion-comunidad .pill-switch-thumb");
+    if (thumb) thumb.style.setProperty("--nav-pill-progreso", String(Math.max(0, Math.min(1, inicio.indice - dx / (viewport.clientWidth || 1)))));
+  }, { passive: false });
+  viewport.addEventListener("touchend", (ev) => {
+    if (!inicio) return;
+    const dx = (ev.changedTouches?.[0]?.clientX ?? inicio.x) - inicio.x;
+    const siguiente = inicio.activo && Math.abs(dx) > Math.max(48, viewport.clientWidth * 0.16)
+      ? (dx < 0 ? "companeros" : "profesores")
+      : estado.tabComunidad;
+    inicio = null;
+    document.querySelector("#seccion-comunidad .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
+    cambiarVistaComunidad(siguiente);
+    pistaVistasComunidad.pista.style.transform = `translate3d(-${estado.tabComunidad === "companeros" ? 50 : 0}%,0,0)`;
+  }, { passive: true });
+  viewport.addEventListener("touchcancel", () => {
+    inicio = null;
+    pistaVistasComunidad.pista.style.transform = `translate3d(-${estado.tabComunidad === "companeros" ? 50 : 0}%,0,0)`;
+    document.querySelector("#seccion-comunidad .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
+  }, { passive: true });
 }
 
 export { inicializarComunidad, renderizarComunidad, abrirModalAltaProfesor };

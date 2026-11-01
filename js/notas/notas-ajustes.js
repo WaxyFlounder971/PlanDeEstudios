@@ -2,8 +2,8 @@ import { opcionesNotas, coloresPaletaNota, resolverColorNota, notasActuales, cre
 import { leerWapper } from "./notas-wapper.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { inyectarEstilosNotas } from "./notas-estilos.js";
 import { mostrarToast } from "../ui/componentes.js";
 

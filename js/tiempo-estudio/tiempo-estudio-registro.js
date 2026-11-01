@@ -12,8 +12,8 @@
    ========================================================================= */
 
 import { crearSesionEstudio, sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { revisarFelicitacionMeta, notificarSesionesEstudioActualizadas } from "./tiempo-estudio-timer.js";

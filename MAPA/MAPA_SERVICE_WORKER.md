@@ -1,32 +1,30 @@
 # MAPA_SERVICE_WORKER.md — Índice de `service-worker.js`
 
-> `service-worker.js` no se importa desde ningún otro módulo (los service workers se registran, no se importan — el registro vive en `main.js`), y no tiene `export`. Por eso este mapa documenta sus **listeners de eventos** y **constantes** en vez de funciones exportadas, que es lo que otro archivo necesita conocer para interactuar con él (ej. main.js enviándole un mensaje `SKIP_WAITING`).
+El Service Worker es un script independiente registrado por el arranque de la app. No importa módulos ES. Su número visible y nombre de caché derivan de `VERSION`; versión actual del código: `v3.26.7`.
 
-## Actualización v3.24.0
+## Constantes
 
-El `fetch` de navegaciones del Web Share Target reduce la clave de caché a la URL sin query cuando llegan `title`, `text` o `url`, y no guarda una respuesta bajo la URL con parámetros. Esos parámetros pueden contener contenido privado de una nota. Cuando la navegación no está cacheada y no hay red, se mantiene el fallback al `index.html` del shell para completar el procesamiento local.
+- `VERSION`: etiqueta de versión. Incrementarla cuando una entrega deba instalar un caché nuevo; la app consulta el valor con `GET_VERSION`.
+- `CACHE_NAME`: `app-academica-${VERSION}`.
+- `PREFIJO_CACHE`: prefijo para identificar los cachés antiguos que se limpian al activar.
+- `CASCARON_MINIMO`: HTML de entrada, manifest, idiomas esenciales, CSS, módulo de arranque, demo e iconos que se precargan al instalar.
+- `DOMINIOS_GOOGLE_SIN_CACHE`: Drive y autenticación de Google; el SW los deja pasar sin intercepción ni caché.
 
----
+Los módulos JS y recursos propios que no están en el cascarón se incorporan a CacheStorage al pedirse por primera vez. No hay una lista manual de todos los módulos de cada sección.
 
-## service-worker.js
-Versión actual en código: `v3.23.9` (2026-10-18, cola offline de Wapper). La ruta nueva `js/asistente/asistente-cola.js` se cachea cuando el navegador la solicita como módulo del mismo origen; no se añadió al cascarón mínimo.
-Propósito: cascarón offline de la PWA. Cachea el HTML/CSS/JS/íconos propios del proyecto (cache-first con actualización de fondo) y deja pasar sin tocar todo lo que va a Google (Drive API + auth), para no interferir con el manejo de cola/reintento offline que ya hacen `storage-sync.js` y `storage-adjuntos.js`.
-Depende de: ninguno de los módulos del proyecto (es un script standalone que corre en su propio contexto de Service Worker, sin `import`). Se comunica con `main.js` únicamente vía `postMessage` (mensaje `SKIP_WAITING`).
+## Eventos
 
-### Constantes (equivalente a "exportado" — es lo que hay que tocar al desplegar o entender desde afuera)
-* `VERSION` — string tipo `"v3"`. **Hay que subirla a mano en cada despliegue** que cambie cualquier archivo del cascarón; es la única señal que tiene el service worker para detectar que hay una versión nueva.
-* `CACHE_NAME` — `` `app-academica-${VERSION}` ``, nombre del caché activo (derivado de `VERSION`).
-* `PREFIJO_CACHE` — `"app-academica-"`, usado en `activate` para identificar y borrar cachés de versiones anteriores.
-* `CASCARON_MINIMO` — array de rutas precacheadas en `install` (`index.html`, `manifest.json`, `css/design-system.css`, `js/main.js`, íconos). A propósito NO lista cada módulo JS del proyecto — el resto se cachea solo la primera vez que el navegador lo pide (ver evento `fetch`).
-* `DOMINIOS_GOOGLE_SIN_CACHE` — `Set` con `www.googleapis.com`, `oauth2.googleapis.com`, `accounts.google.com`. Cualquier request a estos hosts se deja pasar sin interceptar ni cachear.
+- `install`: precarga `CASCARON_MINIMO`; no fuerza `skipWaiting`, para que la persona elija cuándo actualizar.
+- `activate`: borra cachés anteriores con el prefijo de la app y reclama las ventanas abiertas.
+- `message`: `SKIP_WAITING` activa la versión en espera cuando se confirma el aviso; `GET_VERSION` responde a la pestaña que lo pidió con `{ type: "VERSION", version }`.
+- `push`: muestra un recordatorio de Agenda recibido desde el servicio Push. Si el JSON no se puede leer, muestra una notificación genérica.
+- `notificationclick`: enfoca una ventana existente y le envía `abrir-agenda`; si no hay ventana, abre `?abrir=agenda`.
+- `fetch`: solo GET del mismo origen. Los hosts Google, recursos de terceros, solicitudes de escritura y el parámetro `ping` pasan directo. Navegaciones compartidas `title/text/url` usan una clave de caché sin query para no persistir contenido privado.
 
-### Listeners de eventos (el "comportamiento exportado" del archivo)
-* `install` — abre `CACHE_NAME` y precachea `CASCARON_MINIMO`. **No llama `self.skipWaiting()`** a propósito: el SW nuevo no toma control hasta que el usuario confirme (ver `message` más abajo).
-* `activate` — borra cualquier caché cuyo nombre empiece con `PREFIJO_CACHE` y no sea el `CACHE_NAME` actual (limpieza de versiones viejas), y llama `self.clients.claim()`.
-* `message` — si `event.data.type === "SKIP_WAITING"`, llama `self.skipWaiting()`. Disparado desde `main.js` cuando el usuario hace click en "Recargar" del aviso de actualización.
-* `fetch` — solo maneja `GET`. Si el host es uno de `DOMINIOS_GOOGLE_SIN_CACHE`, o si es cross-origin, deja pasar la request sin tocar (`return` temprano). Para el resto (mismo origen): responde cache-first (si hay algo en `CACHE_NAME`, lo devuelve de inmediato) y en paralelo actualiza el caché con la respuesta de red (stale-while-revalidate). Si no hay caché y falla la red en una navegación, devuelve `index.html` cacheado como último recurso; si tampoco hay eso, responde `503`.
+## Estrategia offline y privacidad
 
-## Patrones transversales (Service Worker)
-- **Subir `VERSION` en cada despliegue** que toque cualquier archivo del cascarón (HTML/CSS/JS/íconos) — es la regla operativa más importante del archivo, sin esto los usuarios recurrentes pueden quedar atrapados en una versión vieja indefinidamente.
-- Nunca cachear ni interceptar tráfico hacia `DOMINIOS_GOOGLE_SIN_CACHE` — el manejo de offline para Drive vive en `storage-sync.js`/`storage-adjuntos.js`, no acá.
-- `CASCARON_MINIMO` es intencionalmente mínimo — no hace falta (ni conviene) agregar cada módulo `.js` nuevo a mano ahí; el propio `fetch` los va sumando al caché solos.
+Para recursos propios, busca en caché primero y actualiza desde red en segundo plano. Si no existe la copia local, espera la red; si falla durante una navegación, intenta `index.html`; en otros casos devuelve 503. Las queries de contenido compartido no se guardan. El Service Worker no participa en la lógica de sincronización con Drive ni convierte las notificaciones de metas: esas decisiones viven en sus respectivos módulos.
+
+## Operación de actualización
+
+Al preparar una publicación, revisa `VERSION` en `service-worker.js`. Si se cambia, actualiza esta línea y el mapa técnico de la versión en la misma entrega. No añadas a mano los archivos JS de Finanzas u otras secciones a `CASCARON_MINIMO`; la estrategia de petición los agrega automáticamente.

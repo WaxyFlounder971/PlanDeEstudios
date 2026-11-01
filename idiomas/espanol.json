@@ -1824,6 +1824,19 @@
     "Aumentar alto del lienzo": "Aumentar alto del lienzo",
     "Vista general del lienzo": "Vista general del lienzo",
     "Dibujar en la nota": "Dibujar en la nota",
-    "Herramientas de tinta": "Herramientas de tinta"
+    "Herramientas de tinta": "Herramientas de tinta",
+    "Materias en la lista": "Materias en la lista",
+    "Visibles": "Visibles",
+    "Todas": "Todas",
+    "Mostrar solo las visibles": "Mostrar solo las visibles",
+    "Mostrar en Tiempo de estudio": "Mostrar en Tiempo de estudio",
+    "Ocultar": "Ocultar",
+    "Eliminar materia": "Eliminar materia",
+    "Eliminar materia personalizada": "Eliminar materia personalizada",
+    "Esta acción borrará todos los registros de esta materia personalizada. No los podrás recuperar. ¿Estás seguro de que deseas continuar?": "Esta acción borrará todos los registros de esta materia personalizada. No los podrás recuperar. ¿Estás seguro de que deseas continuar?",
+    "Borrar ahora sí": "Borrar ahora sí",
+    "Detén primero la sesión activa de esta materia para poder eliminarla.": "Detén primero la sesión activa de esta materia para poder eliminarla.",
+    "Materia personalizada y sus registros eliminados": "Materia personalizada y sus registros eliminados",
+    "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste.": "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste."
   }
 }

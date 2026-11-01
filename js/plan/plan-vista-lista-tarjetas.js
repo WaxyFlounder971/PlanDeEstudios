@@ -5,9 +5,9 @@
    ========================================================================= */
 
 import { arbolContieneCodigo, evaluarNodoRequisito, obtenerEstadoEfectivoMateria, sellarTimestamp } from "../core/schema.js";
-import { resolverConflicto, sonValoresEquivalentes } from "../core/storage-merge.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { resolverConflicto, sonValoresEquivalentes } from "../core/storage/storage-merge.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto, formatearHoras } from "../core/utils.js";
 import { agregarLongPress, envolverConFlechasScroll } from "../ui/componentes.js";

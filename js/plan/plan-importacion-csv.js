@@ -5,8 +5,8 @@
    ========================================================================= */
 
 import { crearMateria, crearNodoCodigo, crearNodoO, crearNodoY } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
 import { abrirModalCrearPlan } from "./plan-esquema.js";
 import { abrirModalCapturasPDF, abrirModalInstruccionesImportacion, completarSeguimientoImportacion, construirInputArchivoCSV, construirPromptImportacion, extraerMetadatosImportacion, inicializarEstadoImportacionPlanSiHaceFalta, registrarPasoSeguimientoImportacion } from "./plan-importacion.js";

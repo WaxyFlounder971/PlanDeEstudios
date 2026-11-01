@@ -9,7 +9,7 @@
    ========================================================================= */
 
 import { obtenerClasesEfectivasSemana } from "../core/schema.js";
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import {
   abrirTarjetaInfoBloque,
   obtenerColorBloque,

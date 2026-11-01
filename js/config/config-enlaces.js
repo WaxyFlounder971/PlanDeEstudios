@@ -3,8 +3,8 @@
    ========================================================================= */
 
 import { LIMITE_ENLACES_RAPIDOS, crearEnlaceRapido, sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { convertirImagenABase64Comprimida } from "../core/utils.js";
 
 /* --------------------------- Enlaces rápidos --------------------------- */

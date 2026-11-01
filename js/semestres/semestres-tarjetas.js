@@ -3,7 +3,7 @@
    notas — criterios, asignaciones, cálculo en vivo — Entrega 2/6).
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto, obtenerIniciales } from "../core/utils.js";
 import { agregarLongPress, mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
@@ -32,7 +32,7 @@ import {
   siguienteOrden,
   reordenarPorArrastre,
 } from "../core/schema.js";
-import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage-sync.js";
+import { marcarCambioPendiente, actualizarIndicadorSync } from "../core/storage/storage-sync.js";
 import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflictoGenerico, agregarIndicadorConflicto } from "../plan/plan-vista-lista-tarjetas.js";
 import { abrirModalRequisito, abrirModalAsignarProfesorDesdeHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";

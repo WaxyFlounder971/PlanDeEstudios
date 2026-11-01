@@ -34,6 +34,7 @@ const CSS = `
 .nt-vista-op[aria-checked="true"]{opacity:1;background:var(--nt-grad,linear-gradient(135deg,#f5a9d3,#b7a5f4));color:#1b1530;box-shadow:0 3px 10px rgba(0,0,0,.3)}
 .nt-vista-op svg{width:18px;height:18px;fill:currentColor}
 .notas-grid.notas-lista{grid-template-columns:1fr!important}
+@media(max-width:420px){.notas-grid-fijadas:has(> .nota-card:only-child){grid-template-columns:minmax(0,1fr)!important}}
 .notas-filtro-colores{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 
 /* --- Editor: barra de herramientas centrada y agrupada --- */

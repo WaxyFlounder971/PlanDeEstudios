@@ -12,8 +12,8 @@
    ========================================================================= */
 
 import { obtenerEstadoEfectivoSemestre, sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { obtenerLocaleInterfaz, obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
@@ -41,6 +41,7 @@ import {
   esHoyFecha,
   esTareaVencida,
   formatearFechaISO,
+  formatearFechaRelativa,
   formatearHoraAmPm,
   formatearRangoSemanaAgenda,
   formatearTiempoRestanteHoy,
@@ -54,11 +55,12 @@ import {
   obtenerSemestreActivoAgenda,
   obtenerSemestresSeleccionadosAgenda,
   tareaVenceHoy, ID_FILTRO_OTROS, esEventoHuerfanoAgenda, eventoPasaFiltroTiposAgenda } from "./agenda-utils.js";
-import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "../core/storage-adjuntos.js";
+import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "../core/storage/storage-adjuntos.js";
 
 const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" };
 const ORDEN_TIPO = ["examen", "tarea", "evento"];
 let idEtiquetaAgendaArrastrada = null;
+let controladorPopoverEstadoAgenda = null;
 
 /**
  * Feature "filtro por estado" — pedido nuevo: 7 badges (eran 6; se sumó
@@ -279,11 +281,33 @@ function alternarFiltroEstadoAgenda(id) {
  * inicializarAgenda) porque no comparte color con ningún tipo existente.
  */
 function construirBarraFiltroEstadosAgenda() {
+  controladorPopoverEstadoAgenda?.abort();
+  controladorPopoverEstadoAgenda = new AbortController();
   const activos = obtenerEstadosFiltroActivos();
   const barra = document.createElement("div");
   barra.className = "agenda-filtro-estados";
   const opciones = obtenerOpcionesFiltroAgenda();
-  const botones = opciones.map(({ id, etiqueta, color }) => {
+  const opcionesClase = opciones.filter((o) => o.id === "clase");
+  const opcionesEstado = opciones.filter((o) => ["completado", "perdida", "pendiente"].includes(o.id));
+  const ordenPreferidoCategorias = ["tag:tarea", "tag:examen", "tag:evento", "tag:feriado", "tag:proyecto", "tag:quiz"];
+  const opcionesCategoria = opciones
+    .filter((o) => o.id.startsWith("tag:") || o.id === ID_FILTRO_OTROS)
+    .sort((a, b) => {
+      const ia = ordenPreferidoCategorias.indexOf(a.id), ib = ordenPreferidoCategorias.indexOf(b.id);
+      if (ia < 0 && ib < 0) return 0; // Las etiquetas personalizadas mantienen el orden que eligió el usuario.
+      if (ia < 0) return 1;
+      if (ib < 0) return -1;
+      return ia - ib;
+    });
+  const agregarSeparador = () => {
+    const separador = document.createElement("span");
+    separador.className = "agenda-filtro-separador";
+    separador.setAttribute("aria-hidden", "true");
+    barra.appendChild(separador);
+  };
+  const grupoClase = document.createElement("div"); grupoClase.className = "agenda-filtro-grupo";
+  const grupoCategorias = document.createElement("div"); grupoCategorias.className = "agenda-filtro-grupo agenda-filtro-categorias";
+  const crearChip = ({ id, etiqueta, color }, contenedor) => {
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = `agenda-filtro-estado-btn agenda-filtro-estado-${id}` + (activos.has(id) ? " active" : "");
@@ -303,14 +327,43 @@ function construirBarraFiltroEstadosAgenda() {
       const seleccion=new Set(estado.agendaFiltroEstados===null?todos:estado.agendaFiltroEstados);
       seleccion.delete(id);estado.agendaFiltroEstados=[...seleccion];renderizarAgendaInterno();
     });
-    barra.appendChild(btn);
+    contenedor.appendChild(btn);
     return btn;
+  };
+  opcionesClase.forEach((op) => crearChip(op, grupoClase));
+  opcionesCategoria.forEach((op) => crearChip(op, grupoCategorias));
+  barra.append(grupoClase);
+  agregarSeparador();
+  barra.append(grupoCategorias);
+  agregarSeparador();
+
+  const grupoEstado = document.createElement("div");
+  grupoEstado.className = "agenda-filtro-grupo agenda-filtro-estado-menu";
+  const botonEstado = document.createElement("button");
+  botonEstado.type = "button";
+  botonEstado.className = "agenda-filtro-estado-btn agenda-filtro-estado-trigger" + (opcionesEstado.some((o) => activos.has(o.id)) ? " active" : "");
+  botonEstado.textContent = traducirTextoInterfaz("Estado");
+  botonEstado.setAttribute("aria-haspopup", "true");
+  botonEstado.setAttribute("aria-expanded", "false");
+  const menuEstado = document.createElement("div");
+  menuEstado.className = "agenda-filtro-estado-popover oculto";
+  menuEstado.setAttribute("role", "group");
+  menuEstado.setAttribute("aria-label", traducirTextoInterfaz("Filtrar por estado"));
+  opcionesEstado.forEach((op) => crearChip(op, menuEstado));
+  const cerrarMenu = () => {
+    menuEstado.classList.add("oculto");
+    botonEstado.setAttribute("aria-expanded", "false");
+  };
+  botonEstado.addEventListener("click", () => {
+    const abrir = menuEstado.classList.contains("oculto");
+    menuEstado.classList.toggle("oculto", !abrir);
+    botonEstado.setAttribute("aria-expanded", String(abrir));
   });
-  requestAnimationFrame(() => {
-    if (!botones[0]?.isConnected) return; // re-renderizado antes del frame — no tocar nodos viejos
-    const maxAncho = Math.max(...botones.map((b) => b.offsetWidth));
-    botones.forEach((b) => (b.style.minWidth = `${maxAncho}px`));
-  });
+  menuEstado.querySelectorAll(".agenda-filtro-estado-btn").forEach((btn) => btn.addEventListener("click", cerrarMenu, { once: true }));
+  document.addEventListener("pointerdown", (ev) => { if (!grupoEstado.contains(ev.target)) cerrarMenu(); }, { signal: controladorPopoverEstadoAgenda.signal });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarMenu(); }, { signal: controladorPopoverEstado.signal });
+  grupoEstado.append(botonEstado, menuEstado);
+  barra.appendChild(grupoEstado);
   return barra;
 }
 
@@ -606,13 +659,15 @@ function obtenerTextoIndiceEventoAgenda(ev) {
   const adjuntos=obtenerAdjuntosActivosDe("evento",ev.id).flatMap((a)=>[a.nombre,a.url,a.enlace,a.descripcion].filter(Boolean));
   return [tipo,ev.nombre,ev.notas,ev.fecha,fecha,ev.hora,obtenerNombreMateriaEvento(ev),...adjuntos].join(" ");
 }
+let temporizadorBusquedaAgenda = 0;
+
 function renderizarResultadosBusquedaAgenda() {
   const cont=document.getElementById("agenda-busqueda-resultados"),q=estado.agendaBusquedaConsulta||"";if(!cont)return;
   const panes=["agenda-lista-dias","agenda-vista-calendario","agenda-vista-materia"].map((id)=>document.getElementById(id)).filter(Boolean);
   const buscando=Boolean(q.trim());panes.forEach((p)=>p.classList.toggle("oculto",buscando||((p.id==="agenda-lista-dias"?"lista":p.id==="agenda-vista-calendario"?"calendario":"materia")!==estado.agendaVistaActiva)));cont.classList.toggle("oculto",!buscando);cont.replaceChildren();if(!buscando)return;
   const lista=(estado.datos.agenda||[]).map((ev)=>({ev,puntaje:puntajeBusquedaAgenda(q,obtenerTextoIndiceEventoAgenda(ev))})).filter((x)=>x.puntaje>=.75).sort((a,b)=>b.puntaje-a.puntaje);
   const exactos=lista.filter((x)=>x.puntaje>=.9),posibles=lista.filter((x)=>x.puntaje<.9);
-  const pintar=(titulo,items)=>{if(!items.length)return;const grupo=document.createElement("section");grupo.className="glass-panel stack agenda-busqueda-grupo";const h=document.createElement("h3");h.textContent=titulo;grupo.append(h);items.forEach(({ev})=>{const wrap=document.createElement("div");wrap.className="stack";const fecha=document.createElement("span");fecha.className="muted agenda-busqueda-fecha";fecha.textContent=ev.fecha||"";wrap.append(fecha,construirItemEvento(ev));grupo.append(wrap);});cont.append(grupo);};
+  const pintar=(titulo,items)=>{if(!items.length)return;const grupo=document.createElement("section");grupo.className="glass-panel stack agenda-busqueda-grupo";const h=document.createElement("h3");h.textContent=titulo;grupo.append(h);items.forEach(({ev})=>{const wrap=document.createElement("div");wrap.className="stack";const filaFecha=document.createElement("div");filaFecha.className="agenda-busqueda-fecha-fila";const fecha=document.createElement("span");fecha.className="muted agenda-busqueda-fecha";const fechaLocal=ev.fecha?new Date(`${ev.fecha}T12:00:00`):null;const textoFecha=fechaLocal&&!Number.isNaN(fechaLocal.getTime())?fechaLocal.toLocaleDateString(obtenerLocaleInterfaz(),{weekday:"long",day:"numeric",month:"short"}).replace(",",""):"";fecha.textContent=textoFecha?textoFecha.charAt(0).toLocaleUpperCase(obtenerLocaleInterfaz())+textoFecha.slice(1):"";const relativa=document.createElement("span");relativa.className="muted agenda-busqueda-fecha-relativa";relativa.textContent=formatearFechaRelativa(ev.fecha);filaFecha.append(fecha,relativa);wrap.append(filaFecha,construirItemEvento(ev));grupo.append(wrap);});cont.append(grupo);};
   pintar("Coincidencias",exactos);pintar("Tal vez buscabas",posibles);
   if(!lista.length){const p=document.createElement("p");p.className="muted";p.textContent="No se encontraron eventos parecidos.";cont.append(p);}
 }
@@ -622,7 +677,7 @@ function asegurarBarraBusquedaAgenda() {
   if(!barra){
     barra=document.createElement("div");barra.id="agenda-busqueda-cont";barra.className="agenda-busqueda-cont";
     const input=document.createElement("input");input.type="search";input.id="agenda-busqueda-input";input.className="form-input";input.placeholder="Buscar en toda la Agenda…";input.setAttribute("aria-label","Buscar en toda la Agenda");input.value=estado.agendaBusquedaConsulta||"";
-    input.addEventListener("input",()=>{estado.agendaBusquedaConsulta=input.value;renderizarResultadosBusquedaAgenda();});
+    input.addEventListener("input",()=>{estado.agendaBusquedaConsulta=input.value;window.clearTimeout(temporizadorBusquedaAgenda);temporizadorBusquedaAgenda=window.setTimeout(renderizarResultadosBusquedaAgenda,100);});
     barra.append(input);
     const header=document.getElementById("agenda-header");header?.insertAdjacentElement("afterend",barra);
   }
@@ -1706,6 +1761,7 @@ function renderizarAgenda() {
     if (vista === "calendario") renderizarCalendarioAgenda();
     else renderizarMateriaAgenda();
   }
+  asegurarPistaVistasAgenda();
   // FIX: la barra flotante de selección múltiple (contador + Cancelar +
   // Eliminar) estaba definida (sincronizarBarraSeleccionAgenda) pero nunca
   // se llamaba desde acá — el modo selección guardaba estado y resaltaba
@@ -1716,50 +1772,107 @@ function renderizarAgenda() {
   renderizarResultadosBusquedaAgenda();
 }
 
-function inicializarGestosVistasAgenda() {
+let pistaAgenda = null;
+function asegurarPistaVistasAgenda() {
   const seccion = document.getElementById("seccion-agenda");
+  const lista = document.getElementById("agenda-lista-dias");
+  const calendario = document.getElementById("agenda-vista-calendario");
+  const cronograma = document.getElementById("agenda-vista-materia");
+  if (!seccion || !lista || !calendario || !cronograma) return;
+  if (!pistaAgenda) {
+    const viewport = document.createElement("div");
+    viewport.className = "te-vistas-viewport nav-vistas-viewport";
+    const pista = document.createElement("div");
+    pista.className = "te-vistas-pista nav-vistas-pista";
+    lista.before(viewport);
+    const paneles = [lista, calendario, cronograma];
+    paneles.forEach((panel) => {
+      panel.classList.remove("oculto");
+      panel.classList.add("nav-vista-pane");
+      panel.setAttribute("aria-hidden", "true");
+      pista.appendChild(panel);
+    });
+    viewport.appendChild(pista);
+    const filtro = document.getElementById("agenda-filtro-estados-cont");
+    const busqueda = document.getElementById("agenda-busqueda-cont");
+    const resultados = document.getElementById("agenda-busqueda-resultados");
+    const panelLista = pista.children[0];
+    if (busqueda) panelLista.insertBefore(busqueda, lista);
+    if (resultados) panelLista.insertBefore(resultados, lista);
+    if (filtro) panelLista.insertBefore(filtro, resultados || lista);
+    pistaAgenda = { viewport, pista, paneles };
+    inicializarGestosVistasAgenda();
+  }
+  const indice = ["lista", "calendario", "materia"].indexOf(estado.agendaVistaActiva || "lista");
+  pistaAgenda.paneles.forEach((panel, i) => panel.setAttribute("aria-hidden", String(i !== indice)));
+  pistaAgenda.pista.style.transform = `translate3d(-${Math.max(0, indice) * 100 / 3}%,0,0)`;
+  const grupo = document.getElementById("pills-agenda-vista");
+  if (grupo && !grupo.querySelector(".pill-switch-thumb")) {
+    grupo.classList.add("pill-switch-binario", "pill-group-fijo");
+    grupo.dataset.opciones = "3";
+    const thumb = document.createElement("div");
+    thumb.className = "pill-switch-thumb";
+    grupo.prepend(thumb);
+  }
+  const thumb = grupo?.querySelector(".pill-switch-thumb");
+  thumb?.classList.toggle("pill-switch-thumb--derecha", indice === 1);
+  thumb?.classList.toggle("pill-switch-thumb--tercera", indice === 2);
+  thumb?.style.removeProperty("--nav-pill-progreso");
+}
+
+function inicializarGestosVistasAgenda() {
+  const seccion = document.querySelector("#seccion-agenda .nav-vistas-viewport");
   if (!seccion || seccion.dataset.gestosAgenda === "1") return;
   seccion.dataset.gestosAgenda = "1";
   const vistas = ["lista", "calendario", "materia"];
   let inicio = null;
   seccion.addEventListener("touchstart", (ev) => {
-    const t = ev.changedTouches?.[0];
-    if (t) inicio = { x: t.clientX, y: t.clientY, target: ev.target };
+    const t = ev.touches?.[0];
+    if (ev.touches.length !== 1 || ev.target.closest("input,textarea,select,button,a,[contenteditable='true'],[data-no-swipe]")) { inicio = null; return; }
+    if (t) inicio = { x: t.clientX, y: t.clientY, moviendo: false, indice: vistas.indexOf(estado.agendaVistaActiva || "lista") };
   }, { passive: true });
+  seccion.addEventListener("touchmove", (ev) => {
+    if (!inicio || ev.touches.length !== 1) return;
+    const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
+    if (!inicio.moviendo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
+    inicio.moviendo = true;
+    ev.preventDefault();
+    const width = seccion.clientWidth || 1;
+    const pct = -inicio.indice * 100 / 3 + dx / width * 100 / 3;
+    seccion.querySelector(".nav-vistas-pista").style.transform = `translate3d(${pct}%,0,0)`;
+    const thumb = document.querySelector("#pills-agenda-vista .pill-switch-thumb");
+    if (thumb) thumb.style.setProperty("--nav-pill-progreso", String(Math.max(0, Math.min(2, inicio.indice - dx / width))));
+  }, { passive: false });
   seccion.addEventListener("touchend", (ev) => {
     if (!inicio) return;
     const t = ev.changedTouches?.[0];
     const deltaX = t ? t.clientX - inicio.x : 0;
-    const deltaY = t ? t.clientY - inicio.y : 0;
-    const target = inicio.target;
     inicio = null;
-    if (Math.abs(deltaX) < 72 || Math.abs(deltaY) > Math.abs(deltaX) * 0.75) return;
-    if (target?.closest("input, textarea, select, button, a, [data-no-swipe], .select-custom-lista")) return;
-    const actual = Math.max(0, vistas.indexOf(estado.agendaVistaActiva || "lista"));
-    if (deltaX < 0) {
-      if (actual < vistas.length - 1) cambiarVistaAgendaConGesto(vistas[actual + 1]);
-      else {
-        document.getElementById("drawer-enlaces-movil")?.classList.add("abierta");
-        document.getElementById("enlaces-movil-overlay")?.classList.add("abierta");
-        document.body.classList.add("scroll-bloqueado");
-      }
-    } else if (actual > 0) cambiarVistaAgendaConGesto(vistas[actual - 1]);
-    else {
-      document.getElementById("app-sidebar")?.classList.add("abierta");
-      document.getElementById("sidebar-overlay")?.classList.add("abierta");
-      document.body.classList.add("scroll-bloqueado");
-    }
+    const actual = vistas.indexOf(estado.agendaVistaActiva || "lista");
+    const nuevo = Math.max(0, Math.min(2, actual + (Math.abs(deltaX) > Math.max(48, seccion.clientWidth * 0.16) ? (deltaX < 0 ? 1 : -1) : 0)));
+    document.querySelector("#pills-agenda-vista .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
+    cambiarVistaAgendaConGesto(vistas[nuevo]);
+    if (pistaAgenda) pistaAgenda.pista.style.transform = `translate3d(-${nuevo * 100 / 3}%,0,0)`;
+  }, { passive: true });
+  seccion.addEventListener("touchcancel", () => {
+    inicio = null;
+    if (pistaAgenda) pistaAgenda.pista.style.transform = `translate3d(-${Math.max(0, vistas.indexOf(estado.agendaVistaActiva || "lista")) * 100 / 3}%,0,0)`;
+    document.querySelector("#pills-agenda-vista .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
   }, { passive: true });
 }
 
 function cambiarVistaAgendaConGesto(vista) {
   if (vista === estado.agendaVistaActiva) return;
+  const anterior = ["lista", "calendario", "materia"].indexOf(estado.agendaVistaActiva || "lista");
+  const siguiente = ["lista", "calendario", "materia"].indexOf(vista);
+  if (pistaAgenda && Math.abs(siguiente - anterior) > 1) {
+    pistaAgenda.pista.style.transition = "none";
+    pistaAgenda.pista.style.transform = `translate3d(-${anterior * 100 / 3}%,0,0)`;
+    pistaAgenda.pista.offsetWidth;
+    pistaAgenda.pista.style.transition = "";
+  }
   estado.agendaVistaActiva = vista;
   renderizarAgenda();
-  const pane = document.getElementById(vista === "lista" ? "agenda-lista-dias" : vista === "calendario" ? "agenda-vista-calendario" : "agenda-vista-materia");
-  pane?.classList.remove("agenda-vista-entrante");
-  requestAnimationFrame(() => pane?.classList.add("agenda-vista-entrante"));
-  setTimeout(() => pane?.classList.remove("agenda-vista-entrante"), 360);
 }
 
 /** Abre Cronograma (Agenda > Materia), opcionalmente enfocado en una matrícula. */

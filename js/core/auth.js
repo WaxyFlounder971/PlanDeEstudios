@@ -660,7 +660,7 @@ async function refrescarAccessTokenViaWorker(refreshToken) {
  * `estado.fileId`, el JSON central de la app), estas 3 funciones crean/leen/
  * borran archivos SUELTOS en Drive — uno por adjunto. Nunca se llaman desde
  * intentarSincronizar() ni desde ningún ciclo de sync del JSON: las
- * orquesta core/storage-adjuntos.js, en su propio flujo (subida lazy al
+ * orquesta core/storage/storage-adjuntos.js, en su propio flujo (subida lazy al
  * elegir el archivo, descarga lazy al pedirla, borrado en cola). Comparten
  * el mismo token de acceso porque el scope de Drive ("drive.file") ya
  * cubre cualquier archivo que la app cree, no solo el JSON central.
@@ -682,7 +682,7 @@ async function refrescarAccessTokenViaWorker(refreshToken) {
  * scope drive.file): destino dentro de una carpeta puntual, mismo `parents`
  * que ya usa copiarArchivoDrive más abajo para los backups. Se usa para
  * subir los adjuntos siempre dentro de "ArchivosAdjuntos" (ver
- * buscarOCrearCarpetaEnDrive + core/storage-adjuntos.js) en vez de sueltos
+ * buscarOCrearCarpetaEnDrive + core/storage/storage-adjuntos.js) en vez de sueltos
  * en la raíz junto al archivo de datos y la carpeta de backups.
  */
 async function subirArchivoBinarioADrive(token, archivo, folderId) {

@@ -5,8 +5,8 @@
    ========================================================================= */
 
 import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
-import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
@@ -20,7 +20,7 @@ import {
   eliminarAdjuntosDeSemestre,
   eliminarAdjuntosDeTareasDeSemestre,
   hayAdjuntosGuardados,
-} from "../core/storage-adjuntos.js";
+} from "../core/storage/storage-adjuntos.js";
 // Notificaciones push reales (Ajustes Avanzados) — ver
 // core/notificaciones-push.js. Este archivo solo dibuja el switch y
 // delega toda la lógica de permiso/suscripción/(des)programación en lote
@@ -213,7 +213,7 @@ function aplicarModoRendimiento(activo) {
  * como "presionarlos muchas veces seguidas no debe romper el estado
  * guardado ni la sincronización".
  *
- * Causa real del bug (confirmada en core/storage-sync.js):
+ * Causa real del bug (confirmada en core/storage/storage-sync.js):
  * marcarCambioPendiente() dispara intentarSincronizar() de inmediato, sin
  * esperar a que un intento anterior termine — no existe ningún mutex ni
  * debounce ahí. Tocar un switch varias veces seguidas dispara varias
@@ -1139,7 +1139,7 @@ function renderizarAjustes() {
   renderizarSeccionDatos();
 
   // Ajustes — liberar espacio (borrado en lote de adjuntos, solo si hay
-  // alguno guardado — ver hayAdjuntosGuardados en core/storage-adjuntos.js)
+  // alguno guardado — ver hayAdjuntosGuardados en core/storage/storage-adjuntos.js)
   renderizarSeccionLiberarEspacio();
 
   actualizarIndicadorSync();
@@ -1260,7 +1260,7 @@ function renderizarSelectorMoneda() {
  * frecuencia e informar cuándo fue el último backup exitoso. El ciclo en
  * sí (crear/rotar backup_reciente.json / backup_anterior.json dentro de
  * AppAcademica/) corre SOLO, enganchado al ciclo normal de sync — ver
- * ejecutarBackupSiToca en core/storage-sync.js. Esta función nunca dispara
+ * ejecutarBackupSiToca en core/storage/storage-sync.js. Esta función nunca dispara
  * un backup a mano, solo lee/escribe la preferencia y muestra el estado.
  */
 function renderizarSeccionBackupDrive() {
@@ -1292,7 +1292,7 @@ function renderizarSeccionBackupDrive() {
 
   // Botón "Hacer backup ahora" (2026-08-10, pedido explícito): fuerza el
   // mismo ciclo real de rotación (ver forzarBackupManual en
-  // core/storage-sync.js), ignorando el intervalo de la frecuencia
+  // core/storage/storage-sync.js), ignorando el intervalo de la frecuencia
   // elegida. A diferencia del backup automático, acá SÍ se avisa el
   // resultado (éxito o error) porque es una acción que la persona pidió a
   // mano y espera confirmación.

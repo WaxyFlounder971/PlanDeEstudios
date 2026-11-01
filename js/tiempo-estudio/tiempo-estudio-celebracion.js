@@ -39,7 +39,7 @@
    bug, es lo esperable — el resultado es el mismo.
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { MODO_DEMO } from "../core/demo-mode.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { reproducirAudioPersonal } from "./tiempo-estudio-audio-competencias.js";

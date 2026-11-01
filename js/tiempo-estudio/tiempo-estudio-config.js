@@ -6,9 +6,9 @@
    ========================================================================= */
 
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearConfigPomodoroDefault, sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
-import { mostrarToast } from "../ui/componentes.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
+import { construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 
 /**
@@ -112,7 +112,7 @@ function construirPillDiasEstudio(diasEstudioActuales) {
  * abrió el modal (tiempo-estudio.js) pueda re-renderizar la tarjeta/detalle
  * correspondiente, sin que este archivo necesite saber nada de tarjetas.
  */
-function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
+function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar, onEliminar) {
   const overlay = document.createElement("div");
   overlay.className = "modal-overlay";
   overlay.style.cssText =
@@ -126,11 +126,20 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
 
   const usaPomodoroInicial = mm.tiempo_estudio.pomodoro !== null;
   const pomodoroBase = mm.tiempo_estudio.pomodoro || obtenerPomodoroPredeterminado();
+  let mostrarMateria = mm.mostrar_en_tiempo_estudio !== false;
+  const botonEliminar = mm.tipo === "independiente" && onEliminar
+    ? '<button type="button" class="btn btn-danger" id="te-config-eliminar" style="width:100%;">Eliminar materia</button>'
+    : "";
 
   caja.innerHTML = `
     <div>
       <h2 style="margin:0;">Configurar tiempo de estudio</h2>
       <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">${nombreMateria}</p>
+    </div>
+
+    <div class="stack" style="gap:6px;">
+      <span class="form-label" style="margin:0;">Mostrar en Tiempo de estudio</span>
+      <div id="te-config-visibilidad"></div>
     </div>
 
     <div>
@@ -163,6 +172,8 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
       <p class="muted" style="font-size:0.78rem; margin:0;">Estos ciclos todavía no se usan en el timer de esta parte (llega en la próxima) — quedan guardados desde ya.</p>
     </div>
 
+    ${botonEliminar}
+
     <div class="row-between" style="gap:10px;">
       <button type="button" class="btn btn-secondary" id="te-config-cancelar" style="flex:1;">Cancelar</button>
       <button type="button" class="btn btn-primary" id="te-config-guardar" style="flex:1;">Guardar</button>
@@ -171,6 +182,16 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
 
   overlay.appendChild(caja);
   document.body.appendChild(overlay);
+
+  const pillVisibilidad = construirPillSwitchBinario(
+    [
+      { valor: "mostrar", texto: "Mostrar" },
+      { valor: "ocultar", texto: "Ocultar" },
+    ],
+    mostrarMateria ? "mostrar" : "ocultar",
+    (valor) => { mostrarMateria = valor === "mostrar"; }
+  );
+  caja.querySelector("#te-config-visibilidad").appendChild(pillVisibilidad);
 
   const pillDias = construirPillDiasEstudio(mm.tiempo_estudio.dias_estudio);
   caja.querySelector("#te-config-dias").appendChild(pillDias);
@@ -189,11 +210,15 @@ function abrirModalConfigTiempoEstudio(mm, nombreMateria, onGuardar) {
   // explícito de Cancelar/Cerrar, para no perder lo tipeado de un toque al
   // descuido. (El handler de "clic afuera" que había acá se removió.)
   caja.querySelector("#te-config-cancelar").addEventListener("click", cerrar);
+  if (botonEliminar) {
+    caja.querySelector("#te-config-eliminar").addEventListener("click", () => onEliminar(mm, cerrar));
+  }
 
   caja.querySelector("#te-config-guardar").addEventListener("click", () => {
     const metaCruda = caja.querySelector("#te-config-meta").value;
     const meta = metaCruda === "" ? null : Math.max(0, Number(metaCruda));
     mm.tiempo_estudio.meta_horas_semana = Number.isFinite(meta) ? meta : null;
+    mm.mostrar_en_tiempo_estudio = mostrarMateria;
     mm.tiempo_estudio.color = caja.querySelector("#te-config-color").value || null;
     // Orden canónico L→D (el mismo de DIAS_SEMANA_CONFIG), no el orden en
     // que el usuario los clickeó — calcularMetaDiariaMateria() solo hace

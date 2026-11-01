@@ -5,7 +5,7 @@
    neón, y exportación a PNG.
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { aplicarFormatoTexto, hexARgba } from "../core/utils.js";
 import { abrirModalRequisito } from "./plan-detalle.js";
 import { abrirModalResolverConflicto, obtenerMateriasQueDesbloquea } from "./plan-vista-lista-tarjetas.js";

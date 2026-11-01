@@ -1,6 +1,6 @@
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { registrarAnaliticaUso } from "../core/analitica.js";
 import { notasActuales, opcionesNotas, guardarNota, marcarEliminada, restaurarNota, eliminarDefinitiva, procesarCicloVidaNotas, agendaNotas, COLOR_DEFECTO, resolverColorNota } from "./notas-datos.js";
@@ -21,8 +21,18 @@ const tr = (x) => t(x);
 let seleccion = new Set();
 let enPapelera = false;
 const eliminacionesEnCurso = new Set();
+let cacheTextoBusquedaNotas = new WeakMap();
+let temporizadorRepintadoBusqueda = 0;
 
 function normalizar(s) { return String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLocaleLowerCase(); }
+
+function textoBusquedaNota(nota) {
+  let texto = cacheTextoBusquedaNotas.get(nota);
+  if (texto !== undefined) return texto;
+  texto = normalizar(`${nota.titulo || ""} ${textoPlanoNota(nota.contenido)}`);
+  cacheTextoBusquedaNotas.set(nota, texto);
+  return texto;
+}
 
 function notasVisibles() {
   const q = normalizar(document.querySelector("#notas-busqueda")?.value);
@@ -30,7 +40,7 @@ function notasVisibles() {
   const vence = document.querySelector("#notas-filtro-vence")?.getAttribute("aria-pressed") === "true";
   return notasActuales()
     .filter((n) => (enPapelera ? !!n.eliminada_en : !n.eliminada_en))
-    .filter((n) => !q || normalizar(n.titulo + " " + textoPlanoNota(n.contenido)).includes(q))
+    .filter((n) => !q || textoBusquedaNota(n).includes(q))
     .filter((n) => !color || n.color === color)
     .filter((n) => !vence || !!n.vence_en)
     .sort(comparadorNotas());
@@ -621,6 +631,9 @@ function selectorVista(root) {
 function renderizarNotas() {
   const root = document.getElementById("seccion-notas");
   if (!root || !estado.datos) return;
+  clearTimeout(temporizadorRepintadoBusqueda);
+  temporizadorRepintadoBusqueda = 0;
+  cacheTextoBusquedaNotas = new WeakMap();
   abortarArrastre(); limpiarArrastresHuerfanos(); // si un arrastre quedó a medias, nunca deja la tarjeta fantasma
   procesarCicloVidaNotas(); procesarCompartidos();
   root.replaceChildren(); root.classList.add("stack", "notas-seccion");
@@ -722,7 +735,11 @@ function renderizarNotas() {
     contenido.replaceChildren(...nodos);
     if (contenido.isConnected) aplicarTodosAnchos(contenido);
   };
-  const repintar = pintarGrupos;
+  const repintar = () => {
+    clearTimeout(temporizadorRepintadoBusqueda);
+    temporizadorRepintadoBusqueda = 0;
+    pintarGrupos();
+  };
   pintarGrupos();
   root.append(contenido);
   aplicarTodosAnchos(contenido); // ya está en la página: ahora sí se pueden medir las columnas
@@ -733,7 +750,14 @@ function renderizarNotas() {
     observadorAnchos.observe(contenido);
   }
   if (seleccion.size) root.append(barraSeleccion());
-  search.oninput = repintar; color.onchange = repintar;
+  search.oninput = () => {
+    clearTimeout(temporizadorRepintadoBusqueda);
+    temporizadorRepintadoBusqueda = window.setTimeout(() => {
+      temporizadorRepintadoBusqueda = 0;
+      pintarGrupos();
+    }, 80);
+  };
+  color.onchange = repintar;
   restaurarFlotantes();
   window.dispatchEvent(new Event("notas:actualizadas-ui"));
 }

@@ -3,7 +3,7 @@
 // - Flotantes: la nota queda suelta sobre toda la app (también al cambiar de sección), se arrastra, se inclina
 //   con la velocidad y, si la lanzas muy rápido, sigue de largo hasta la pared y se queda pegada.
 //   La posición se guarda por dispositivo (localStorage), no se sincroniza.
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { notasActuales, resolverColorNota, COLOR_DEFECTO, guardarNota, grosorTrazoPreferido, guardarGrosorTrazoPreferido } from "./notas-datos.js";
 import { renderizarHTMLNota } from "./notas-sanitizar.js";

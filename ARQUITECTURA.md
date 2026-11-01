@@ -14,8 +14,9 @@ archivo hay que ir para pedir un cambio. Todo el proyecto usa **módulos ES nati
 Este archivo es el mapa de **decisión** (capas, por qué existen los imports
 circulares, y en qué archivo empezar según lo que te pidan). El detalle
 función-por-función de cada archivo — qué exporta, con qué firma, qué hace cada
-export — vive en **`MAPA_FUNCIONES.md`**, para no duplicar la misma información en
-dos lugares y que se desincronicen entre sí. Si vas a pedirle a una IA que trabaje en
+export — vive en **`MAPA_FUNCIONES.md`** y en mapas especializados de `MAPA/`,
+como `MAPA_FUNCIONES_finanzas.md`, para mantener el detalle por área sin duplicar
+la documentación extensa en un solo archivo. Si vas a pedirle a una IA que trabaje en
 algo:
 
 1. Buscá la fila que corresponda en la tabla "¿Dónde va cada cosa?" acá abajo para
@@ -29,12 +30,13 @@ algo:
 ## Capas del proyecto (de más base a más arriba)
 
 ```
-js/core/       → datos, sesión, sincronización — no saben nada de la UI
+js/core/       → datos, sesión, sincronización — base compartida
+js/core/finanzas/ → lógica, modelo y cálculos de Finanzas 2.0
 js/ui/         → componentes de interfaz genéricos y reutilizables (modales, toasts, tema)
 js/config/     → secciones de Configuración (ajustes, enlaces, baneados)
 js/plan/       → todo el Plan de Estudios (el módulo de negocio más grande)
 js/semestres/  → Semestres, matrícula y el motor de notas
-js/finanzas/   → Finanzas (matrícula, gastos U, becas, beneficios)
+js/finanzas/   → shell e interfaz de Finanzas (Finanzas universitaria y Finanzas 2.0)
 js/comunidad/  → Profesores y compañeros
 js/horario/    → Horario semanal + Horario entre amigos (incluye amigos.html standalone)
 js/agenda/     → Agenda (Lista + Calendario, eventos/tareas/exámenes)
@@ -57,8 +59,11 @@ reutilizan piezas de `js/plan/` en vez de duplicarlas:
   `semestres/semestres-tarjetas.js` para vincular profesores a materias matriculadas.
 - `agenda/agenda-clases.js` y `agenda/agenda-utils.js` reutilizan `horario/horario.js`
   para calcular qué clases caen en un día dado.
-- `finanzas/*` reutiliza `semestres/semestres.js` para listar semestres y
-  `plan/plan-esquema.js` para saber la universidad del plan activo.
+- `finanzas/*` reutiliza `semestres/semestres.js` y `plan/plan-esquema.js`
+  para funciones universitarias heredadas. Finanzas 2.0 separa la lógica en
+  `core/finanzas/` y las vistas en `finanzas/`; ambos lados usan el almacenamiento
+  y la sincronización comunes. Sus colecciones se definen en `core/schema.js` y
+  se funden en `core/storage/storage-merge.js`.
 
 > **Imports circulares — por qué existen y por qué son intencionales:**
 > Varios módulos se importan entre sí en ambas direcciones. Esto es **seguro** en
@@ -69,8 +74,8 @@ reutilizan piezas de `js/plan/` en vez de duplicarlas:
 >
 > | Par | Por qué |
 > |---|---|
-> | `core/storage.js` ↔ `core/storage-sync.js` | `storage.js` necesita `programarRefrescoProactivo`/`ocultarAvisoReconexion` de sync; sync necesita `estado` de storage. |
-> | `core/storage-sync.js` → `plan-gestionar.js`, `plan-vista-lista.js`, `semestres.js`, `semestres-tarjetas.js`, `finanzas.js`, `config-ajustes.js`, `config-enlaces.js`, `main.js` | tras `aplicarDatosRemotosFrescos()` hay que re-renderizar toda la UI activa; es la única razón por la que `core/` "mira hacia arriba". |
+> | `core/storage/storage.js` ↔ `core/storage/storage-sync.js` | `storage.js` necesita `programarRefrescoProactivo`/`ocultarAvisoReconexion` de sync; sync necesita `estado` de storage. |
+> | `core/storage/storage-sync.js` → `plan-gestionar.js`, `plan-vista-lista.js`, `semestres.js`, `semestres-tarjetas.js`, `finanzas.js`, `config-ajustes.js`, `config-enlaces.js`, `main.js` | tras `aplicarDatosRemotosFrescos()` hay que re-renderizar toda la UI activa; es la única razón por la que `core/` "mira hacia arriba". |
 > | `plan/plan-esquema.js` ↔ `plan/plan-gestionar.js` | esquema necesita abrir el modal de gestión desde ciertos flujos; gestionar necesita los getters de esquema. |
 > | `plan/plan-detalle.js` ↔ `plan/plan-vista-lista-tarjetas.js` | detalle necesita el candado de disponibilidad; tarjetas necesita el cuerpo de detalle compartido. |
 > | `ui/componentes.js` ↔ `main.js` | componentes necesita `renderizarPerfil` al cambiar el layout; main usa casi todo lo de componentes. |
@@ -98,8 +103,7 @@ El `share_target` de `manifest.json` usa una acción relativa (`./`) dentro del 
 
 ### `js/core/` — datos y sesión
 `auth.js` (login Google + API Drive cruda), `clipboard.js` (blindaje de copiar al
-portapapeles), `schema.js` (molde de datos completo, factories, Lamport, motor de
-notas/promedios/finanzas — la única fuente de verdad del JSON de Drive),
+portapapeles), `schema.js` (molde de datos, factories, migraciones y Lamport — la fuente de verdad del JSON de Drive; las reglas de Finanzas viven en `core/finanzas/`),
 `storage.js` (`estado` en memoria + caché offline), `storage-sync.js` (motor de
 sincronización), `storage-merge.js` (motor de fusión/conflictos), `storage-adjuntos.js`
 (ciclo de vida de adjuntos binarios).
@@ -132,10 +136,13 @@ interactivo), `plan-modo-edicion.js` (badge/toggle de Modo Edición).
 (tarjetas + motor de notas completo — criterios, asignaciones, proyecciones,
 conflictos), `semestres-dashboard.js` (Historial académico: aprobación + promedios).
 
-### `js/finanzas/` — Finanzas
-`finanzas.js` (shell de 4 pestañas + totales del Resumen), `finanzas-gastos.js`
-(gastos generales U + prompt de Beneficios), `finanzas-semestres.js` (registro
-financiero por semestre: matrícula/beca/desglose de pagos).
+### `js/core/finanzas/` y `js/finanzas/` — Finanzas
+`js/core/finanzas/` contiene el modelo unificado, registro, cálculos de Disponible,
+Plan, metas, presupuesto, categorías, sobres, importación/exportación, lectura de
+mensajes, deudas y cuentas. `js/finanzas/` contiene el shell, pestañas y formularios.
+La sección mantiene además las pantallas universitarias heredadas de Semestres y
+Beneficios. El [mapa completo de Finanzas](MAPA/MAPA_FUNCIONES_finanzas.md) enumera
+responsabilidades, exports, colecciones, sincronización y límites del producto.
 
 ### `js/comunidad/` — Profesores y compañeros
 `comunidad.js` (única, ~3948 líneas — candidata a dividirse, ver Patrones
@@ -171,10 +178,10 @@ migraciones): el primero es login/sync/tema/perfil; el segundo llama a los
 |---|---|
 | Cambiar una llave del JSON que se guarda en Drive | `core/schema.js` |
 | Un bug de login / sesión que no inicia | `core/auth.js`, `main.js` |
-| "No sincroniza" / "se pierden cambios" / spinner de carga | `core/storage-sync.js` |
-| "Se resucitó algo que borré" / conflicto entre 2 dispositivos | `core/storage-merge.js` |
-| Agregar una llave nueva a `estado` (memoria de sesión) | `core/storage.js` |
-| Ciclo de vida de un adjunto (subir/descargar/borrar binario) | `core/storage-adjuntos.js` |
+| "No sincroniza" / "se pierden cambios" / spinner de carga | `core/storage/storage-sync.js` |
+| "Se resucitó algo que borré" / conflicto entre 2 dispositivos | `core/storage/storage-merge.js` |
+| Agregar una llave nueva a `estado` (memoria de sesión) | `core/storage/storage.js` |
+| Ciclo de vida de un adjunto (subir/descargar/borrar binario) | `core/storage/storage-adjuntos.js` |
 | Un helper genérico de texto/color/fecha reutilizable | `core/utils.js` |
 | Modal de confirmación, toast, drawer móvil, flechas `‹ ›` | `ui/componentes.js` |
 | Paletas / modo claro-oscuro | `ui/tema.js` |
@@ -193,9 +200,14 @@ migraciones): el primero es login/sync/tema/perfil; el segundo llama a los
 | Alta de semestre, matricular materias, sincronía con el Plan | `semestres/semestres.js` |
 | Tarjeta de semestre/materia matriculada, motor de notas, criterios/asignaciones | `semestres/semestres-tarjetas.js` |
 | Dashboard de promedio/aprobación en Semestres | `semestres/semestres-dashboard.js` |
-| Costo de matrícula, beca, desglose de pagos de un semestre | `finanzas/finanzas-semestres.js` |
-| Gastos generales U, prompt de descuentos estudiantiles | `finanzas/finanzas-gastos.js` |
-| Totales del Resumen de Finanzas | `finanzas/finanzas.js` |
+| Pagos de matrícula/beca heredados por semestre | `js/finanzas/finanzas-semestres.js` |
+| Gastos universitarios heredados y Beneficios | `js/finanzas/finanzas-gastos.js` |
+| Registro de movimientos, metas, disponible y resumen | `js/core/finanzas/` + `js/finanzas/finanzas.js` |
+| Importar/exportar CSV y respaldos | `js/core/finanzas/finanzas-importar.js`, `js/finanzas/finanzas-datos-ui.js` |
+| Plantillas para leer mensajes bancarios | `js/core/finanzas/finanzas-mensajes.js`, `js/finanzas/finanzas-mensajes-ui.js` |
+| Préstamos y gastos divididos | `js/core/finanzas/finanzas-deudas.js`, `js/finanzas/finanzas-deudas-ui.js` |
+| Cuentas, divisas y traspasos | `js/core/finanzas/finanzas-cuentas.js`, `js/finanzas/finanzas-cuentas-ui.js` |
+| Colecciones, migraciones y sync de Finanzas | `js/core/schema.js`, `js/core/storage/storage-merge.js` |
 | Alta/edición de profesor o compañero, vincular profesor a materia | `comunidad/comunidad.js` |
 | Grid semanal de Horario, modo conjunto, colores/nombres de bloque | `horario/horario.js` |
 | Modal de alta/edición de bloque de horario, Cronograma de excepciones | `horario/horario-modal.js` |

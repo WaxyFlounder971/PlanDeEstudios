@@ -28,9 +28,9 @@ import {
   obtenerIntentosMateria,
   sellarTimestamp,
 } from "../core/schema.js";
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { aplicarFormatoTexto, estiloBadgeCategoria, formatearHoras, formatearHorasCompactoIniciales } from "../core/utils.js";
 import { agregarLongPress } from "../ui/componentes.js";
 import { buscarMateriaPorCodigoEnPlanes } from "./plan-esquema.js";

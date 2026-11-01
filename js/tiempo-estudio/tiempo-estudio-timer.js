@@ -74,8 +74,9 @@
    ========================================================================= */
 
 import { crearSesionEstudio, sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
+import { minutosSesionEnRango } from "./tiempo-estudio-periodos.js";
 import { MODO_DEMO } from "../core/demo-mode.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
@@ -161,8 +162,7 @@ function calcularMinutosEstaSemana(materiaMatriculadaId) {
   const inicio = lunes.getTime();
   const fin = inicioSemanaSiguiente.getTime();
   return (estado.datos?.sesiones_estudio || [])
-    .filter((s) => (s.materia_independiente_id || s.materia_matriculada_id) === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin)
-    .reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
+    .reduce((acc, s) => acc + ((s.materia_independiente_id || s.materia_matriculada_id) === materiaMatriculadaId ? minutosSesionEnRango(s, inicio, fin) : 0), 0);
 }
 
 /* ===================== Persistencia local (salvavidas) ===================== */

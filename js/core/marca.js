@@ -1,10 +1,10 @@
-import { estado } from "./storage.js";
-import { marcarCambioPendiente } from "./storage-sync.js";
+import { estado } from "./storage/storage.js";
+import { marcarCambioPendiente } from "./storage/storage-sync.js";
 import { sellarTimestamp } from "./schema.js";
 import { mostrarToast } from "../ui/componentes.js";
 
 const LOGOS = {
-  folder: "imagenes/LogoAppFolder.png",
+  folder: "imagenes/LogoAppFolder-512.png",
   birrete: "imagenes/LogoAppBirrete.png",
 };
 

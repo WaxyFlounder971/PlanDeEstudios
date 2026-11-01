@@ -7,7 +7,7 @@
    para el modal "Adjuntar" y el menú de gestión, en vez de reconstruirlos
    por separado en cada pantalla. La lógica de datos (subir, guardar
    enlace, reordenar, activar/desactivar, borrar) ya vive en
-   core/storage-adjuntos.js; este archivo solo arma el DOM y llama a esas
+   core/storage/storage-adjuntos.js; este archivo solo arma el DOM y llama a esas
    funciones.
 
    No se clona crearModalDinamico (semestres-tarjetas.js) porque no está
@@ -26,7 +26,7 @@ import {
   fijarActivoAdjunto,
   obtenerAdjuntosDe,
   reordenarAdjuntos,
-} from "../core/storage-adjuntos.js";
+} from "../core/storage/storage-adjuntos.js";
 import { abrirConfirmacion, mostrarToast } from "./componentes.js";
 
 /* ------------------------------- Abrir uno ------------------------------- */
@@ -35,7 +35,7 @@ import { abrirConfirmacion, mostrarToast } from "./componentes.js";
  * Resuelve y abre un adjunto puntual — mismo comportamiento sin importar
  * desde dónde se lo toque (pill del Cronograma, chip de una tarjeta de
  * evento, fila del menú de gestión). Un enlace abre directo; un archivo se
- * descarga bajo demanda (ver core/storage-adjuntos.js/descargarAdjunto) y
+ * descarga bajo demanda (ver core/storage/storage-adjuntos.js/descargarAdjunto) y
  * se abre en pestaña nueva, revocando el Blob URL apenas el navegador
  * tuvo tiempo de usarlo — no hace falta guardarlo más que eso.
  */

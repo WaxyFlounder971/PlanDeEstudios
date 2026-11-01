@@ -2,7 +2,7 @@
 
 ### config-ajustes.js
 Propósito: Renderiza la sección de Ajustes (paletas, modo claro/oscuro, escala de notas, nota de aprobación por plan/universidad, formato de texto, backup rotativo a Drive, modo rendimiento, config de días de Horario).
-Depende de: core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js, plan/plan-vista-lista.js, ui/componentes.js, ui/tema.js, ui/paleta-personalizada.js
+Depende de: core/schema.js, core/storage/storage-sync.js, core/storage/storage.js, core/utils.js, plan/plan-vista-lista.js, ui/componentes.js, ui/tema.js, ui/paleta-personalizada.js
 Exporta:
 
 * `renderizarAjustes()` — reconstruye toda la sección de Ajustes (paletas, escalas, moneda, backup, etc.) e inicializa el accordion.
@@ -17,7 +17,7 @@ Exporta: (nada — solo `export {}`)
 
 ### config-enlaces.js
 Propósito: Gestiona los Enlaces rápidos de Configuración — listar, agregar, editar, eliminar y renderizarlos en los distintos contenedores donde aparecen (Configuración, panel lateral, drawer móvil).
-Depende de: core/schema.js, core/storage-sync.js, core/storage.js, core/utils.js
+Depende de: core/schema.js, core/storage/storage-sync.js, core/storage/storage.js, core/utils.js
 Exporta:
 
 * `renderizarEnlacesRapidos()` — repinta las 3 listas de enlaces rápidos (Configuración, panel lateral, drawer móvil) y habilita/deshabilita el botón "Agregar" según el límite.

@@ -24,10 +24,10 @@
    así que esconder botones es comodidad, nunca la seguridad real.
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
 import { sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import {

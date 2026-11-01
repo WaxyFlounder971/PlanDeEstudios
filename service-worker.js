@@ -67,7 +67,6 @@ const CASCARON_MINIMO = [
   "demo/datos-demo.json",
   "css/design-system.css",
   "js/main.js",
-  "imagenes/LogoAppFolder.png",
   "imagenes/LogoAppFolder-192.png",
   "imagenes/LogoAppFolder-512.png",
   "imagenes/LogoAppBirrete.png",

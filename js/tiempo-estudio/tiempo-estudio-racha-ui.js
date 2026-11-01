@@ -49,10 +49,10 @@
                                      racha cuya pérdida ya se mostró.
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { MODO_DEMO, PREVIEW_DEMO } from "../core/demo-mode.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { mostrarToast } from "../ui/componentes.js";
 import {
   DESCANSOS_POR_SEMANA,
@@ -63,6 +63,7 @@ import {
   indiceDesdeISO,
   minutosSemana,
 } from "./tiempo-estudio-racha.js";
+import { minutosSesionPorDiaLocal } from "./tiempo-estudio-periodos.js";
 
 const NS_SVG = "http://www.w3.org/2000/svg";
 const CLAVE_OFERTA_VISTA = "te_racha_oferta_dia_v1"; // por dispositivo, a propósito
@@ -737,11 +738,10 @@ function construirCalendarioAnual(est) {
   const sesiones=sesionesRachaVisibles();
   const dias=new Map();
   for(const s of sesiones){
-    const inicio=Number(s?.inicio);let min=Number(s?.duracion_minutos);
-    if(!Number.isFinite(min))min=Math.round((Number(s?.fin)-inicio)/60000);
-    if(!Number.isFinite(inicio)||!Number.isFinite(min)||min<=0)continue;
-    const d=new Date(inicio);const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-    dias.set(key,(dias.get(key)||0)+min);
+    for(const parte of minutosSesionPorDiaLocal(s)){
+      const d=parte.fecha;const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      dias.set(key,(dias.get(key)||0)+parte.minutos);
+    }
   }
   const descansos=new Set();
   const inicioCadena=est.activa?est.inicioIdx:est.rachaPerdida?.inicioIdx;

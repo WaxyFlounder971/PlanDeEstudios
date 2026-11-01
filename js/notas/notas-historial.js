@@ -1,7 +1,7 @@
 // Historial global de Notas (Ctrl+Z / Ctrl+Y sobre la lista): eliminar, editar, fijar, duplicar, reordenar, restaurar…
 // Una entrada guarda cómo estaban las notas afectadas antes y después. Formato de instantánea: [{ id, nota | null }].
-import { estado } from "../core/storage.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { sellarTimestamp } from "../core/schema.js";
 import { notasActuales } from "./notas-datos.js";
 

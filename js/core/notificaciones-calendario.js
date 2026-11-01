@@ -45,8 +45,8 @@ import {
   COLOR_ID_GOOGLE_CALENDAR_POR_TIPO,
   OFFSETS_RECORDATORIO_AGENDA,
 } from "./schema.js";
-import { marcarCambioPendiente, asegurarTokenValido, conReintentoSi401 } from "./storage-sync.js";
-import { estado } from "./storage.js";
+import { marcarCambioPendiente, asegurarTokenValido, conReintentoSi401 } from "./storage/storage-sync.js";
+import { estado } from "./storage/storage.js";
 import { MODO_DEMO } from "./demo-mode.js";
 import { aplicarFormatoTexto } from "./utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";

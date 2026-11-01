@@ -6,9 +6,9 @@
    ========================================================================= */
 
 import { NOMBRES_UNIVERSIDAD_PRESET, PARAMETROS_UNIVERSIDAD_DEFAULT, crearMateria, crearPlanEstudio, sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { confirmarUniversidadNoInvertida } from "../ui/aviso-universidad.js";
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { obtenerModoTemaLocal } from "../ui/tema.js";
 import { abrirModalGestionPlanes, renderizarModoHardcore, renderizarSelectorPlan } from "./plan-gestionar.js";
 import { derivarTiposHorasDeHorasColumnas, importarCSVEnPlan, materiaPareceOptativa, obtenerPalabraOptativa, parsearRequisitoArbol, serializarRequisitoArbol } from "./plan-importacion-csv.js";

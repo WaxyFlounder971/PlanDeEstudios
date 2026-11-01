@@ -9,7 +9,7 @@
    ========================================================================= */
 
 import { fechaLocalDesdeISO } from "../horario/horario.js";
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
 import { calcularNumeroSemanaParaFecha, construirSeccionMateriasDia } from "./agenda-clases.js";

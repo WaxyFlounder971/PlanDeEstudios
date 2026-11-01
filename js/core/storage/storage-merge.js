@@ -30,7 +30,7 @@
       a nivel de objeto completo (ver fusionarBloqueUnico).
    ========================================================================= */
 
-import { observarRelojLogico, migrarDatosAntiguos } from "./schema.js";
+import { observarRelojLogico, migrarDatosAntiguos } from "../schema.js";
 
 /**
  * Compara dos entidades por su contador lógico de última modificación
@@ -1151,6 +1151,15 @@ function fusionarDatos(datosLocal, datosRemoto) {
   // Finanzas 2.0: movimientos y metas, mismo patrón.
   const tumbasMovimientos = fusionarTumbas(datosLocal._eliminados_movimientos, datosRemoto._eliminados_movimientos);
   const tumbasMetas = fusionarTumbas(datosLocal._eliminados_metas, datosRemoto._eliminados_metas);
+  // Finanzas 2.0 (sesión 2): compromisos del Plan, mismo patrón.
+  const tumbasCompromisos = fusionarTumbas(datosLocal._eliminados_compromisos, datosRemoto._eliminados_compromisos);
+  // Finanzas 2.0 (sesión 5): categorías y sobres, mismo patrón.
+  const tumbasCategoriasFinanzas = fusionarTumbas(datosLocal._eliminados_categorias_finanzas, datosRemoto._eliminados_categorias_finanzas);
+  const tumbasSobres = fusionarTumbas(datosLocal._eliminados_sobres, datosRemoto._eliminados_sobres);
+  // Formatos bancarios, préstamos y cuentas son colecciones sincronizadas independientes.
+  const tumbasPatronesMensajes = fusionarTumbas(datosLocal._eliminados_patrones_mensajes, datosRemoto._eliminados_patrones_mensajes);
+  const tumbasPrestamos = fusionarTumbas(datosLocal._eliminados_prestamos, datosRemoto._eliminados_prestamos);
+  const tumbasCuentas = fusionarTumbas(datosLocal._eliminados_cuentas, datosRemoto._eliminados_cuentas);
   // Tiempo de Estudio (Parte 1): colección plana de nivel superior, mismo
   // patrón exacto que finanzas_semestre/gastos_u — fusionarColeccion ya
   // sabe fundir por _actualizadoEn y respetar tumbas, no hace falta ninguna
@@ -1251,6 +1260,12 @@ function fusionarDatos(datosLocal, datosRemoto) {
     gastos_u: fusionarColeccion(datosLocal.gastos_u, datosRemoto.gastos_u, tumbasGastosU, "gasto general U"),
     movimientos: fusionarColeccion(datosLocal.movimientos, datosRemoto.movimientos, tumbasMovimientos, "movimiento"),
     metas: fusionarColeccion(datosLocal.metas, datosRemoto.metas, tumbasMetas, "meta"),
+    compromisos: fusionarColeccion(datosLocal.compromisos, datosRemoto.compromisos, tumbasCompromisos, "compromiso"),
+    categorias_finanzas: fusionarColeccion(datosLocal.categorias_finanzas, datosRemoto.categorias_finanzas, tumbasCategoriasFinanzas, "categoría de finanzas"),
+    sobres: fusionarColeccion(datosLocal.sobres, datosRemoto.sobres, tumbasSobres, "sobre"),
+    patrones_mensajes: fusionarColeccion(datosLocal.patrones_mensajes, datosRemoto.patrones_mensajes, tumbasPatronesMensajes, "formato de mensaje bancario"),
+    prestamos: fusionarColeccion(datosLocal.prestamos, datosRemoto.prestamos, tumbasPrestamos, "préstamo"),
+    cuentas: fusionarColeccion(datosLocal.cuentas, datosRemoto.cuentas, tumbasCuentas, "cuenta"),
     sesiones_estudio: fusionarColeccion(
       datosLocal.sesiones_estudio,
       datosRemoto.sesiones_estudio,
@@ -1290,6 +1305,12 @@ function fusionarDatos(datosLocal, datosRemoto) {
     _eliminados_gastos_u: tumbasGastosU,
     _eliminados_movimientos: tumbasMovimientos,
     _eliminados_metas: tumbasMetas,
+    _eliminados_compromisos: tumbasCompromisos,
+    _eliminados_categorias_finanzas: tumbasCategoriasFinanzas,
+    _eliminados_sobres: tumbasSobres,
+    _eliminados_patrones_mensajes: tumbasPatronesMensajes,
+    _eliminados_prestamos: tumbasPrestamos,
+    _eliminados_cuentas: tumbasCuentas,
     _eliminados_horario_enlaces: tumbasHorarioEnlaces,
     _eliminados_sesiones_estudio: tumbasSesionesEstudio,
     _eliminados_tiempo_estudio_materias: tumbasTiempoEstudioMaterias,

@@ -27,7 +27,7 @@ Exporta:
 
 ### paleta-personalizada.js
 Propósito: Flujo para crear una paleta de colores personalizada ("Crear mi paleta", 15ª opción del selector de paletas), generado 100% por JS (overlay + modal).
-Depende de: core/schema.js, core/storage-sync.js, core/storage.js, ui/tema.js
+Depende de: core/schema.js, core/storage/storage-sync.js, core/storage/storage.js, ui/tema.js
 Exporta:
 
 * `iniciarFlujoPaletaPersonalizada({alGuardar}?)` — punto de entrada llamado desde config-ajustes.js; abre el overlay del flujo de creación de paleta. `alGuardar` es un callback (típicamente `renderizarAjustes`) para refrescar el grid de paletas al terminar.

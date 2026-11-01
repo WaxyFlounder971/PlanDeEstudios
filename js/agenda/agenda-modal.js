@@ -4,8 +4,8 @@
    ========================================================================= */
 
 import { TIPOS_EVENTO_AGENDA, crearEventoAgenda, sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
@@ -20,7 +20,7 @@ import {
   obtenerMateriasVinculablesAgenda,
   tareaVenceHoy,
 } from "./agenda-utils.js";
-import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "../core/storage-adjuntos.js";
+import { eliminarAdjunto, obtenerAdjuntosActivosDe, obtenerAdjuntosDe } from "../core/storage/storage-adjuntos.js";
 import { abrirAdjunto, abrirMenuAdjuntos, abrirModalAdjuntar } from "../ui/adjuntos-ui.js";
 // Sincronización con Google Calendar (2026-08-25, reemplaza Web Push) —
 // ver core/notificaciones-calendario.js. Ambas llamadas son "best-effort":
@@ -42,7 +42,7 @@ let tipoEtiquetaAgendaSeleccionadaId = null;
 // para adjuntar el cronograma del semestre u otros documentos importantes a
 // un evento/tarea/examen puntual. Ampliado 2026-08-19: ya NO se guardan
 // como base64 dentro del propio evento — se migró al sistema unificado de
-// adjuntos (core/storage-adjuntos.js + ui/adjuntos-ui.js), el mismo que usa
+// adjuntos (core/storage/storage-adjuntos.js + ui/adjuntos-ui.js), el mismo que usa
 // Cronograma para materia. Cada adjunto sube a la carpeta dedicada del
 // Drive del usuario y solo queda una referencia liviana con
 // entidadTipo:"evento" + entidadId — nada de binarios sueltos dentro del
@@ -741,7 +741,7 @@ function renderizarTarjetaInfoEventoAgenda(evento) {
   document.getElementById("info-agenda-fila-notas").classList.toggle("oculto", !evento.notas);
   document.getElementById("info-agenda-notas-texto").textContent = evento.notas || "";
 
-  // Adjuntos: pills del sistema unificado (core/storage-adjuntos.js) —
+  // Adjuntos: pills del sistema unificado (core/storage/storage-adjuntos.js) —
   // tocar una la abre directo (archivo se descarga bajo demanda desde
   // Drive, enlace abre directo); "Gestionar" reordena/desactiva/borra.
   const adjuntos = obtenerAdjuntosActivosDe("evento", evento.id);

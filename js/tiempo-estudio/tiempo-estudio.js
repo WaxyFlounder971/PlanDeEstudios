@@ -8,7 +8,7 @@
    Semestres/Plan de Estudios (.materia-card + código/nombre en línea 1),
    franja de color SOLO a la izquierda (nunca todo el borde), color por
    defecto = el mismo que ya usa Horario para esa materia (color de
-   categoría), editable por el usuario. Filtro Todo/Activos como pills
+   categoría), editable por el usuario. Filtro Visibles/Todas las materias
    (mismo componente que Lista/Calendario/Cronograma de Agenda). Encabezado
    de detalle con franja de color horizontal arriba, y timer → barra de
    progreso → texto simple, en ese orden. El componente "Buscar materia
@@ -27,9 +27,9 @@
    Horario. Si hace falta que coincida, avisar para ajustarlo.
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
-import { marcarCambioPendiente, registrarHookPostFusion } from "../core/storage-sync.js";
+import { marcarCambioPendiente, registrarHookPostFusion } from "../core/storage/storage-sync.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearMateriaEstudioIndependiente, sellarTimestamp } from "../core/schema.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
@@ -38,9 +38,10 @@ import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
 import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estudio-registro.js";
 import { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria } from "./tiempo-estudio-estadisticas.js";
-import { construirVistaCompetencias } from "./tiempo-estudio-competencias.js";
+import { construirVistaCompetencias, sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
 import { montarIndicadoresTimer } from "./tiempo-estudio-indicador.js";
 import { construirChipRacha, inicializarRacha, alFusionarDatosRacha, simularAnimacionRachaDemo } from "./tiempo-estudio-racha-ui.js";
+import { minutosSesionEnRango } from "./tiempo-estudio-periodos.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -79,21 +80,23 @@ let semestreTiempoEstudioId = null;
 // dejar 2+ suscriptores duplicados de una visita anterior.
 let desuscribirTimerDetalle = null;
 
-/* ===================== Parte A/B: filtro Todo/Activos ===================== */
+/* ===================== Visibilidad de materias en Tiempo de Estudio ===================== */
 
 // Preferencia puramente de visualización de ESTE dispositivo (no afecta
 // datos ni se sincroniza entre dispositivos) — vive en localStorage, no en
 // estado.datos.configuracion, a propósito: es del mismo tipo que
 // CLAVE_SECCION_ACTIVA en main.js (qué se ve, no qué se guarda), no algo
 // que tenga sentido que viaje entre celular/notebook.
-const CLAVE_FILTRO_VISTA_TE = "te_filtro_vista_v1";
+const CLAVE_FILTRO_VISTA_TE = "te_filtro_vista_v2";
 
 function obtenerFiltroVista() {
-  return localStorage.getItem(CLAVE_FILTRO_VISTA_TE) === "activos" ? "activos" : "todo";
+  // La preferencia nueva inicia en Visibles, aunque una versión anterior
+  // hubiera dejado guardado su filtro Todo/Activos.
+  return localStorage.getItem(CLAVE_FILTRO_VISTA_TE) === "todo" ? "todo" : "mostrar";
 }
 
 function guardarFiltroVista(valor) {
-  localStorage.setItem(CLAVE_FILTRO_VISTA_TE, valor === "activos" ? "activos" : "todo");
+  localStorage.setItem(CLAVE_FILTRO_VISTA_TE, valor === "todo" ? "todo" : "mostrar");
 }
 
 /* ===================== Helpers de datos ===================== */
@@ -178,8 +181,7 @@ function obtenerRangoSemanaActual() {
 function calcularMinutosEstudiadosEstaSemana(materiaMatriculadaId) {
   const { inicio, fin } = obtenerRangoSemanaActual();
   return (estado.datos.sesiones_estudio || [])
-    .filter((s) => (s.materia_independiente_id || s.materia_matriculada_id) === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin)
-    .reduce((acc, s) => acc + (Number(s.duracion_minutos) || 0), 0);
+    .reduce((acc, s) => acc + ((s.materia_independiente_id || s.materia_matriculada_id) === materiaMatriculadaId ? minutosSesionEnRango(s, inicio, fin) : 0), 0);
 }
 
 /**
@@ -353,7 +355,7 @@ function construirTarjetaMateria(item) {
   btnConfig.textContent = "⚙️";
   btnConfig.addEventListener("click", (e) => {
     e.stopPropagation();
-    abrirModalConfigTiempoEstudio(mm, nombreMateria, () => renderizarTiempoEstudio());
+    abrirModalConfigTiempoEstudio(mm, nombreMateria, () => alGuardarConfiguracionMateria(mm), confirmarEliminarMateriaPersonalizada);
   });
 
   const activo = obtenerTimerActivo();
@@ -413,10 +415,9 @@ function construirTarjetaMateria(item) {
 }
 
 /**
- * Encabezado (B.1): tarjetita con el título y el filtro "Todo"/"Activos"
- * como pills (mismo componente .pill-group/.pill-item que ya usa Agenda
- * para Lista/Calendario/Cronograma), no un switch on/off. "Activos" filtra
- * las mm sin tiempo_estudio.meta_horas_semana configurado.
+ * Encabezado (B.1): tarjetita con el título, engranaje y acceso al registro
+ * manual. La lista usa el filtro Visibles/Todas definido en Ajustes; por
+ * defecto respeta el switch de visibilidad de cada materia.
  */
 function construirEncabezado(cont, contextoSemestre = null) {
   const encabezado = document.createElement("div");
@@ -478,7 +479,7 @@ function construirEncabezado(cont, contextoSemestre = null) {
   const grupoBotones = document.createElement("div");
   grupoBotones.style.cssText = "display:flex; align-items:center; gap:8px;";
 
-  // El pill Todo/Activos se mudó adentro del modal de Ajustes (pedido) —
+  // El filtro Visibles/Todas vive en Ajustes —
   // orden: engranaje primero, + después (pedido).
   const btnAjustes = document.createElement("button");
   btnAjustes.type = "button";
@@ -548,14 +549,73 @@ function abrirModalNuevaMateriaIndependiente() {
     estado.datos.tiempo_estudio_materias.push(materia);
     sellarTimestamp(materia);
     marcarCambioPendiente();
-    // La materia nueva empieza sin meta, por lo que no aparece en el filtro
-    // "Activas". Pasar a "Todo" permite verla de inmediato para configurarla.
-    if (obtenerFiltroVista() === "activos") guardarFiltroVista("todo");
     cerrar();
     mostrarToast("Materia propia agregada");
     renderizarTiempoEstudio();
   });
   input.focus();
+}
+
+function confirmarEliminarMateriaPersonalizada(mm, cerrarModalConfig) {
+  if (!mm || mm.tipo !== "independiente") return;
+
+  const timerEnCurso = () => {
+    const local = obtenerTimerActivo();
+    const compartido = estado.datos.timer_estudio_activo;
+    return (local && local.materiaMatriculadaId === mm.id) ||
+      (compartido?.activo === true && compartido.materiaMatriculadaId === mm.id);
+  };
+  if (timerEnCurso()) {
+    mostrarToast("Detén primero la sesión activa de esta materia para poder eliminarla.");
+    return;
+  }
+
+  abrirConfirmacion({
+    titulo: "Eliminar materia personalizada",
+    mensaje: "Esta acción borrará todos los registros de esta materia personalizada. No los podrás recuperar. ¿Estás seguro de que deseas continuar?",
+    textoConfirmar: "Borrar ahora sí",
+    claseConfirmar: "btn-danger",
+    onConfirmar: () => {
+      if (timerEnCurso()) {
+        mostrarToast("Detén primero la sesión activa de esta materia para poder eliminarla.");
+        return;
+      }
+
+      cerrarModalConfig?.();
+      const ahora = Date.now();
+      const sesiones = estado.datos.sesiones_estudio || [];
+      const idsSesionesEliminadas = sesiones
+        .filter((sesion) => sesion.materia_independiente_id === mm.id || sesion.materia_matriculada_id === mm.id)
+        .map((sesion) => sesion.id)
+        .filter(Boolean);
+      const tumbasSesiones = estado.datos._eliminados_sesiones_estudio || (estado.datos._eliminados_sesiones_estudio = []);
+      const idsConTumba = new Set(tumbasSesiones.map((tumba) => tumba?.id).filter(Boolean));
+      idsSesionesEliminadas.forEach((id) => {
+        if (!idsConTumba.has(id)) tumbasSesiones.push({ id, eliminadoEn: ahora });
+      });
+      estado.datos.sesiones_estudio = sesiones.filter(
+        (sesion) => sesion.materia_independiente_id !== mm.id && sesion.materia_matriculada_id !== mm.id
+      );
+
+      estado.datos.tiempo_estudio_materias = (estado.datos.tiempo_estudio_materias || []).filter((materia) => materia.id !== mm.id);
+      const tumbasMaterias = estado.datos._eliminados_tiempo_estudio_materias || (estado.datos._eliminados_tiempo_estudio_materias = []);
+      if (!tumbasMaterias.some((tumba) => tumba?.id === mm.id)) tumbasMaterias.push({ id: mm.id, eliminadoEn: ahora });
+
+      if (materiaDetalleActivaId === mm.id) materiaDetalleActivaId = null;
+      marcarCambioPendiente();
+      sincronizarHorasCompetencias();
+      notificarSesionesEstudioActualizadas();
+      mostrarToast("Materia personalizada y sus registros eliminados");
+      renderizarTiempoEstudio();
+    },
+  });
+}
+
+function alGuardarConfiguracionMateria(mm) {
+  if (mm.mostrar_en_tiempo_estudio === false && materiaDetalleActivaId === mm.id) {
+    materiaDetalleActivaId = null;
+  }
+  renderizarTiempoEstudio();
 }
 
 /**
@@ -565,22 +625,91 @@ function abrirModalNuevaMateriaIndependiente() {
  * existía; "Estadísticas" es la vista nueva de tiempo-estudio-estadisticas.js.
  */
 function construirPillVistaSeccion(cont) {
+  const opciones = [
+    ["materias", "Materias"],
+    ["estadisticas", "Estadísticas"],
+    ["competencias", "Competencias"],
+  ];
   const grupo = document.createElement("div");
-  grupo.className = "pill-group";
-  grupo.style.cssText = "width:100%;";
-  grupo.innerHTML = `
-    <button type="button" class="pill-item ${vistaSeccionTE === "materias" ? "active" : ""}" data-vista="materias">Materias</button>
-    <button type="button" class="pill-item ${vistaSeccionTE === "estadisticas" ? "active" : ""}" data-vista="estadisticas">Estadísticas</button>
-    <button type="button" class="pill-item ${vistaSeccionTE === "competencias" ? "active" : ""}" data-vista="competencias">Competencias</button>
-  `;
-  grupo.querySelectorAll(".pill-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      if (vistaSeccionTE === btn.dataset.vista) return;
-      vistaSeccionTE = btn.dataset.vista;
-      renderizarTiempoEstudio();
-    });
+  grupo.className = "pill-group pill-group-fijo pill-switch-binario";
+  grupo.dataset.opciones = "3";
+  const thumb = document.createElement("div");
+  thumb.className = "pill-switch-thumb";
+  grupo.appendChild(thumb);
+  opciones.forEach(([valor, texto]) => {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `pill-item${vistaSeccionTE === valor ? " active" : ""}`;
+    btn.dataset.vista = valor;
+    btn.setAttribute("aria-pressed", String(vistaSeccionTE === valor));
+    btn.textContent = texto;
+    btn.addEventListener("click", () => cambiarVistaTiempoEstudio(valor));
+    grupo.appendChild(btn);
   });
+  actualizarThumbVistaTE(thumb);
   cont.appendChild(grupo);
+}
+
+const indicesVistaTE = { materias: 0, estadisticas: 1, competencias: 2 };
+let panelesVistaTE = null;
+let pistaVistaTE = null;
+function actualizarThumbVistaTE(thumb) {
+  thumb?.classList.toggle("pill-switch-thumb--derecha", indicesVistaTE[vistaSeccionTE] === 1);
+  thumb?.classList.toggle("pill-switch-thumb--tercera", indicesVistaTE[vistaSeccionTE] === 2);
+}
+function cambiarVistaTiempoEstudio(vista) {
+  if (!(vista in indicesVistaTE) || vista === vistaSeccionTE) return;
+  vistaSeccionTE = vista;
+  const indice = indicesVistaTE[vista];
+  if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${-indice * (pistaVistaTE.parentElement?.clientWidth || 0)}px,0,0)`;
+  const grupo = document.querySelector("#seccion-tiempo-estudio .pill-switch-binario");
+  grupo?.querySelectorAll("[data-vista]").forEach((btn) => {
+    const activo = btn.dataset.vista === vista;
+    btn.classList.toggle("active", activo);
+    btn.setAttribute("aria-pressed", String(activo));
+  });
+  actualizarThumbVistaTE(grupo?.querySelector(".pill-switch-thumb"));
+  renderizarTiempoEstudio();
+}
+
+function inicializarDeslizamientoVistasTE(viewport) {
+  if (viewport.dataset.gestoInicializado) return;
+  viewport.dataset.gestoInicializado = "1";
+  let inicio = null;
+  viewport.addEventListener("touchstart", (ev) => {
+    if (ev.touches.length !== 1 || ev.target.closest("button,a,input,textarea,select,[contenteditable='true']")) { inicio = null; return; }
+    const t = ev.touches[0];
+    inicio = { x: t.clientX, y: t.clientY, indice: indicesVistaTE[vistaSeccionTE], moviendo: false };
+  }, { passive: true });
+  viewport.addEventListener("touchmove", (ev) => {
+    if (!inicio || ev.touches.length !== 1) return;
+    const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
+    if (!inicio.moviendo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
+    inicio.moviendo = true;
+    ev.preventDefault();
+    const ancho = viewport.clientWidth || 1;
+    const base = -inicio.indice * ancho;
+    const delta = Math.max(-ancho, Math.min(ancho, dx));
+    if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${base + delta}px,0,0)`;
+    const proyectado = Math.max(0, Math.min(2, inicio.indice - dx / ancho));
+    const grupo = document.querySelector("#seccion-tiempo-estudio .pill-switch-binario");
+    const thumb = grupo?.querySelector(".pill-switch-thumb");
+    if (thumb) thumb.style.setProperty("--te-pill-progreso", String(proyectado));
+  }, { passive: false });
+  const terminar = (ev) => {
+    if (!inicio) return;
+    const t = ev.changedTouches?.[0];
+    const dx = t ? t.clientX - inicio.x : 0;
+    const navega = inicio.moviendo && Math.abs(dx) > Math.max(48, viewport.clientWidth * 0.16);
+    const destino = Math.max(0, Math.min(2, inicio.indice + (navega ? (dx < 0 ? 1 : -1) : 0)));
+    inicio = null;
+    const thumb = document.querySelector("#seccion-tiempo-estudio .pill-switch-thumb");
+    if (thumb) thumb.style.removeProperty("--te-pill-progreso");
+    cambiarVistaTiempoEstudio(Object.keys(indicesVistaTE).find((key) => indicesVistaTE[key] === destino));
+    if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${-destino * (pistaVistaTE.parentElement?.clientWidth || 0)}px,0,0)`;
+  };
+  viewport.addEventListener("touchend", terminar, { passive: true });
+  viewport.addEventListener("touchcancel", terminar, { passive: true });
 }
 
 function construirSelectorSemestreTiempo(cont) {
@@ -602,7 +731,7 @@ function construirSelectorSemestreTiempo(cont) {
 /**
  * Pantalla de Ajustes de Tiempo de Estudio (Entrega 4) — modal, mismo
  * patrón que el resto de modales de la app. Tiene 3 cosas:
- * 1) Filtro Todo/Activos (se mudó acá adentro desde el encabezado).
+ * 1) Filtro de materias visibles/todas.
  * 2) Editar el Pomodoro predeterminado global (Entrega 2).
  * 3) Switch "Mostrar tiempos de estudio en Agenda" (Entrega 5).
  */
@@ -625,10 +754,10 @@ function abrirModalAjustesTiempoEstudio() {
     <h2 style="margin:0;">Ajustes de Tiempo</h2>
 
     <div class="stack" style="gap:6px;">
-      <span class="form-label" style="margin:0;">Mostrar</span>
+      <span class="form-label" style="margin:0;">Materias en la lista</span>
       <div class="pill-group" id="te-ajustes-filtro-pills" style="width:100%;">
-        <button type="button" class="pill-item ${filtroActual === "todo" ? "active" : ""}" data-filtro="todo">Todo</button>
-        <button type="button" class="pill-item ${filtroActual === "activos" ? "active" : ""}" data-filtro="activos">Activos</button>
+        <button type="button" class="pill-item ${filtroActual === "mostrar" ? "active" : ""}" data-filtro="mostrar">Visibles</button>
+        <button type="button" class="pill-item ${filtroActual === "todo" ? "active" : ""}" data-filtro="todo">Todas</button>
       </div>
     </div>
 
@@ -681,15 +810,16 @@ function abrirModalAjustesTiempoEstudio() {
 function construirVistaPrincipal(cont) {
   let items = obtenerMateriasParaTiempoEstudio();
   const hayMaterias = items.length > 0;
-  if (obtenerFiltroVista() === "activos") {
-    items = items.filter((item) => item.mm.tiempo_estudio.meta_horas_semana !== null && item.mm.tiempo_estudio.meta_horas_semana !== undefined);
+  const filtroActual = obtenerFiltroVista();
+  if (filtroActual === "mostrar") {
+    items = items.filter((item) => item.mm.mostrar_en_tiempo_estudio !== false);
   }
 
   if (items.length === 0) {
     const vacio = document.createElement("p");
     vacio.className = "muted";
-    vacio.textContent = hayMaterias
-      ? "Ninguna materia tiene una meta configurada todavía."
+    vacio.textContent = hayMaterias && filtroActual === "mostrar"
+      ? "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste."
       : "No hay materias matriculadas en semestres actuales. Puedes crear una materia propia abajo.";
     cont.appendChild(vacio);
   } else {
@@ -703,14 +833,13 @@ function construirVistaPrincipal(cont) {
   const acciones = document.createElement("div");
   acciones.className = "te-pestanas-finales-materias";
 
-  const filtroActual = obtenerFiltroVista();
   const btnFiltro = document.createElement("button");
   btnFiltro.type = "button";
   btnFiltro.className = "te-pestana-final-materias";
-  btnFiltro.textContent = filtroActual === "activos" ? "Mostrar más materias" : "Mostrar solo activas";
+  btnFiltro.textContent = filtroActual === "mostrar" ? "Mostrar más materias" : "Mostrar solo las visibles";
   btnFiltro.setAttribute("aria-label", btnFiltro.textContent);
   btnFiltro.addEventListener("click", () => {
-    guardarFiltroVista(filtroActual === "activos" ? "todo" : "activos");
+    guardarFiltroVista(filtroActual === "mostrar" ? "todo" : "mostrar");
     renderizarTiempoEstudio();
   });
 
@@ -775,7 +904,7 @@ function construirEncabezadoDetalle(cont, item) {
   btnConfig.setAttribute("aria-label", "Configurar");
   btnConfig.textContent = "⚙️";
   btnConfig.addEventListener("click", () => {
-    abrirModalConfigTiempoEstudio(mm, nombreMateria, () => renderizarTiempoEstudio());
+    abrirModalConfigTiempoEstudio(mm, nombreMateria, () => alGuardarConfiguracionMateria(mm), confirmarEliminarMateriaPersonalizada);
   });
 
   tarjeta.appendChild(btnVolver);
@@ -1428,7 +1557,14 @@ function construirPantallaDetalle(cont, item) {
 function renderizarTiempoEstudio() {
   const cont = document.getElementById("seccion-tiempo-estudio");
   if (!cont) return;
-  cont.innerHTML = "";
+  if (materiaDetalleActivaId || !panelesVistaTE || !cont.contains(panelesVistaTE.viewport)) {
+    cont.innerHTML = "";
+    panelesVistaTE = null;
+    pistaVistaTE = null;
+  } else {
+    const viewportAnterior = panelesVistaTE.viewport;
+    cont.replaceChildren(...[...cont.children].filter((el) => el !== viewportAnterior));
+  }
 
   if (desuscribirTimerDetalle) {
     desuscribirTimerDetalle();
@@ -1453,14 +1589,35 @@ function renderizarTiempoEstudio() {
   const contextoSemestre = construirSelectorSemestreTiempo(cont);
   construirEncabezado(cont, contextoSemestre);
   construirPillVistaSeccion(cont);
-
-  if (vistaSeccionTE === "estadisticas") {
-    construirVistaEstadisticas(cont, renderizarTiempoEstudio);
-  } else if (vistaSeccionTE === "competencias") {
-    construirVistaCompetencias(cont, renderizarTiempoEstudio);
-  } else {
-    construirVistaPrincipal(cont);
+  if (!panelesVistaTE) {
+    const viewport = document.createElement("div");
+    viewport.className = "te-vistas-viewport";
+    const pista = document.createElement("div");
+    pista.className = "te-vistas-pista";
+    const panes = ["materias", "estadisticas", "competencias"].map((key) => {
+      const pane = document.createElement("section");
+      pane.className = "te-vista-pane";
+      pane.dataset.vista = key;
+      pane.setAttribute("aria-hidden", String(key !== vistaSeccionTE));
+      pista.appendChild(pane);
+      return pane;
+    });
+    viewport.appendChild(pista);
+    panelesVistaTE = { viewport, panes };
+    pistaVistaTE = pista;
+    inicializarDeslizamientoVistasTE(viewport);
   }
+  const indice = indicesVistaTE[vistaSeccionTE];
+  const viewport = panelesVistaTE.viewport;
+  const pista = pistaVistaTE;
+  panelesVistaTE.panes.forEach((pane, i) => pane.setAttribute("aria-hidden", String(i !== indice)));
+  pista.style.transform = `translate3d(${-indice * (viewport.clientWidth || cont.clientWidth || 0)}px,0,0)`;
+  const paneActual = panelesVistaTE.panes[indice];
+  paneActual.replaceChildren();
+  if (vistaSeccionTE === "estadisticas") construirVistaEstadisticas(paneActual, renderizarTiempoEstudio);
+  else if (vistaSeccionTE === "competencias") construirVistaCompetencias(paneActual, renderizarTiempoEstudio);
+  else construirVistaPrincipal(paneActual);
+  cont.appendChild(viewport);
 }
 
 /**
@@ -1521,6 +1678,15 @@ function inicializarTiempoEstudio() {
     ],
     resolverInfo: resolverInfoIndicadorTimer,
     alTocar: irAMateriaDelTimerActivo,
+    alTogglePausa: () => {
+      const activo = obtenerTimerActivo();
+      if (activo) (activo.pausado ? reanudarTimerEstudio : pausarTimerEstudio)();
+    },
+    alDetener: () => {
+      if (!obtenerTimerActivo()) return;
+      detenerTimerEstudio();
+      renderizarTiempoEstudio();
+    },
   });
   if (!pintarIndicadores) return;
 

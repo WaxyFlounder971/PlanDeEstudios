@@ -6,7 +6,7 @@
      1. Adjuntos de la materia (cronograma, reglas, libros — entidadTipo
         "materia", entidadId = materia_matriculada_id): botón "+ Adjuntar"
         y pills, mismo sistema unificado que ya usa Agenda para eventos
-        (ver core/storage-adjuntos.js + ui/adjuntos-ui.js).
+        (ver core/storage/storage-adjuntos.js + ui/adjuntos-ui.js).
      2. Tarjeta-resumen: nombre, ícono 👤 de profesores, "Nota: X" y una
         flecha ➤ que salta a la tarjeta real en Semestres — clona el
         mismo cálculo/formato que usa esa tarjeta (calcularNotaFinalVigente
@@ -31,8 +31,8 @@ import {
   obtenerClasesEfectivasSemana,
   obtenerEstadoEfectivoSemestre,
 } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import {
@@ -58,7 +58,7 @@ import { abrirModalRequisito } from "../plan/plan-detalle.js";
 import { calcularNumeroSemanaParaFecha } from "./agenda-clases.js";
 import { construirItemEvento, limpiarIntervalosVenceHoy } from "./agenda.js";
 import { ESTADOS_TAREA_FILTRO, ID_FILTRO_OTROS, esEventoHuerfanoAgenda, eventoPasaFiltroTiposAgenda, formatearHoraAmPm, obtenerMateriasVinculablesAgenda, obtenerTiposEtiquetaAgenda } from "./agenda-utils.js";
-import { obtenerAdjuntosActivosDe } from "../core/storage-adjuntos.js";
+import { obtenerAdjuntosActivosDe } from "../core/storage/storage-adjuntos.js";
 import { abrirAdjunto, abrirMenuAdjuntos } from "../ui/adjuntos-ui.js";
 
 /**

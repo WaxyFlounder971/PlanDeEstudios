@@ -1,5 +1,5 @@
-import { estado } from "./storage.js";
-import { marcarCambioPendiente } from "./storage-sync.js";
+import { estado } from "./storage/storage.js";
+import { marcarCambioPendiente } from "./storage/storage-sync.js";
 import { sellarTimestamp, PALETAS_DISPONIBLES, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, LIMITE_ENLACES_RAPIDOS, crearEnlaceRapido } from "./schema.js";
 import { convertirImagenABase64Comprimida } from "./utils.js";
 import { activarSincronizacionCalendario, desactivarSincronizacionCalendario, sincronizacionCalendarActiva, sincronizarResumenDiario } from "./notificaciones-calendario.js";
@@ -25,9 +25,22 @@ const SECCIONES_TUTORIAL = [
   { id:"tiempo-estudio", nombre:"Tiempo de estudio", puntos:["Abre una materia y empieza una sesión de estudio.","Usa materias aunque no estén en tu plan: toca «Nueva Materia» al final de la lista.","Consulta historial, estadísticas y competencias de todos tus semestres."] },
   { id:"semestres", nombre:"Semestres", puntos:["Matricula materias de tu plan.","Registra criterios, asignaciones y notas."] },
   { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Cada docente lleva tu propia valoración, según tu experiencia."] },
-  { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
+  { id:"finanzas", nombre:"Finanzas", puntos:[
+    "Inicio resume tu Disponible, los compromisos próximos y el avance de tus metas.",
+    "Semestres y Beneficios siguen pagos, becas y apoyos universitarios; Plan anticipa ingresos y pagos futuros.",
+    "Movimientos registra gastos, ingresos, ahorros, ajustes y traspasos; Metas y Presupuesto ayudan a organizar objetivos y límites.",
+    "Cuentas y Deudas son módulos opcionales: separan tu dinero por cuenta y llevan préstamos o gastos divididos.",
+    "En Ajustes eliges módulos, moneda y herramientas de datos. Apagar un módulo solo lo oculta; asociar movimientos a semestres también es opcional."
+  ] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
-  { id:"notas", nombre:"Notas rápidas", puntos:["Guarda ideas y pendientes al instante, incluso sin conexión.","Fija, organiza, busca y comparte tus notas.","Envía una nota a Wapper para convertirla en actividades de Agenda.","En computadora, haz clic derecho en una nota para abrir sus acciones.","En teléfono, mantén pulsada una nota para seleccionarla; el resaltado muestra la selección.","La Papelera permite restaurar notas eliminadas o quitarlas definitivamente.","Compartir contenido desde otras apps requiere tener instalada la app en Android."] },
+  { id:"notas", nombre:"Notas rápidas", puntos:[
+    "Crea notas para ideas, pendientes y listas. Los cambios se guardan mientras editas y se sincronizan cuando vuelve la conexión.",
+    "Busca por texto y usa filtros de color o vencimiento; también puedes cambiar entre cuadrícula y lista y ordenar las notas.",
+    "Fija las notas importantes, reordena las fijadas y abre una nota como flotante o en una ventana PiP compatible.",
+    "Selecciona varias para fijarlas, enviarlas a Wapper o moverlas a la Papelera. En móvil, mantén pulsada una tarjeta.",
+    "Comparte texto, imagen o un archivo Wapper Note. En Ajustes puedes importar archivos Wapper Note y configurar la sección.",
+    "La Papelera permite restaurar notas durante 30 días o eliminarlas definitivamente. Compartir desde otras apps requiere la PWA instalada en Android."
+  ] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
   { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras.","Toca dos veces el título de cualquier sección para ver qué hace y, si quieres, su guía paso a paso."] },
 ];
@@ -1148,9 +1161,15 @@ function contenidoEsquema(id) {
       break;
     }
     case "notas": {
-      const nota1=rCard(rFila("onb-r-sp",rTit("Notas rápidas"),rPildora("Fijada",PURPURA)),rSuave("Ideas para el proyecto"),rSuave("Guardar una idea al instante"));
-      const nota2=rCard(rFila("onb-r-sp",rTit("Pendientes"),rSuave("Hoy")),rSuave("Revisar materiales de clase"));
-      base.push(nodo("div","onb-r onb-notas-demo",null,[nota1,nota2]));
+      const nota1=rCard(rFila("onb-r-sp",rTit("Ideas para el proyecto"),rPildora("Fijada",PURPURA)),rSuave("Guardar una idea al instante"),rSuave("☑ Revisar materiales de clase"),rSuave("☐ Anotar preguntas para el equipo"),rFila("onb-r-sp",rBoton("Editar"),rBoton("Compartir")));
+      const nota2=rCard(rFila("onb-r-sp",rTit("Pendientes"),rPildora("Vence mañana",NARANJA)),rSuave("Preparar los materiales de clase"),rSuave("Puedes añadir una fecha y cambiar el color."),rFila("onb-r-sp",rBoton("Wapper"),rBoton("Flotante")));
+      const barra=rFila("onb-r-sp onb-r-botonesh",rBoton("＋ Nueva nota",true),rBoton("⚙ Ajustes"));
+      const buscar=nodo("div","onb-r-buscar","Buscar notas por título o contenido...");
+      const filtros=nodo("div","onb-r-chips centro",null,[rPildora("Color",PURPURA),rPildora("Con vencimiento",NARANJA),rPildora("Cuadrícula",AZUL),rPildora("Lista",TEAL)]);
+      base.push(nodo("div","onb-r onb-notas-demo",null,[barra,buscar,filtros,nota1,nota2]));
+      extras.push(rCard(rTit("Una idea en segundos"),rSuave("Edita texto, listas y casillas; dibuja, usa figuras y stickers, y guarda cambios mientras escribes.")),
+        rCard(rTit("Organiza como te sirva"),rSuave("Busca, filtra, fija, cambia la vista y mueve las tarjetas importantes.")),
+        rCard(rTit("Tus notas te acompañan"),rSuave("Compártelas, envíalas a Wapper o déjalas flotando mientras estudias.")));
       break;
     }
     case "configuracion": {
@@ -1944,7 +1963,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       PALETAS_DISPONIBLES.forEach((p)=>{const b=document.createElement("button");b.type="button";b.className="onboarding-color";b.title=traducirTextoInterfaz(p);b.setAttribute("aria-label",traducirTextoInterfaz(p));b.dataset.paleta=p;b.setAttribute("aria-pressed",String(paletaActual()===p));const colors=COLORES_PREVIEW_PALETA[p]||[];b.style.background=p==="azucarado"?FONDO_PREVIEW_AZUCARADO:`linear-gradient(135deg,${colors.join(",")})`;b.addEventListener("click",()=>{cfg.paleta=p;aplicarTemaAhora();guardar();actualizarPreview();marcarPaletas();});colores.append(b);});
       const paletaPersonal=document.createElement("button");paletaPersonal.type="button";paletaPersonal.dataset.paleta="personalizada";paletaPersonal.setAttribute("aria-pressed",String(paletaActual()==="personalizada"));paletaPersonal.className="onboarding-color onboarding-paleta-nueva";paletaPersonal.setAttribute("aria-label",traducirTextoInterfaz("Crear mi paleta"));paletaPersonal.title=traducirTextoInterfaz("Crear mi paleta");paletaPersonal.textContent="+";paletaPersonal.onclick=()=>iniciarFlujoPaletaPersonalizada({alGuardar:()=>{cfg.paleta="personalizada";cfg.paleta_personalizada=estado.datos.configuracion.paleta_personalizada;guardar();aplicarTemaAhora();actualizarPreview();marcarPaletas();}});
       colores.append(paletaPersonal);
-      const logos=document.createElement("div");logos.className="onboarding-logos";const marcarLogos=()=>logos.querySelectorAll(".onboarding-logo").forEach(x=>x.setAttribute("aria-pressed",String(cfg.logo_app===x.dataset.logo&&!cfg.logo_app_url)));[["folder","imagenes/LogoAppFolder.png","Carpeta"],["birrete","imagenes/LogoAppBirrete.png","Birrete"]].forEach(([v,src,alt])=>{const b=document.createElement("button");b.type="button";b.className="onboarding-logo";b.dataset.logo=v;b.setAttribute("aria-pressed",String(cfg.logo_app===v&&!cfg.logo_app_url));const img=document.createElement("img");img.src=src;img.alt=alt;b.append(img);b.onclick=()=>{cfg.logo_app=v;cfg.logo_app_url=null;guardar();aplicarLogoApp();actualizarPreview();marcarLogos();};logos.append(b);});
+      const logos=document.createElement("div");logos.className="onboarding-logos";const marcarLogos=()=>logos.querySelectorAll(".onboarding-logo").forEach(x=>x.setAttribute("aria-pressed",String(cfg.logo_app===x.dataset.logo&&!cfg.logo_app_url)));[["folder","imagenes/LogoAppFolder-512.png","Carpeta"],["birrete","imagenes/LogoAppBirrete.png","Birrete"]].forEach(([v,src,alt])=>{const b=document.createElement("button");b.type="button";b.className="onboarding-logo";b.dataset.logo=v;b.setAttribute("aria-pressed",String(cfg.logo_app===v&&!cfg.logo_app_url));const img=document.createElement("img");img.src=src;img.alt=alt;b.append(img);b.onclick=()=>{cfg.logo_app=v;cfg.logo_app_url=null;guardar();aplicarLogoApp();actualizarPreview();marcarLogos();};logos.append(b);});
       const etiquetaArchivo=document.createElement("label");etiquetaArchivo.className="btn btn-secondary onboarding-file-picker";etiquetaArchivo.append(texto("span","","Personalizado"));
       const archivo=document.createElement("input");archivo.type="file";archivo.accept="image/png,image/jpeg,image/webp";archivo.className="onboarding-file-input";archivo.setAttribute("aria-label",traducirTextoInterfaz("Elegir logo desde archivos"));archivo.onchange=async()=>{let url=null;try{url=await prepararImagenLogo(archivo.files?.[0]);}catch(_){}if(url){cfg.logo_app="personalizado";cfg.logo_app_url=url;guardar();aplicarLogoApp();actualizarPreview();marcarLogos();}else if(archivo.files?.length)toast?.(traducirTextoInterfaz("No se pudo usar esa imagen. Prueba con PNG, JPG o WebP."));archivo.value="";};etiquetaArchivo.append(archivo);
       const toggleLogos=boton("Logos de la app  ⌄","btn-secondary",()=>{const abierto=toggleLogos.getAttribute("aria-expanded")==="true";toggleLogos.setAttribute("aria-expanded",String(!abierto));toggleLogos.textContent=traducirTextoInterfaz(`Logos de la app  ${abierto?"⌄":"⌃"}`);logos.hidden=abierto;});toggleLogos.setAttribute("aria-expanded","false");logos.hidden=true;
@@ -1953,7 +1972,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa=MODO_DEMO?"nombre":"terminos";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=etapaTrasPersonalizar();indice=0;pintar();}));return;
     }
     if(etapa==="instalar"){
-      const logoSrc=cfg.logo_app_url||(cfg.logo_app==="birrete"?"imagenes/LogoAppBirrete.png":"imagenes/LogoAppFolder.png");
+      const logoSrc=cfg.logo_app_url||(cfg.logo_app==="birrete"?"imagenes/LogoAppBirrete.png":"imagenes/LogoAppFolder-512.png");
       const ui=construirInstalacion({logoSrc});contenido.append(ui.raiz);
       const T=traducirTextoInterfaz;
       const alTour=()=>{ui.detener();etapa="tour";indice=0;pintar();};
@@ -2377,6 +2396,107 @@ function iniciarGuiaSeccion(info) {
   pintar();
 }
 
+/* Recorrido específico de Finanzas 2.0. Cambia de pestaña por el control real,
+   omite módulos opcionales apagados y también enlaza los ajustes relacionados. */
+const PASOS_GUIA_FINANZAS = [
+  { tab:"resumen", target:()=>document.querySelector("#finanzas-contenido .resumen-hero")||document.getElementById("finanzas-contenido"), texto:"Inicio resume cuánto tienes, lo que viene pronto y tus metas. Disponible considera el horizonte elegido y los compromisos configurados; abre su desglose si quieres ver qué se cuenta." },
+  { tab:"semestres", target:()=>document.getElementById("finanzas-contenido"), texto:"Semestres reúne matrícula y becas por periodo. Puedes repartir el total en cuotas, ajustar fechas y confirmar cada una cuando se realice; asociar el semestre no es obligatorio para los movimientos cotidianos." },
+  { tab:"plan", target:()=>document.getElementById("finanzas-contenido"), texto:"Plan sirve para anticipar pagos e ingresos con fecha. Lo pendiente alimenta los próximos días de Inicio; al confirmar, se registra el movimiento para evitar contarlo dos veces." },
+  { tab:"gastos-u", target:()=>document.querySelector("#finanzas-contenido h3")?.parentElement||document.getElementById("finanzas-contenido"), texto:"Movimientos es el registro central: gastos, ingresos, ahorros, ajustes de saldo, préstamos y traspasos. Añade fecha, categoría y cuenta cuando aplique; usa las vistas por tipo o cronológica para revisar el historial." },
+  { tab:"gastos-u", target:()=>[...document.querySelectorAll("#seccion-finanzas button")].find(b=>/añadir movimiento/i.test(b.textContent))||document.getElementById("finanzas-contenido"), texto:"Añadir movimiento abre el registro rápido. Para más campos, abre el formulario completo: puedes indicar categoría, cuenta, semestre, meta o recurrencia. Las plantillas usan tus registros recientes como atajos." },
+  { tab:"metas", target:()=>document.getElementById("finanzas-contenido"), texto:"Metas separa objetivos de ahorro y límites de gasto por categorías. Los aportes programados son recordatorios o planes: no mueven dinero automáticamente. Si configuras un reparto de ingresos para una meta, la app propone cuánto separar y tú confirmas el aporte." },
+  { tab:"presupuesto", target:()=>document.getElementById("finanzas-contenido"), texto:"Presupuesto crea límites para categorías y periodos. El gasto registrado consume el presupuesto y puedes consultar el resumen mensual para ajustar tus topes." },
+  { tab:"gastos-estudiantiles", target:()=>document.getElementById("finanzas-contenido"), texto:"Beneficios reúne apoyos y gastos estudiantiles vinculados a tu vida académica. Usa Semestres para pagos de matrícula y becas; aquí encuentras el seguimiento de beneficios relacionados." },
+  { tab:"cuentas", target:()=>document.getElementById("finanzas-contenido"), texto:"Cuentas separa tu efectivo, bancos y tarjetas, incluso en distintas divisas. Los traspasos mueven saldo entre cuentas sin contarse como ingreso o gasto. Activa el módulo desde Ajustes > Finanzas." },
+  { tab:"deudas", target:()=>document.getElementById("finanzas-contenido"), texto:"Deudas registra lo que prestas o te prestan y el saldo pendiente. También puedes dividir un gasto para saber qué parte te corresponde y qué parte debe otra persona. Es un módulo opcional de Ajustes > Finanzas." },
+  { ajustes:"finanzas", target:()=>document.getElementById("ajustes-finanzas-modulos"), texto:"Aquí eliges un perfil o combinas módulos. Apagar uno solo lo oculta: conserva sus datos. Cuentas, Deudas y los consejos al activar funciones son opcionales. La moneda preferida define el símbolo general; cada cuenta conserva su propia divisa." },
+  { ajustes:"datos", target:()=>{const s=[...document.querySelectorAll("#seccion-configuracion .ajuste-seccion")].find(x=>/^datos$/i.test(x.querySelector("h2")?.textContent.trim()||""));return s?.querySelector(".ajuste-seccion-cuerpo")||s;}, texto:"En Ajustes > Datos de Finanzas puedes importar desde archivo o texto, exportar CSV o respaldo, y administrar formatos para leer mensajes del banco. Revisa la vista previa y confirma la importación; los formatos ayudan a interpretar, no conectan tu banco." },
+];
+
+function iniciarGuiaFinanzas() {
+  const tabs = [...document.querySelectorAll("#seccion-finanzas .finanzas-tabs-contenedor button[data-valor]")];
+  if (!tabs.length || document.querySelector(".guia-seccion-flotante,.guia-plan-flotante,.tutorial-seccion-overlay")) return false;
+  const idsVisibles = new Set(tabs.map((b)=>b.dataset.valor));
+  const pasos = PASOS_GUIA_FINANZAS.filter((p)=>!p.tab||idsVisibles.has(p.tab));
+  let indice=0, resaltado=null, cerrarTimer=0;
+  const resaltador=crearResaltador();
+  const pop=document.createElement("aside");pop.className="guia-plan-flotante guia-seccion-flotante";pop.setAttribute("role","dialog");pop.setAttribute("aria-live","polite");pop.setAttribute("aria-label",`${traducirTextoInterfaz("Tutorial")}: Finanzas`);document.body.append(pop);
+  const cerrar=()=>{clearTimeout(cerrarTimer);marcarVista();resaltador.quitar();pop.remove();};
+  const marcarVista=()=>{const c=estado.datos?.configuracion;if(!c)return;c.tutoriales_secciones_vistas=c.tutoriales_secciones_vistas||{};c.tutoriales_secciones_vistas.finanzas=true;guardar();};
+  const btn=(txt,clase,fn)=>{const b=document.createElement("button");b.type="button";b.className=`btn ${clase}`;b.textContent=traducirTextoInterfaz(txt);b.onclick=fn;return b;};
+  const mostrar=(paso)=>{
+    resaltado=paso.target?.()||document.getElementById("seccion-finanzas");
+    resaltado?.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});
+    resaltador.apuntar(resaltado,()=>paso.target?.()||document.getElementById("seccion-finanzas"));
+    pop.replaceChildren();
+    const titulo=document.createElement("strong");titulo.textContent=`Finanzas · ${indice+1}/${pasos.length}`;
+    const texto=document.createElement("p");texto.textContent=traducirTextoInterfaz(paso.texto);
+    const acciones=document.createElement("div");acciones.className="guia-seccion-acciones";
+    if(indice>0)acciones.append(btn("Anterior","btn-secondary",()=>{indice--;pintar();}));
+    acciones.append(btn(indice===pasos.length-1?"Terminar":"Siguiente","btn-primary",()=>{indice++;pintar();}),btn("Saltar guía","btn-secondary",cerrar));
+    pop.append(titulo,texto,acciones);evitarSolape(pop,resaltado);
+  };
+  const abrirAjustes=(paso)=>{
+    window.mostrarSeccion?.("configuracion");
+    cerrarTimer=setTimeout(()=>{
+      const selector=paso.ajustes==="datos"
+        ? [...document.querySelectorAll("#seccion-configuracion .ajuste-seccion")].find(x=>/^datos$/i.test(x.querySelector("h2")?.textContent.trim()||""))
+        : [...document.querySelectorAll("#seccion-configuracion .ajuste-seccion")].find(x=>/^finanzas$/i.test(x.querySelector("h2")?.textContent.trim()||""));
+      if(selector?.classList.contains("colapsada")){selector.querySelector(".ajuste-seccion-cabecera")?.click();cerrarTimer=setTimeout(()=>mostrar(paso),300);return;}
+      mostrar(paso);
+    },300);
+  };
+  const pintar=()=>{
+    if(indice>=pasos.length){marcarVista();cerrar();return;}
+    const paso=pasos[indice];
+    if(paso.ajustes){abrirAjustes(paso);return;}
+    window.mostrarSeccion?.("finanzas");
+    const tab=tabs.find((b)=>b.dataset.valor===paso.tab);
+    if(tab&&!tab.classList.contains("active")){tab.click();cerrarTimer=setTimeout(()=>mostrar(paso),450);return;}
+    mostrar(paso);
+  };
+  marcarVista();pintar();return true;
+}
+
+/* Mini recorrido de Notas rápidas, anclado a sus controles visibles. */
+const PASOS_GUIA_NOTAS = [
+  { target:()=>document.querySelectorAll("#seccion-notas .notas-cab-acciones .nt-btn-circulo")[0]||document.querySelector("#seccion-notas .notas-vacio"), texto:"Toca + para crear una nota. Escribe una idea o pendiente: los cambios se guardan mientras editas y se sincronizan cuando vuelve la conexión; también puedes seguir trabajando sin internet." },
+  { target:()=>document.querySelector("#seccion-notas .notas-grupos .nota-card")||document.querySelector("#seccion-notas .notas-vacio"), texto:"Al editar una nota puedes usar negrita y listas con casillas, dibujar y añadir figuras o stickers. En Herramientas puedes deshacer cambios y convertir escritura a texto si el navegador o Gemini lo permiten." },
+  { target:()=>document.querySelectorAll("#seccion-notas .notas-cab-acciones .nt-btn-circulo")[0], texto:"En el editor puedes cambiar el color, fijar una nota y agregar un vencimiento. Al vencer, la nota pasa a la Papelera; en Ajustes puedes elegir si las nuevas notas reciben una fecha por defecto." },
+  { target:()=>document.getElementById("notas-busqueda")||document.getElementById("seccion-notas"), texto:"Busca palabras en títulos y contenido. Los resultados se actualizan mientras escribes." },
+  { target:()=>document.querySelector("#seccion-notas .notas-filtros")||document.getElementById("seccion-notas"), texto:"Filtra por color o por notas con vencimiento. Los filtros se pueden combinar con la búsqueda." },
+  { target:()=>document.querySelector("#seccion-notas .nt-filtros-der")||document.querySelector("#seccion-notas .notas-filtros"), texto:"Cambia entre cuadrícula y lista, ordena por fecha o de forma manual. Las notas fijadas aparecen arriba y puedes arrastrarlas para acomodarlas." },
+  { target:()=>document.querySelector("#seccion-notas .nota-card .nota-card-top")||document.querySelector("#seccion-notas .notas-grupos"), texto:"Toca una tarjeta para verla como nota flotante y elige Editar para abrir el editor. Sus acciones también permiten fijarla, duplicarla, compartirla, enviarla a Wapper, eliminarla o dejarla flotante; PiP abre una ventana aparte si el navegador lo admite." },
+  { target:()=>document.querySelector("#seccion-notas .notas-grupos")||document.getElementById("seccion-notas"), texto:"Para seleccionar varias, mantén pulsada una tarjeta en el teléfono; en computadora puedes arrastrar sobre un espacio vacío. Clic derecho abre las acciones de una nota. La barra de selección permite aplicar acciones en grupo." },
+  { target:()=>document.querySelector("#seccion-notas .nota-card .nota-card-actions")||document.querySelector("#seccion-notas .notas-cab-acciones"), texto:"Compartir ofrece texto, imagen o un archivo Wapper Note; puedes importar archivos Wapper Note desde Ajustes. Para compartir desde otras apps necesitas la PWA instalada en Android. Enviar a Wapper requiere configurar tu clave de Gemini." },
+  { target:()=>document.querySelectorAll("#seccion-notas .notas-cab-acciones .nt-btn-circulo")[1]||document.getElementById("seccion-notas"), texto:"En Ajustes personalizas colores, vista, fechas y el comportamiento de las notas, importas archivos Wapper Note y abres la Papelera. Allí puedes restaurar notas durante 30 días o eliminarlas definitivamente." },
+];
+
+function iniciarGuiaNotas() {
+  const raiz=document.getElementById("seccion-notas");
+  if(!raiz||document.querySelector(".guia-seccion-flotante,.guia-plan-flotante,.tutorial-seccion-overlay"))return false;
+  let indice=0,resaltado=null;
+  const resaltador=crearResaltador();
+  const pop=document.createElement("aside");pop.className="guia-plan-flotante guia-seccion-flotante";pop.setAttribute("role","dialog");pop.setAttribute("aria-live","polite");pop.setAttribute("aria-label",`${traducirTextoInterfaz("Tutorial")}: Notas rápidas`);document.body.append(pop);
+  const marcarVista=()=>{const c=estado.datos?.configuracion;if(!c)return;c.tutoriales_secciones_vistas=c.tutoriales_secciones_vistas||{};c.tutoriales_secciones_vistas.notas=true;guardar();};
+  const cerrar=()=>{marcarVista();resaltador.quitar();pop.remove();};
+  const btn=(txt,clase,fn)=>{const b=document.createElement("button");b.type="button";b.className=`btn ${clase}`;b.textContent=traducirTextoInterfaz(txt);b.onclick=fn;return b;};
+  const pintar=()=>{
+    if(indice>=PASOS_GUIA_NOTAS.length){cerrar();return;}
+    const paso=PASOS_GUIA_NOTAS[indice];resaltado=paso.target()||raiz;
+    resaltado.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});
+    resaltador.apuntar(resaltado,()=>paso.target()||document.getElementById("seccion-notas"));
+    pop.replaceChildren();
+    const titulo=document.createElement("strong");titulo.textContent=`Notas rápidas · ${indice+1}/${PASOS_GUIA_NOTAS.length}`;
+    const texto=document.createElement("p");texto.textContent=traducirTextoInterfaz(paso.texto);
+    const acciones=document.createElement("div");acciones.className="guia-seccion-acciones";
+    if(indice>0)acciones.append(btn("Anterior","btn-secondary",()=>{indice--;pintar();}));
+    acciones.append(btn(indice===PASOS_GUIA_NOTAS.length-1?"Terminar":"Siguiente","btn-primary",()=>{indice++;pintar();}),btn("Saltar guía","btn-secondary",cerrar));
+    pop.append(titulo,texto,acciones);evitarSolape(pop,resaltado);
+  };
+  marcarVista();pintar();return true;
+}
+
 function mostrarTutorialPrimeraVez(seccion) {
   if(reanudarGuiaPendiente(window.mostrarSeccion))return true;
   const cfg=estado.datos?.configuracion;
@@ -2391,7 +2511,7 @@ function mostrarVentanaSeccion(info) {
   const card=document.createElement("section");card.className="glass-card modal-card stack tutorial-seccion-card";const h=document.createElement("h2");h.textContent=`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(info.nombre)}`;card.append(h);
   const lista=document.createElement("ul");lista.className="onboarding-lista";info.puntos.forEach(p=>lista.append(textoTutorial("li",p)));card.append(lista);
   const acciones=document.createElement("div");acciones.className="tutorial-seccion-acciones";
-  const tutorial=document.createElement("button");tutorial.type="button";tutorial.className="btn btn-secondary";tutorial.textContent=traducirTextoInterfaz("Guía");tutorial.title=traducirTextoInterfaz("Guía paso a paso para conocer esta sección");tutorial.onclick=()=>{overlay.remove();if(info.id==="plan-estudios")iniciarGuiaPlan({navegar:window.mostrarSeccion});else iniciarGuiaSeccion(info);};
+  const tutorial=document.createElement("button");tutorial.type="button";tutorial.className="btn btn-secondary";tutorial.textContent=traducirTextoInterfaz("Guía");tutorial.title=traducirTextoInterfaz("Guía paso a paso para conocer esta sección");tutorial.onclick=()=>{overlay.remove();if(info.id==="plan-estudios")iniciarGuiaPlan({navegar:window.mostrarSeccion});else if(info.id==="finanzas")iniciarGuiaFinanzas();else if(info.id==="notas")iniciarGuiaNotas();else iniciarGuiaSeccion(info);};
   const cerrar=document.createElement("button");cerrar.type="button";cerrar.className="btn btn-primary";cerrar.textContent=traducirTextoInterfaz("Entendido");cerrar.onclick=()=>overlay.remove();
   acciones.append(tutorial,cerrar);card.append(acciones);overlay.append(card);document.body.append(overlay);tutorial.focus();return true;
 }function textoTutorial(tag,value){const e=document.createElement(tag);e.textContent=traducirTextoInterfaz(value);return e;}
@@ -2454,4 +2574,5 @@ if (!PREVIEW_DEMO && !window.__guiaEncabezadoInicializada) {
     previo = { t: ahora, x: ev.clientX, y: ev.clientY, id: info.id };
   }, true);
 }
-export { mostrarOnboardingNuevoUsuario, inicializarTutorialDesdeAjustes, mostrarTutorialPrimeraVez };
+window.iniciarGuiaFinanzas = iniciarGuiaFinanzas;
+export { mostrarOnboardingNuevoUsuario, inicializarTutorialDesdeAjustes, mostrarTutorialPrimeraVez, iniciarGuiaFinanzas };

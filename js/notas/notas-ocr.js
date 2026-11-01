@@ -1,4 +1,4 @@
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { traducirTextoInterfaz as tr } from "../core/i18n.js";
 
 const MODELO="gemini-3.1-flash-lite";

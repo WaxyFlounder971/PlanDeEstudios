@@ -4,13 +4,19 @@
    (ver finanzas-derivados.js); aquí solo hay fábricas y la migración.
    ========================================================================= */
 
-import { sellarTimestamp, calcularPagosRecurrentesTranscurridos } from "./schema.js";
+import { sellarTimestamp, calcularPagosRecurrentesTranscurridos } from "../schema.js";
 
-/** gasto | ingreso | ahorro (aporte a una meta) | transferencia (entre Mi dinero y una meta). */
-const TIPOS_MOVIMIENTO = ["gasto", "ingreso", "ahorro", "transferencia"];
+/**
+ * gasto | ingreso | ahorro (aporte a una meta) | transferencia (entre Mi dinero y una meta)
+ * | ajuste (corrige Mi dinero para que coincida con la realidad: saldo inicial o diferencia).
+ * Un ajuste NUNCA es gasto ni ingreso: solo mueve Mi dinero y no entra en ningún total de gastos/ingresos.
+ */
+const TIPOS_MOVIMIENTO = ["gasto", "ingreso", "ahorro", "transferencia", "ajuste", "prestamo", "traspaso"];
 /** Qué módulo gobierna la visibilidad del movimiento. */
 const ORIGENES_MOVIMIENTO = ["manual", "matricula", "beca"];
 const MODULOS_FINANZAS_DEFAULT = { matricula: true, beca: true, gastos: true, ahorros: true };
+/** Módulos opcionales fuera de los 4 de siempre y de los perfiles: guardan su interruptor aparte y arrancan apagados. */
+const MODULOS_OPCIONALES_DEFAULT = { deudas: false };
 
 function hoyIso() {
   const d = new Date();
@@ -26,13 +32,19 @@ function hoyIso() {
  *   "nuevo" (dinero nuevo directo a la meta, no toca Mi dinero).
  * - transferencia: `meta_id` + `sentido` "a_meta" | "desde_meta". Nunca cuenta
  *   como gasto ni ingreso.
+ * - ajuste: `sentido` "suma" | "resta" sobre Mi dinero. Nunca cuenta como gasto ni ingreso.
+ * - prestamo (módulo Me deben y debo): `prestamo_id` + `sentido` "sale" | "entra" sobre Mi dinero. Nunca es gasto ni ingreso.
+ * - traspaso (módulo Cuentas): dinero entre dos cuentas tuyas. `cuenta_id` = de dónde sale (null = "Sin asignar"), `cuenta_destino_id` = adónde
+ *   llega (null = "Sin asignar"). Con divisas distintas, `monto_destino` es lo que llegó (lo escribe la persona; no hay conversión).
+ *   Nunca es gasto ni ingreso. Gasto, ingreso y ajuste también pueden llevar `cuenta_id` (en qué cuenta ocurrieron).
+ * - gasto con `pagado_por_prestamo_id`: lo pagó otra persona; cuenta como gasto pero no baja Mi dinero, y aumenta lo que le debes.
  * - `recurrente` conserva la forma de gastos_u (monto_por_pago, fecha_inicio...).
  * - `fecha_registro` null = sin fecha (datos migrados que nunca la tuvieron).
  * `id` explícito solo lo usa la migración (ids deterministas).
  */
 function crearMovimiento({
   id, tipo, nombre, monto, fechaRegistro, nota, semestreId, origen,
-  metaId, fuente, sentido, pagadoConMetaId, recurrente,
+  metaId, fuente, sentido, pagadoConMetaId, recurrente, compromisoId, categoriaId, prestamoId, pagadoPorPrestamoId, cuentaId, cuentaDestinoId, montoDestino, repartoDe,
 }) {
   const tipoValido = TIPOS_MOVIMIENTO.includes(tipo) ? tipo : "gasto";
   const esMeta = tipoValido === "ahorro" || tipoValido === "transferencia";
@@ -47,17 +59,35 @@ function crearMovimiento({
     origen: ORIGENES_MOVIMIENTO.includes(origen) && (tipoValido === "gasto" || tipoValido === "ingreso") ? origen : "manual",
     meta_id: esMeta ? metaId || null : null,
     fuente: tipoValido === "ahorro" ? (fuente === "nuevo" ? "nuevo" : "liquido") : null,
-    sentido: tipoValido === "transferencia" ? (sentido === "desde_meta" ? "desde_meta" : "a_meta") : null,
+    // transferencia: "a_meta" | "desde_meta". ajuste: "suma" | "resta" (sobre Mi dinero).
+    sentido: tipoValido === "transferencia"
+      ? (sentido === "desde_meta" ? "desde_meta" : "a_meta")
+      : tipoValido === "ajuste" ? (sentido === "resta" ? "resta" : "suma")
+      : tipoValido === "prestamo" ? (sentido === "entra" ? "entra" : "sale") : null,
     pagado_con_meta_id: tipoValido === "gasto" ? pagadoConMetaId || null : null,
     recurrente: recurrente || null,
+    // Si nació de confirmar un compromiso del Plan (referencia de vuelta; el vínculo principal vive en el compromiso).
+    compromiso_id: compromisoId || null,
+    // Finanzas 2.0 (sesión 5): categoría opcional. Solo gastos e ingresos se categorizan; el movimiento viejo queda sin categoría.
+    categoria_id: tipoValido === "gasto" || tipoValido === "ingreso" ? categoriaId || null : null,
+    // Sesión 7A: préstamo al que pertenece el movimiento, o préstamo de quien pagó este gasto por mí. Las claves solo
+    // existen cuando se usan: los movimientos de siempre conservan exactamente su forma (la fusión no ve diferencias falsas).
+    ...(tipoValido === "prestamo" ? { prestamo_id: prestamoId || null } : {}),
+    ...(tipoValido === "gasto" && !pagadoConMetaId && pagadoPorPrestamoId ? { pagado_por_prestamo_id: pagadoPorPrestamoId } : {}),
+    // Sesión 7B: cuenta donde ocurrió (gasto, ingreso, ajuste) o traspaso entre cuentas. Solo existen cuando se usan.
+    ...((tipoValido === "gasto" || tipoValido === "ingreso" || tipoValido === "ajuste") && cuentaId ? { cuenta_id: cuentaId } : {}),
+    // Sesión 8: ingreso del que nació este aporte por una regla de reparto. Solo existe cuando se usa.
+    ...(tipoValido === "ahorro" && repartoDe ? { reparto_de: repartoDe } : {}),
+    ...(tipoValido === "traspaso" ? { cuenta_id: cuentaId || null, cuenta_destino_id: cuentaDestinoId || null, ...(Number(montoDestino) > 0 ? { monto_destino: Math.round(Number(montoDestino) * 100) / 100 } : {}) } : {}),
   });
 }
 
 /** Meta de ahorro (la de gasto llega en una etapa posterior; `tipo` ya queda previsto). */
-function crearMeta({ id, nombre, objetivo, saldoInicial, emoji, color, fechaObjetivo }) {
+function crearMeta({ id, nombre, objetivo, saldoInicial, emoji, color, fechaObjetivo, tipo, fechaInicio, categoriaIds }) {
+  const esGasto = tipo === "gasto"; // meta de gasto (sesión 8): un tope de gasto en un periodo, medido sobre los gastos reales
   return sellarTimestamp({
     id: id || "meta_" + crypto.randomUUID(),
-    tipo: "ahorro",
+    tipo: esGasto ? "gasto" : "ahorro",
     nombre: nombre || "",
     objetivo: Number(objetivo) || 0,
     saldo_inicial: Number(saldoInicial) || 0, // "¿cuánto llevas ya?"
@@ -65,6 +95,8 @@ function crearMeta({ id, nombre, objetivo, saldoInicial, emoji, color, fechaObje
     color: color || null,
     fecha_objetivo: fechaObjetivo || null,
     archivada: false,
+    // Solo las metas de gasto llevan estas claves: las de ahorro conservan exactamente su forma.
+    ...(esGasto ? { fecha_inicio: fechaInicio || null, categoria_ids: Array.isArray(categoriaIds) ? categoriaIds : [] } : {}),
   });
 }
 
@@ -134,6 +166,7 @@ function migrarFinanzasAMovimientos(datos) {
 
 export {
   MODULOS_FINANZAS_DEFAULT,
+  MODULOS_OPCIONALES_DEFAULT,
   ORIGENES_MOVIMIENTO,
   TIPOS_MOVIMIENTO,
   crearMeta,

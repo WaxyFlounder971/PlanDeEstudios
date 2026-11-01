@@ -29,7 +29,7 @@
      cual, sin reconstruir nada.
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { mostrarSeccion } from "../main.js";
 import { desplazarYResaltarElemento } from "./componentes.js";
 import { abrirModalHistorial } from "../plan/plan-detalle.js";

@@ -4,8 +4,8 @@
    ========================================================================= */
 
 import { crearCategoria, sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { estiloBadgeCategoria } from "../core/utils.js";
 import { abrirConfirmacion } from "../ui/componentes.js";
 import { obtenerPlanActivo } from "./plan-esquema.js";

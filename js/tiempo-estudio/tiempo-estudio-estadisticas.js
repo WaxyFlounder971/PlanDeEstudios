@@ -27,12 +27,13 @@
    hermano tiempo-estudio.js.
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT } from "../core/schema.js";
 import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
+import { minutosSesionEnRango, minutosSesionPorDiaLocal } from "./tiempo-estudio-periodos.js";
 // Import circular intencional (timer → competencias → estadísticas → timer):
 // seguro porque estos 3 nombres solo se usan DENTRO de funciones, nunca en el
 // nivel superior de este archivo (mismo criterio documentado en ARQUITECTURA.md).
@@ -317,16 +318,16 @@ function obtenerRangoSemestre(semestre) {
 function calcularMinutosPorMateriaEnRango(inicio, fin) {
   const mapa = new Map();
   obtenerSesionesParaGraficas().forEach((s) => {
-    if (s.inicio < inicio || s.inicio >= fin) return;
     const id = idMateriaSesion(s);
-    mapa.set(id, (mapa.get(id) || 0) + (Number(s.duracion_minutos) || 0));
+    const minutos = minutosSesionEnRango(s, inicio, fin);
+    if (minutos > 0) mapa.set(id, (mapa.get(id) || 0) + minutos);
   });
   return mapa;
 }
 
 function calcularMinutosTotalesEnRango(inicio, fin, incluirEnCurso = false) {
   const fuente = incluirEnCurso ? obtenerSesionesParaGraficas() : estado.datos.sesiones_estudio || [];
-  return fuente.reduce((acc, s) => (s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc), 0);
+  return fuente.reduce((acc, s) => acc + minutosSesionEnRango(s, inicio, fin), 0);
 }
 
 /* ===================== Donut multi-segmento (N materias) =====================
@@ -1265,13 +1266,15 @@ function construirSeccionBarras(cont, refrescar) {
        nunca una ventana de fecha propia que pueda desalinearse. */
     const porSemana = new Map(); // numero de semana -> Map(materiaId -> minutos)
     obtenerSesionesParaGraficas().forEach((s) => {
-      if (s.inicio < inicioSemestre.getTime() || s.inicio > finSemestre.getTime()) return;
-      const numero = calcularNumeroSemanaSegura(semestre, new Date(s.inicio));
-      if (numero < 1 || numero > semanaVigente) return;
-      if (!porSemana.has(numero)) porSemana.set(numero, new Map());
-      const porMateria = porSemana.get(numero);
       const id = idMateriaSesion(s);
-      porMateria.set(id, (porMateria.get(id) || 0) + (Number(s.duracion_minutos) || 0));
+      minutosSesionPorDiaLocal(s).forEach((parte) => {
+        if (parte.inicio < inicioSemestre.getTime() || parte.inicio > finSemestre.getTime()) return;
+        const numero = calcularNumeroSemanaSegura(semestre, parte.fecha);
+        if (numero < 1 || numero > semanaVigente) return;
+        if (!porSemana.has(numero)) porSemana.set(numero, new Map());
+        const porMateria = porSemana.get(numero);
+        porMateria.set(id, (porMateria.get(id) || 0) + parte.minutos);
+      });
     });
 
     for (let i = 1; i <= semanaVigente; i++) {
@@ -1345,7 +1348,7 @@ let indiceSemestreBarrasMateria = null;
 
 function calcularMinutosMateriaEnRango(materiaMatriculadaId, inicio, fin) {
   return obtenerSesionesParaGraficas().reduce(
-    (acc, s) => (idMateriaSesion(s) === materiaMatriculadaId && s.inicio >= inicio && s.inicio < fin ? acc + (Number(s.duracion_minutos) || 0) : acc),
+    (acc, s) => acc + (idMateriaSesion(s) === materiaMatriculadaId ? minutosSesionEnRango(s, inicio, fin) : 0),
     0
   );
 }
@@ -1695,10 +1698,12 @@ function construirSeccionBarrasMateria(cont, mm, color, refrescar) {
     const porSemana = new Map(); // numero de semana -> minutos
     obtenerSesionesParaGraficas().forEach((s) => {
       if (idMateriaSesion(s) !== mm.id) return;
-      if (s.inicio < inicioSemestre.getTime() || s.inicio > finSemestre.getTime()) return;
-      const numero = calcularNumeroSemanaSegura(semestre, new Date(s.inicio));
-      if (numero < 1 || numero > semanaVigente) return;
-      porSemana.set(numero, (porSemana.get(numero) || 0) + (Number(s.duracion_minutos) || 0));
+      minutosSesionPorDiaLocal(s).forEach((parte) => {
+        if (parte.inicio < inicioSemestre.getTime() || parte.inicio > finSemestre.getTime()) return;
+        const numero = calcularNumeroSemanaSegura(semestre, parte.fecha);
+        if (numero < 1 || numero > semanaVigente) return;
+        porSemana.set(numero, (porSemana.get(numero) || 0) + parte.minutos);
+      });
     });
 
     for (let i = 1; i <= semanaVigente; i++) {
@@ -1819,9 +1824,10 @@ function calcularResumenTotalesMateria(materiaMatriculadaId) {
 
   const porDia = new Map();
   sesiones.forEach((s) => {
-    const f = new Date(s.inicio);
-    const clave = `${f.getFullYear()}-${f.getMonth()}-${f.getDate()}`;
-    porDia.set(clave, { minutos: (porDia.get(clave)?.minutos || 0) + (Number(s.duracion_minutos) || 0), fecha: f });
+    minutosSesionPorDiaLocal(s).forEach(({ fecha: f, minutos }) => {
+      const clave = `${f.getFullYear()}-${f.getMonth()}-${f.getDate()}`;
+      porDia.set(clave, { minutos: (porDia.get(clave)?.minutos || 0) + minutos, fecha: f });
+    });
   });
   let diaTop = null;
   porDia.forEach((valor) => {

@@ -24,8 +24,8 @@ import {
   redondearNotaFinalAlCincoMasCercano,
   sellarTimestamp,
 } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { desplazarYResaltarElemento, abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { recalcularPlanesHardcore } from "../plan/plan-gestionar.js";

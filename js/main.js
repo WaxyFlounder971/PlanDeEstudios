@@ -8,9 +8,9 @@ import { aplicarModoRendimiento, renderizarAjustes } from "./config/config-ajust
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
 import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
-import { fusionarDatos } from "./core/storage-merge.js";
-import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, recuperarConexionEscalonada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage-sync.js";
-import { borrarCacheLocal, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, guardarRespaldoPendiente, leerCacheLocal, leerRespaldoPendiente, leerTokenCacheValido, resolverAuthListo } from "./core/storage.js";
+import { fusionarDatos } from "./core/storage/storage-merge.js";
+import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, recuperarConexionEscalonada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage/storage-sync.js";
+import { borrarCacheLocal, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, guardarRespaldoPendiente, leerCacheLocal, leerRespaldoPendiente, leerTokenCacheValido, resolverAuthListo } from "./core/storage/storage.js";
 import { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, cargarDatosDemo, registrarAperturaDemo } from "./core/demo-mode.js";
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
 import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario, mostrarTutorialPrimeraVez } from "./core/onboarding.js";
@@ -505,7 +505,6 @@ window.addEventListener("DOMContentLoaded", () => {
   // app ya esté visible (solo agrega un listener global de document, sin
   // tocar nada del DOM que dependa de haber iniciado sesión).
   inicializarNavegacionBotonesMouse();
-  inicializarGestosNavegacionHorizontal();
   // Comunidad - Parte 3: se inyecta ANTES de inicializarBotonesCerrarModal()
   // (así sus 2 modales dinámicos también reciben el botón "✕" automático) y
   // ANTES del posible mostrarApp() por caché unas líneas más abajo (así
@@ -726,7 +725,6 @@ async function iniciarAplicacionDemo() {
     inicializarModalConfirmacion();
     inicializarNavegacionSecciones();
     inicializarNavegacionBotonesMouse();
-    inicializarGestosNavegacionHorizontal();
     inicializarComunidad();
     inicializarResumen();
     inicializarAgenda();
@@ -849,6 +847,8 @@ function programarAvisoLoginBloqueado() {
   temporizadorAvisoLogin = setTimeout(() => {
     const aviso = document.getElementById("aviso-login-bloqueado");
     if (!aviso) return;
+    // Si auth.js ya mostró el error real de Google, no lo pisa con el genérico.
+    if (!aviso.classList.contains("oculto")) return;
     aviso.textContent =
       "Google todavía no respondió. Revisa tu conexión e inténtalo de nuevo.";
     aviso.classList.remove("oculto");
@@ -1478,50 +1478,6 @@ function inicializarNavegacionSecciones() {
     const destino = evento.state && evento.state.appNav && evento.state.appSeccion;
     if (destino) mostrarSeccion(destino, { desdeHistorial: true });
   });
-}
-
-function inicializarGestosNavegacionHorizontal() {
-  const contenido = document.querySelector("main.app-contenido");
-  if (!contenido || contenido.dataset.gestosHorizontal === "1") return;
-  contenido.dataset.gestosHorizontal = "1";
-  let inicio = null;
-  contenido.addEventListener("touchstart", (ev) => {
-    const toque = ev.touches[0];
-    if (!toque || ev.touches.length !== 1) { inicio = null; return; }
-    const objetivo = ev.target;
-    if (objetivo.closest("input, textarea, select, a, [contenteditable='true'], .modal-overlay, .drawer-enlaces-movil")) { inicio = null; return; }
-    const botonPestana = objetivo.closest("button[data-vista], [role='tab']");
-    if (objetivo.closest("button") && !botonPestana) { inicio = null; return; }
-    inicio = { x: toque.clientX, y: toque.clientY };
-  }, { passive: true });
-  contenido.addEventListener("touchend", (ev) => {
-    if (!inicio) return;
-    const toque = ev.changedTouches[0];
-    const dx = toque.clientX - inicio.x;
-    const dy = toque.clientY - inicio.y;
-    const origen = inicio;
-    inicio = null;
-    if (Math.abs(dx) < 64 || Math.abs(dx) < Math.abs(dy) * 1.45) return;
-
-    const grupo = document.elementFromPoint(origen.x, origen.y)?.closest(".pill-group");
-    const pestañas = grupo
-      ? [...grupo.querySelectorAll("button[data-vista], button[role='tab']")]
-      : [];
-    if (pestañas.length > 1) {
-      const activa = pestañas.findIndex((btn) => btn.classList.contains("active") || btn.getAttribute("aria-selected") === "true");
-      const siguiente = activa + (dx < 0 ? 1 : -1);
-      if (siguiente >= 0 && siguiente < pestañas.length) {
-        pestañas[siguiente].click();
-        return;
-      }
-    }
-
-    // Al llegar al límite de las pestañas, el mismo gesto abre el panel
-    // lateral hacia el que se deslizó: derecha = menú, izquierda = enlaces.
-    if (dx > 0) document.getElementById("btn-hamburguesa")?.click();
-    else (document.getElementById("btn-topbar-enlaces") || document.getElementById("btn-flotante-enlaces"))?.click();
-  }, { passive: true });
-  contenido.addEventListener("touchcancel", () => { inicio = null; }, { passive: true });
 }
 
 let seccionNavegacionActual = null;

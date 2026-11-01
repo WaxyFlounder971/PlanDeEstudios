@@ -4,7 +4,7 @@
    parseo de grupos de requisitos, conversión de archivos, etc.
    ========================================================================= */
 
-import { estado } from "./storage.js";
+import { estado } from "./storage/storage.js";
 
 function convertirArchivoABase64(archivo) {
   return new Promise((resolve, reject) => {

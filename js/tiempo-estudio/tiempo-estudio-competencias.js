@@ -56,14 +56,14 @@
    de cada sesión).
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { MODO_DEMO } from "../core/demo-mode.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente, intentarSincronizar } from "../core/storage-sync.js";
+import { marcarCambioPendiente, intentarSincronizar } from "../core/storage/storage-sync.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
-import { adjuntarArchivo } from "../core/storage-adjuntos.js";
+import { adjuntarArchivo } from "../core/storage/storage-adjuntos.js";
 import { validarAudio } from "./tiempo-estudio-audio-competencias.js";
 import { copiarAlPortapapelesBlindado, abrirModalCopiaManualPortapapeles } from "../core/clipboard.js";
 import { calcularMinutosTotalesEnRango, obtenerRangoSemana } from "./tiempo-estudio-estadisticas.js";
@@ -95,6 +95,7 @@ import {
 const CLAVE_CACHE_COMPETENCIA = "te_comp_marcador_cache_v1:";
 const vistasDemoPorId = new Map();
 let refrescoCompetenciasAlReconectarInstalado = false;
+let colaSincronizacionHorasCompetencias = Promise.resolve();
 
 function guardarCacheMarcador(competenciaId, datos) {
   try {
@@ -346,9 +347,8 @@ async function copiarLinkInvitacion(competencia) {
  *
  * Best-effort A PROPÓSITO (mismo criterio que documenta el propio Worker
  * en `manejarActualizarHoras`): nunca bloquea al usuario ni muestra un
- * error si falla, y manda el TOTAL recalculado (no un delta) — así, si
- * una llamada se pierde por un corte de red puntual, la siguiente sesión
- * guardada autocorrige el número sola, sin necesidad de reintentar acá.
+ * error si falla, y manda el TOTAL recalculado (no un delta). Las llamadas
+ * se serializan para que una respuesta vieja no pise una más reciente.
  *
  * FIX 2026-09-11 (bug real: una competencia "perdió" sus horas guardadas
  * frente a una stakeholder, tras agregar una sesión de 1 minuto): esto
@@ -366,7 +366,18 @@ async function copiarLinkInvitacion(competencia) {
  * `await` se "sube" a la sincronización que `marcarCambioPendiente()` ya
  * había arrancado en vez de disparar una segunda en paralelo.
  */
-async function sincronizarHorasCompetencias() {
+function sincronizarHorasCompetencias() {
+  // Un POST viejo no debe terminar después de uno nuevo y pisar sus horas.
+  // Encadenar llamadas conserva el orden en que timer, registro manual y
+  // apertura del marcador pidieron sincronizar.
+  const siguiente = colaSincronizacionHorasCompetencias
+    .catch(() => {})
+    .then(ejecutarSincronizacionHorasCompetencias);
+  colaSincronizacionHorasCompetencias = siguiente;
+  return siguiente;
+}
+
+async function ejecutarSincronizacionHorasCompetencias() {
   // 2026-09-17 (punto 4.3): una competencia `finalizada` deja de aceptar
   // horas nuevas. El Worker igual las ignora (ver manejarActualizarHoras),
   // pero filtrarlas acá evita N requests inútiles en cada sesión guardada.
@@ -374,6 +385,12 @@ async function sincronizarHorasCompetencias() {
   if (competencias.length === 0) return;
 
   await intentarSincronizar();
+  // Si nos incorporamos a una sincronización que todavía tenía otra subida
+  // pendiente, esperar ese segundo ciclo antes de calcular un total completo.
+  if (estado.pendienteSync) await intentarSincronizar();
+  // Una lectura/subida fallida de Drive deja el estado local pendiente. No
+  // enviar una suma potencialmente incompleta que reemplazaría la del Worker.
+  if (estado.pendienteSync || navigator.onLine === false) return;
 
   const { inicio, fin } = obtenerRangoSemana(0);
   const horas = calcularMinutosTotalesEnRango(inicio, fin) / 60;
@@ -408,6 +425,7 @@ async function sincronizarHorasCompetencias() {
           competencia.es_creador = true;
           huboDelegacionRecibida = true;
         }
+
       } catch (e) {
         console.warn(`[competencias] Falló actualizar-horas para "${competencia.nombre}" — se autocorrige con la próxima sesión:`, e);
       }
@@ -1148,7 +1166,7 @@ async function abrirModalHistorial(competencia, abrirEn) {
  * tarjeta, para no bloquear el render de toda la lista esperando a las N
  * competencias a la vez (cada una carga a su propio ritmo).
  */
-async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
+async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincronizacionInicial) {
   const vistaGuardada = leerVistaPreferida();
   const base = {
     nombre: competencia.nombre,
@@ -1189,6 +1207,10 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar) {
 
   try {
     if (navigator.onLine === false) throw new Error("Sin conexión; se muestra el último marcador local.");
+    // No leer el marcador antes de que termine el envío del total actual;
+    // si no, una respuesta rápida con ceros podía quedar pintada encima de
+    // las horas que el POST acababa de guardar.
+    if (sincronizacionInicial) await sincronizacionInicial;
     const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}`);
     if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
     const datos = await respuesta.json(); // { id, nombre, estado, participantes: [{id, apodo, horas_semana_actual, foto_url}] }
@@ -1403,7 +1425,7 @@ function construirVistaCompetencias(cont, refrescar) {
   // pincha acá para que una delegación pendiente (ver
   // abrirModalDelegarAntesDeSalir) llegue apenas alguien abre esta
   // pestaña, sin tener que esperar a la próxima vez que estudie.
-  sincronizarHorasCompetencias();
+  const sincronizacionInicial = sincronizarHorasCompetencias();
 
   // 2026-09-26 — FIX "queda demasiado gap" (entre el título+botones
   // "Competencias" y la primera tarjeta): ese espacio NO lo pone nada de
@@ -1505,7 +1527,7 @@ function construirVistaCompetencias(cont, refrescar) {
     // "cargando" y luego con los datos del Worker.
     const tarjeta = document.createElement("article");
     lista.appendChild(tarjeta);
-    cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar);
+    cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincronizacionInicial);
   });
 
   envoltorio.appendChild(lista);

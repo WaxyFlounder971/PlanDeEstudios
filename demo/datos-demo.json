@@ -213,7 +213,17 @@
         "url": "https://drive.google.com/",
         "id": "demo-link-drive"
       }
-    ]
+    ],
+    "moneda_preferida": "CRC",
+    "finanzas_modulos": {
+      "matricula": true,
+      "beca": true,
+      "gastos": true,
+      "ahorros": true
+    },
+    "finanzas_deudas": true,
+    "finanzas_cuentas": true,
+    "finanzas_consejos": true
   },
   "planes_estudio": [
     {
@@ -256,14 +266,14 @@
       "materias": [
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "EG-I",
           "bloque": 1,
-          "creditos": 6.0,
+          "creditos": 6,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -275,14 +285,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "OPT-",
           "bloque": 1,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -294,14 +304,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "EF-",
           "bloque": 1,
-          "creditos": 0.0,
+          "creditos": 0,
           "sin_definir": true,
           "es_optativa": true,
           "estado": "pendiente",
@@ -313,14 +323,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-1504",
           "bloque": 1,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "aprobado",
@@ -332,14 +342,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-1501",
           "bloque": 1,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "aprobado",
@@ -351,14 +361,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "EG-II",
           "bloque": 2,
-          "creditos": 6.0,
+          "creditos": 6,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -373,14 +383,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "OPT-",
           "bloque": 2,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -392,14 +402,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-1502",
           "bloque": 2,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "aprobado",
@@ -414,14 +424,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-1503",
           "bloque": 2,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "aprobado",
@@ -436,14 +446,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "SR-I",
           "bloque": 3,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -458,14 +468,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-2001",
           "bloque": 3,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "aprobado",
@@ -480,14 +490,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-2002",
           "bloque": 3,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "aprobado",
@@ -502,14 +512,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-2003",
           "bloque": 3,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "aprobado",
@@ -536,14 +546,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-2004",
           "bloque": 3,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "cursando",
@@ -558,14 +568,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-2005",
           "bloque": 3,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "cursando",
@@ -580,14 +590,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "SR-II",
           "bloque": 4,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -602,14 +612,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-2006",
           "bloque": 4,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -633,14 +643,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-2007",
           "bloque": 4,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -655,14 +665,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-2008",
           "bloque": 4,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -677,14 +687,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-2009",
           "bloque": 4,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -699,14 +709,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-2010",
           "bloque": 4,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -734,14 +744,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "EG-",
           "bloque": 5,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -753,14 +763,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "RP-",
           "bloque": 5,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -772,14 +782,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "OPT-",
           "bloque": 5,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -791,14 +801,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-3001",
           "bloque": 5,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -813,14 +823,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-3002",
           "bloque": 5,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -835,14 +845,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-3003",
           "bloque": 5,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -857,14 +867,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "OPT-",
           "bloque": 6,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -876,14 +886,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-3004",
           "bloque": 6,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -898,14 +908,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-3005",
           "bloque": 6,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -929,14 +939,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-3006",
           "bloque": 6,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -960,14 +970,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-3007",
           "bloque": 6,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -982,14 +992,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-3008",
           "bloque": 6,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1013,14 +1023,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "OPT-",
           "bloque": 7,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1032,14 +1042,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-4000",
           "bloque": 7,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1054,14 +1064,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-4001",
           "bloque": 7,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1076,14 +1086,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-4002",
           "bloque": 7,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1098,14 +1108,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-4003",
           "bloque": 7,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1120,14 +1130,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-4004",
           "bloque": 7,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1142,14 +1152,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "OPT-",
           "bloque": 8,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1161,14 +1171,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-4005",
           "bloque": 8,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1183,14 +1193,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-4006",
           "bloque": 8,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1205,14 +1215,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 18.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 18
           },
           "codigo": "CP-4007",
           "bloque": 8,
-          "creditos": 6.0,
+          "creditos": 6,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1248,14 +1258,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-4008",
           "bloque": 8,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1270,14 +1280,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "OPT-",
           "bloque": 9,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1289,14 +1299,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 4.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 4,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-5000",
           "bloque": 9,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1311,14 +1321,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 4.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 4,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-5001",
           "bloque": 9,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1333,14 +1343,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 4.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 4,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-5002",
           "bloque": 9,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1355,14 +1365,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "OPT-",
           "bloque": 10,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": true,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1374,14 +1384,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 4.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 4,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-5003",
           "bloque": 10,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1396,14 +1406,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 4.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 4,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-5004",
           "bloque": 10,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1418,14 +1428,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-5005",
           "bloque": 10,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": false,
           "estado": "pendiente",
@@ -1442,14 +1452,14 @@
       "optativas_disponibles": [
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6000",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1485,14 +1495,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6001",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1528,14 +1538,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6002",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1571,14 +1581,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6003",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1614,14 +1624,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6004",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1657,14 +1667,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6005",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1700,14 +1710,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6006",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1743,14 +1753,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6007",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1786,14 +1796,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6008",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1829,14 +1839,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6009",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1872,14 +1882,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6010",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1915,14 +1925,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6011",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -1958,14 +1968,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6012",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2001,14 +2011,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6013",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2044,14 +2054,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6014",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2087,14 +2097,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6015",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2130,14 +2140,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-6016",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2173,14 +2183,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 3.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 3,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "CP-6017",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2216,14 +2226,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 3.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 3
           },
           "codigo": "ND-0006",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2235,14 +2245,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-0121",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2278,14 +2288,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "CP-6018",
           "bloque": null,
-          "creditos": 3.0,
+          "creditos": 3,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2321,14 +2331,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 4.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 4,
+            "Práctica": 0
           },
           "codigo": "ND-0007",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2340,14 +2350,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-1030",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2359,14 +2369,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-1032",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2390,14 +2400,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-2003",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2409,14 +2419,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-2004",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2431,14 +2441,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-2030",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2450,14 +2460,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-2032",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2481,14 +2491,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-3001",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2500,14 +2510,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-3002",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2522,14 +2532,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-3030",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2541,14 +2551,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-3032",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2572,14 +2582,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-4001",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2591,14 +2601,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-4002",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2613,14 +2623,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-5001",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2632,14 +2642,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-5002",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2654,14 +2664,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-5030",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2673,14 +2683,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-5032",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2722,14 +2732,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-6030",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2741,14 +2751,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 6.0,
-            "Laboratorio": 0.0,
-            "Teoría": 0.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 6,
+            "Laboratorio": 0,
+            "Teoría": 0,
+            "Práctica": 0
           },
           "codigo": "LM-6032",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2772,14 +2782,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-7030",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2791,14 +2801,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-7032",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2813,14 +2823,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-7037",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2832,14 +2842,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 6.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 6,
+            "Práctica": 0
           },
           "codigo": "LM-7039",
           "bloque": null,
-          "creditos": 4.0,
+          "creditos": 4,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2854,14 +2864,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-8001",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2873,14 +2883,14 @@
         },
         {
           "horas": {
-            "Teoría-Práctica": 0.0,
-            "Laboratorio": 0.0,
-            "Teoría": 3.0,
-            "Práctica": 0.0
+            "Teoría-Práctica": 0,
+            "Laboratorio": 0,
+            "Teoría": 3,
+            "Práctica": 0
           },
           "codigo": "LM-8002",
           "bloque": null,
-          "creditos": 2.0,
+          "creditos": 2,
           "sin_definir": false,
           "es_optativa": true,
           "estado": "pendiente",
@@ -2933,9 +2943,9 @@
           "id": "CI0202",
           "codigo": "CI0202",
           "nombre": "Inglés Básico",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 3.0
+            "Horas": 3
           },
           "bloque": 0,
           "requisitos": null,
@@ -2951,9 +2961,9 @@
           "id": "MA0101",
           "codigo": "MA0101",
           "nombre": "Matemática General",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 5.0
+            "Horas": 5
           },
           "bloque": 0,
           "requisitos": null,
@@ -2969,9 +2979,9 @@
           "id": "CI1106",
           "codigo": "CI1106",
           "nombre": "Comunicación Escrita",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 6.0
+            "Horas": 6
           },
           "bloque": 1,
           "requisitos": null,
@@ -2987,9 +2997,9 @@
           "id": "MA1403",
           "codigo": "MA1403",
           "nombre": "Matemática Discreta",
-          "creditos": 4.0,
+          "creditos": 4,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 1,
           "requisitos": null,
@@ -3005,9 +3015,9 @@
           "id": "SE1100",
           "codigo": "SE1100",
           "nombre": "Actividad Cultural I",
-          "creditos": 0.0,
+          "creditos": 0,
           "horas": {
-            "Horas": 2.0
+            "Horas": 2
           },
           "bloque": 1,
           "requisitos": null,
@@ -3023,9 +3033,9 @@
           "id": "TI1102",
           "codigo": "TI1102",
           "nombre": "Información Contable",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 1,
           "requisitos": null,
@@ -3041,9 +3051,9 @@
           "id": "TI1103",
           "codigo": "TI1103",
           "nombre": "Modelos Organizacionales y Gestión de TI",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 1,
           "requisitos": null,
@@ -3059,9 +3069,9 @@
           "id": "ATI120",
           "codigo": "TI1400",
           "nombre": "Introducción a la Programación",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 1,
           "requisitos": null,
@@ -3077,9 +3087,9 @@
           "id": "TI1401",
           "codigo": "TI1401",
           "nombre": "Taller de Programación",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 1,
           "requisitos": null,
@@ -3095,9 +3105,9 @@
           "id": "CI1107",
           "codigo": "CI1107",
           "nombre": "Comunicación Oral",
-          "creditos": 1.0,
+          "creditos": 1,
           "horas": {
-            "Horas": 3.0
+            "Horas": 3
           },
           "bloque": 2,
           "requisitos": null,
@@ -3113,9 +3123,9 @@
           "id": "FH1000",
           "codigo": "FH1000",
           "nombre": "Centros de Formación Humanística",
-          "creditos": 0.0,
+          "creditos": 0,
           "horas": {
-            "Horas": 2.0
+            "Horas": 2
           },
           "bloque": 2,
           "requisitos": null,
@@ -3131,9 +3141,9 @@
           "id": "MA1102",
           "codigo": "MA1102",
           "nombre": "Cálculo Diferencial e Integral",
-          "creditos": 4.0,
+          "creditos": 4,
           "horas": {
-            "Horas": 5.0
+            "Horas": 5
           },
           "bloque": 2,
           "requisitos": {
@@ -3161,9 +3171,9 @@
           "id": "SE1200",
           "codigo": "SE1200",
           "nombre": "Actividad Deportiva I",
-          "creditos": 0.0,
+          "creditos": 0,
           "horas": {
-            "Horas": 2.0
+            "Horas": 2
           },
           "bloque": 2,
           "requisitos": null,
@@ -3179,9 +3189,9 @@
           "id": "TI1201",
           "codigo": "TI1201",
           "nombre": "Comportamiento Organizacional y Talento Humano",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 2,
           "requisitos": {
@@ -3200,9 +3210,9 @@
           "id": "TI2402",
           "codigo": "TI2402",
           "nombre": "Algoritmos y Estructuras de Datos",
-          "creditos": 4.0,
+          "creditos": 4,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 2,
           "requisitos": {
@@ -3230,9 +3240,9 @@
           "id": "TI2404",
           "codigo": "TI2404",
           "nombre": "Organización y Arquitectura de Computadoras",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 2,
           "requisitos": {
@@ -3251,9 +3261,9 @@
           "id": "TI4500",
           "codigo": "TI4500",
           "nombre": "Ingeniería de Requerimientos",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 2,
           "requisitos": {
@@ -3272,9 +3282,9 @@
           "id": "CI3400",
           "codigo": "CI3400",
           "nombre": "Inglés 1",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 6.0
+            "Horas": 6
           },
           "bloque": 3,
           "requisitos": {
@@ -3302,9 +3312,9 @@
           "id": "MA1103",
           "codigo": "MA1103",
           "nombre": "Cálculo y Álgebra Lineal",
-          "creditos": 4.0,
+          "creditos": 4,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 3,
           "requisitos": {
@@ -3323,9 +3333,9 @@
           "id": "SE1400",
           "codigo": "SE1400",
           "nombre": "Actividad Cultural - Deportiva",
-          "creditos": 0.0,
+          "creditos": 0,
           "horas": {
-            "Horas": 2.0
+            "Horas": 2
           },
           "bloque": 3,
           "requisitos": null,
@@ -3341,9 +3351,9 @@
           "id": "ATI220",
           "codigo": "TI2800",
           "nombre": "Administracion de Proyectos I",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 3,
           "requisitos": {
@@ -3362,9 +3372,9 @@
           "id": "TI3103",
           "codigo": "TI3103",
           "nombre": "Costos en Ambientes Informáticos",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 3,
           "requisitos": {
@@ -3383,9 +3393,9 @@
           "id": "ATI200",
           "codigo": "TI3600",
           "nombre": "Base de Datos",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 3,
           "requisitos": {
@@ -3413,9 +3423,9 @@
           "id": "TI4200",
           "codigo": "TI4200",
           "nombre": "Economía",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 3,
           "requisitos": {
@@ -3434,9 +3444,9 @@
           "id": "CI4401",
           "codigo": "CI4401",
           "nombre": "Inglés II",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 6.0
+            "Horas": 6
           },
           "bloque": 4,
           "requisitos": {
@@ -3455,9 +3465,9 @@
           "id": "MA2404",
           "codigo": "MA2404",
           "nombre": "Probabilidades",
-          "creditos": 4.0,
+          "creditos": 4,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 4,
           "requisitos": {
@@ -3476,9 +3486,9 @@
           "id": "TI2201",
           "codigo": "TI2201",
           "nombre": "Programación Orientada a Objetos",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 4,
           "requisitos": {
@@ -3497,9 +3507,9 @@
           "id": "TI3801",
           "codigo": "TI3801",
           "nombre": "Administracion de Proyectos II",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 4,
           "requisitos": {
@@ -3518,9 +3528,9 @@
           "id": "TI4101",
           "codigo": "TI4101",
           "nombre": "Planificación y Presupuesto",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 4,
           "requisitos": {
@@ -3539,9 +3549,9 @@
           "id": "TI4601",
           "codigo": "TI4601",
           "nombre": "Base de Datos Avanzados",
-          "creditos": 4.0,
+          "creditos": 4,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 4,
           "requisitos": {
@@ -3560,9 +3570,9 @@
           "id": "CS3404",
           "codigo": "CS3404",
           "nombre": "Seminario de Ética para la Ingeniería",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 5.0
+            "Horas": 5
           },
           "bloque": 5,
           "requisitos": {
@@ -3581,9 +3591,9 @@
           "id": "MA3405",
           "codigo": "MA3405",
           "nombre": "Estadística",
-          "creditos": 4.0,
+          "creditos": 4,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 5,
           "requisitos": {
@@ -3602,9 +3612,9 @@
           "id": "TI3500",
           "codigo": "TI3500",
           "nombre": "Mercadeo en la Era Digital",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 5,
           "requisitos": {
@@ -3623,9 +3633,9 @@
           "id": "TI3501",
           "codigo": "TI3501",
           "nombre": "Fundamentos de Sistemas Operativos",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 5,
           "requisitos": {
@@ -3653,9 +3663,9 @@
           "id": "TI5100",
           "codigo": "TI5100",
           "nombre": "Gestión y Toma de Decisiones Financieras",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 5,
           "requisitos": {
@@ -3683,9 +3693,9 @@
           "id": "TI5501",
           "codigo": "TI5501",
           "nombre": "Diseño de Software",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 5,
           "requisitos": {
@@ -3713,9 +3723,9 @@
           "id": "CS2304",
           "codigo": "CS2304",
           "nombre": "Derecho Laboral",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 3.0
+            "Horas": 3
           },
           "bloque": 6,
           "requisitos": {
@@ -3734,9 +3744,9 @@
           "id": "TI3601",
           "codigo": "TI3601",
           "nombre": "Modelo de Toma de Deciciones",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 6.0
+            "Horas": 6
           },
           "bloque": 6,
           "requisitos": {
@@ -3764,9 +3774,9 @@
           "id": "TI3602",
           "codigo": "TI3602",
           "nombre": "Producción, Logistica y Calidad",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 6.0
+            "Horas": 6
           },
           "bloque": 6,
           "requisitos": {
@@ -3794,9 +3804,9 @@
           "id": "TI3603",
           "codigo": "TI3603",
           "nombre": "Calidad en Sistemas de Información",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 6,
           "requisitos": {
@@ -3824,9 +3834,9 @@
           "id": "TI3604",
           "codigo": "TI3604",
           "nombre": "Fundamento de Redes",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 6,
           "requisitos": {
@@ -3845,9 +3855,9 @@
           "id": "TI6900",
           "codigo": "TI6900",
           "nombre": "Inteligencia de Negocios",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 6,
           "requisitos": {
@@ -3866,9 +3876,9 @@
           "id": "TI9003",
           "codigo": "TI9003",
           "nombre": "Computación y Sociedad",
-          "creditos": 2.0,
+          "creditos": 2,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 6,
           "requisitos": {
@@ -3896,9 +3906,9 @@
           "id": "CS3405",
           "codigo": "CS3405",
           "nombre": "Derecho Informático y Mercantil",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 7,
           "requisitos": {
@@ -3917,9 +3927,9 @@
           "id": "TI4701",
           "codigo": "TI4701",
           "nombre": "Seguridad en Sistemas de Información",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 7,
           "requisitos": {
@@ -3938,9 +3948,9 @@
           "id": "TI5000",
           "codigo": "TI5000",
           "nombre": "Electiva 1",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 7,
           "requisitos": null,
@@ -3956,9 +3966,9 @@
           "id": "TI7503",
           "codigo": "TI7503",
           "nombre": "Arquitectura de Aplicaciones",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 7,
           "requisitos": {
@@ -3986,9 +3996,9 @@
           "id": "TI7901",
           "codigo": "TI7901",
           "nombre": "Negocios Electrónicos",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 7,
           "requisitos": {
@@ -4016,9 +4026,9 @@
           "id": "TI8109",
           "codigo": "TI8109",
           "nombre": "Formulación y Evaluación de Proyectos de TI",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 7,
           "requisitos": {
@@ -4046,9 +4056,9 @@
           "id": "TI6000",
           "codigo": "TI6000",
           "nombre": "Electiva 2",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 8,
           "requisitos": null,
@@ -4064,9 +4074,9 @@
           "id": "TI8902",
           "codigo": "TI8902",
           "nombre": "Adquisicion de TI",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 8,
           "requisitos": {
@@ -4094,9 +4104,9 @@
           "id": "TI8904",
           "codigo": "TI8904",
           "nombre": "Administración de Procesos de Negocios",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 8,
           "requisitos": {
@@ -4115,9 +4125,9 @@
           "id": "TI8905",
           "codigo": "TI8905",
           "nombre": "Administración de Servicios de Tecnologías de Información I",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 8,
           "requisitos": {
@@ -4145,9 +4155,9 @@
           "id": "TI9805",
           "codigo": "TI9805",
           "nombre": "Auditoría de TI",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 8,
           "requisitos": {
@@ -4166,9 +4176,9 @@
           "id": "ATI100",
           "codigo": "TI9905",
           "nombre": "Sistemas de Información Empresarial",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 4.0
+            "Horas": 4
           },
           "bloque": 8,
           "requisitos": {
@@ -4187,9 +4197,9 @@
           "id": "TI5901",
           "codigo": "TI5901",
           "nombre": "Espiritu Emprendedor y Creación de Empresas",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 13.0
+            "Horas": 13
           },
           "bloque": 9,
           "requisitos": {
@@ -4208,9 +4218,9 @@
           "id": "TI5902",
           "codigo": "TI5902",
           "nombre": "Analítica Empresarial",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 9,
           "requisitos": {
@@ -4229,9 +4239,9 @@
           "id": "TI5903",
           "codigo": "TI5903",
           "nombre": "Planificación Estratégica de Tecnología de Información",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 9,
           "requisitos": {
@@ -4250,9 +4260,9 @@
           "id": "TI5904",
           "codigo": "TI5904",
           "nombre": "Investigación en Sistemas de Información",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 9,
           "requisitos": {
@@ -4280,9 +4290,9 @@
           "id": "TI5905",
           "codigo": "TI5905",
           "nombre": "Fundamentos de Arquitectura Empresarial",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 9,
           "requisitos": {
@@ -4301,9 +4311,9 @@
           "id": "TI9004",
           "codigo": "TI9004",
           "nombre": "Administración de Servicios de Tecnologías de Información II",
-          "creditos": 3.0,
+          "creditos": 3,
           "horas": {
-            "Horas": 9.0
+            "Horas": 9
           },
           "bloque": 9,
           "requisitos": {
@@ -4322,9 +4332,9 @@
           "id": "TI9000",
           "codigo": "TI9000",
           "nombre": "Trabajo Final de Graduación",
-          "creditos": 10.0,
+          "creditos": 10,
           "horas": {
-            "Horas": 0.0
+            "Horas": 0
           },
           "bloque": 10,
           "requisitos": {
@@ -8694,6 +8704,669 @@
       "semestre_id": "sem-demo-hist-2"
     }
   ],
+  "movimientos": [
+    {
+      "id": "demo-mov-01",
+      "tipo": "gasto",
+      "nombre": "Almuerzo en el campus",
+      "monto": 4850,
+      "fecha_registro": "2026-10-02",
+      "nota": "Menú del día",
+      "categoria_id": "cat_comida",
+      "cuenta_id": "cue_demo_efectivo",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-02",
+      "tipo": "gasto",
+      "nombre": "Supermercado",
+      "monto": 12650,
+      "fecha_registro": "2026-10-03",
+      "nota": "Compras de la semana",
+      "categoria_id": "cat_comida",
+      "cuenta_id": "cue_demo_banco",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-03",
+      "tipo": "gasto",
+      "nombre": "Autobús y tren",
+      "monto": 3900,
+      "fecha_registro": "2026-10-05",
+      "nota": null,
+      "categoria_id": "cat_transporte",
+      "cuenta_id": "cue_demo_efectivo",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-04",
+      "tipo": "gasto",
+      "nombre": "Cuaderno y marcadores",
+      "monto": 7350,
+      "fecha_registro": "2026-10-07",
+      "nota": "Materiales para clase",
+      "categoria_id": "cat_materiales",
+      "cuenta_id": "cue_demo_banco",
+      "origen": "manual",
+      "semestre_id": "sem-demo-actual",
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-05",
+      "tipo": "gasto",
+      "nombre": "Café después de clase",
+      "monto": 2200,
+      "fecha_registro": "2026-10-09",
+      "nota": null,
+      "categoria_id": "cat_cafeteria",
+      "cuenta_id": "cue_demo_efectivo",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-06",
+      "tipo": "gasto",
+      "nombre": "Medicamentos",
+      "monto": 6420,
+      "fecha_registro": "2026-10-11",
+      "nota": "Farmacia",
+      "categoria_id": "cat_salud",
+      "cuenta_id": "cue_demo_banco",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-07",
+      "tipo": "gasto",
+      "nombre": "Suscripción de música",
+      "monto": 3990,
+      "fecha_registro": "2026-10-13",
+      "nota": "Mensual",
+      "categoria_id": "cat_ocio",
+      "cuenta_id": "cue_demo_credito",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-08",
+      "tipo": "gasto",
+      "nombre": "Impresiones del proyecto",
+      "monto": 3150,
+      "fecha_registro": "2026-10-15",
+      "nota": null,
+      "categoria_id": "cat_estudios",
+      "cuenta_id": "cue_demo_efectivo",
+      "origen": "manual",
+      "semestre_id": "sem-demo-actual",
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-09",
+      "tipo": "gasto",
+      "nombre": "Material para exposición",
+      "monto": 9800,
+      "fecha_registro": "2026-10-17",
+      "nota": "Lo pagó Mateo y se lo devuelvo luego",
+      "categoria_id": "cat_materiales",
+      "origen": "manual",
+      "semestre_id": "sem-demo-actual",
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "pagado_por_prestamo_id": "pre_demo_mateo",
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-10",
+      "tipo": "gasto",
+      "nombre": "Viaje compartido a la biblioteca",
+      "monto": 5400,
+      "fecha_registro": "2026-10-19",
+      "nota": null,
+      "categoria_id": "cat_transporte_app",
+      "cuenta_id": "cue_demo_credito",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-11",
+      "tipo": "ingreso",
+      "nombre": "Depósito de beca",
+      "monto": 46150,
+      "fecha_registro": "2026-10-18",
+      "nota": "Desembolso mensual ficticio",
+      "categoria_id": "cat_becas_apoyos",
+      "cuenta_id": "cue_demo_banco",
+      "origen": "beca",
+      "semestre_id": "sem-demo-actual",
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-12",
+      "tipo": "ingreso",
+      "nombre": "Tutoría de matemáticas",
+      "monto": 18000,
+      "fecha_registro": "2026-10-20",
+      "nota": "Dos sesiones",
+      "categoria_id": "cat_tutorias",
+      "cuenta_id": "cue_demo_banco",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-13",
+      "tipo": "ingreso",
+      "nombre": "Venta de resúmenes",
+      "monto": 12500,
+      "fecha_registro": "2026-10-22",
+      "nota": null,
+      "categoria_id": "cat_tutorias",
+      "cuenta_id": "cue_demo_efectivo",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-14",
+      "tipo": "ahorro",
+      "nombre": "Aporte al fondo de emergencia",
+      "monto": 12000,
+      "fecha_registro": "2026-10-23",
+      "nota": "Aporte voluntario",
+      "categoria_id": null,
+      "cuenta_id": null,
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": "meta_demo_emergencia",
+      "fuente": "liquido",
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-15",
+      "tipo": "ahorro",
+      "nombre": "Aporte para la laptop",
+      "monto": 8500,
+      "fecha_registro": "2026-10-25",
+      "nota": null,
+      "categoria_id": null,
+      "cuenta_id": null,
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": "meta_demo_laptop",
+      "fuente": "liquido",
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-16",
+      "tipo": "ajuste",
+      "nombre": "Saldo inicial de la demo",
+      "monto": 35000,
+      "fecha_registro": "2026-08-10",
+      "nota": "Ajuste de ejemplo",
+      "categoria_id": null,
+      "cuenta_id": null,
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": "suma",
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-17",
+      "tipo": "prestamo",
+      "nombre": "Camila Vargas",
+      "monto": 15000,
+      "fecha_registro": "2026-10-21",
+      "nota": "Le presté para el transporte",
+      "categoria_id": null,
+      "cuenta_id": null,
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": "sale",
+      "prestamo_id": "pre_demo_camila",
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "demo-mov-18",
+      "tipo": "traspaso",
+      "nombre": "Pasar efectivo al banco",
+      "monto": 10000,
+      "fecha_registro": "2026-10-26",
+      "nota": null,
+      "categoria_id": null,
+      "cuenta_id": "cue_demo_efectivo",
+      "cuenta_destino_id": "cue_demo_banco",
+      "origen": "manual",
+      "semestre_id": null,
+      "meta_id": null,
+      "fuente": null,
+      "sentido": null,
+      "recurrente": null,
+      "compromiso_id": null,
+      "pagado_con_meta_id": null,
+      "_actualizadoEn": 0
+    }
+  ],
+  "metas": [
+    {
+      "id": "meta_demo_emergencia",
+      "tipo": "ahorro",
+      "nombre": "Fondo de emergencia",
+      "objetivo": 300000,
+      "saldo_inicial": 42000,
+      "emoji": "🛟",
+      "color": "#22c55e",
+      "fecha_objetivo": "2027-04-30",
+      "aporte_programado": {
+        "monto": 12000,
+        "frecuencia": "mensual",
+        "fecha_inicio": "2026-10-01",
+        "recordar": true
+      },
+      "reparto": {
+        "porcentaje": 10,
+        "origen": "todo"
+      },
+      "archivada": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "meta_demo_laptop",
+      "tipo": "ahorro",
+      "nombre": "Laptop para la U",
+      "objetivo": 420000,
+      "saldo_inicial": 95000,
+      "emoji": "💻",
+      "color": "#6366f1",
+      "fecha_objetivo": "2027-06-30",
+      "aporte_programado": {
+        "monto": 8500,
+        "frecuencia": "semanal",
+        "fecha_inicio": "2026-10-04"
+      },
+      "archivada": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "meta_demo_comida",
+      "tipo": "gasto",
+      "nombre": "Comidas fuera de casa",
+      "objetivo": 65000,
+      "saldo_inicial": 0,
+      "emoji": "🥗",
+      "color": "#f59e0b",
+      "fecha_inicio": "2026-10-01",
+      "fecha_objetivo": "2026-10-31",
+      "categoria_ids": [
+        "cat_comida",
+        "cat_cafeteria"
+      ],
+      "archivada": false,
+      "_actualizadoEn": 0
+    }
+  ],
+  "compromisos": [
+    {
+      "id": "cmp_demo_matricula",
+      "tipo": "matricula",
+      "subtipo": null,
+      "nombre": "Segundo tracto de matrícula",
+      "monto": 46100,
+      "fecha_prevista": "2026-11-03",
+      "semestre_id": "sem-demo-actual",
+      "estado": "pendiente",
+      "afecta_saldo": false,
+      "movimiento_id": null,
+      "serie_id": "serie_demo_matricula",
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cmp_demo_beca",
+      "tipo": "ingreso_esperado",
+      "subtipo": "beca",
+      "nombre": "Próximo depósito de beca",
+      "monto": 46150,
+      "fecha_prevista": "2026-11-18",
+      "semestre_id": "sem-demo-actual",
+      "estado": "pendiente",
+      "afecta_saldo": false,
+      "movimiento_id": null,
+      "serie_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cmp_demo_tutoria",
+      "tipo": "ingreso_esperado",
+      "subtipo": "trabajo",
+      "nombre": "Tutoría programada",
+      "monto": 9000,
+      "fecha_prevista": "2026-10-30",
+      "semestre_id": null,
+      "estado": "pendiente",
+      "afecta_saldo": false,
+      "movimiento_id": null,
+      "serie_id": null,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cmp_demo_internet",
+      "tipo": "recurrente",
+      "subtipo": null,
+      "nombre": "Internet de noviembre",
+      "monto": 18500,
+      "fecha_prevista": "2026-11-02",
+      "semestre_id": null,
+      "estado": "pendiente",
+      "afecta_saldo": true,
+      "movimiento_id": null,
+      "serie_id": "serie_demo_servicios",
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cmp_demo_transporte",
+      "tipo": "recurrente",
+      "subtipo": null,
+      "nombre": "Abono de transporte",
+      "monto": 12000,
+      "fecha_prevista": "2026-11-05",
+      "semestre_id": "sem-demo-actual",
+      "estado": "pendiente",
+      "afecta_saldo": true,
+      "movimiento_id": null,
+      "serie_id": "serie_demo_servicios",
+      "_actualizadoEn": 0
+    }
+  ],
+  "categorias_finanzas": [
+    {
+      "id": "cat_materiales",
+      "nombre": "Materiales",
+      "emoji": "📚",
+      "color": "#8e6bd8",
+      "tipo": "gasto",
+      "prioridad": "esencial",
+      "archivada": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cat_cafeteria",
+      "nombre": "Cafetería",
+      "emoji": "☕",
+      "color": "#b7794b",
+      "tipo": "gasto",
+      "prioridad": "flexible",
+      "archivada": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cat_salud",
+      "nombre": "Salud",
+      "emoji": "🩺",
+      "color": "#e2607a",
+      "tipo": "gasto",
+      "prioridad": "esencial",
+      "archivada": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cat_transporte_app",
+      "nombre": "Viajes por app",
+      "emoji": "🚕",
+      "color": "#4c8bf5",
+      "tipo": "gasto",
+      "prioridad": "flexible",
+      "archivada": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cat_becas_apoyos",
+      "nombre": "Becas y apoyos",
+      "emoji": "🎓",
+      "color": "#22a06b",
+      "tipo": "ingreso",
+      "archivada": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cat_tutorias",
+      "nombre": "Tutorías",
+      "emoji": "🧑‍🏫",
+      "color": "#14b8a6",
+      "tipo": "ingreso",
+      "archivada": false,
+      "_actualizadoEn": 0
+    }
+  ],
+  "sobres": [
+    {
+      "id": "sob_demo_comida",
+      "nombre": "Comida del mes",
+      "categoria_ids": [
+        "cat_comida"
+      ],
+      "limite": 65000,
+      "periodo": "mes",
+      "arrastra_sobrante": false,
+      "desde": "2026-10-01",
+      "archivado": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "sob_demo_transporte",
+      "nombre": "Transporte",
+      "categoria_ids": [
+        "cat_transporte",
+        "cat_transporte_app"
+      ],
+      "limite": 38000,
+      "periodo": "mes",
+      "arrastra_sobrante": true,
+      "desde": "2026-10-01",
+      "archivado": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "sob_demo_estudio",
+      "nombre": "Materiales de estudio",
+      "categoria_ids": [
+        "cat_estudios",
+        "cat_materiales"
+      ],
+      "limite": 32000,
+      "periodo": "mes",
+      "arrastra_sobrante": false,
+      "desde": "2026-10-01",
+      "archivado": false,
+      "_actualizadoEn": 0
+    }
+  ],
+  "patrones_mensajes": [
+    {
+      "id": "pat_demo_compra",
+      "nombre": "Compra con tarjeta",
+      "plantilla": "Compra aprobada por {monto} en {nombre}",
+      "tipo": "gasto",
+      "nombre_fijo": "",
+      "categoria_id": "cat_comida",
+      "orden_fecha": "dmy",
+      "activo": true,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "pat_demo_deposito",
+      "nombre": "Depósito recibido",
+      "plantilla": "Transferencia recibida de {nombre} por {monto}",
+      "tipo": "ingreso",
+      "nombre_fijo": "",
+      "categoria_id": "cat_tutorias",
+      "orden_fecha": "dmy",
+      "activo": true,
+      "_actualizadoEn": 0
+    }
+  ],
+  "prestamos": [
+    {
+      "id": "pre_demo_camila",
+      "persona": "Camila Vargas",
+      "direccion": "preste",
+      "saldo_inicial": 0,
+      "fecha": "2026-10-21",
+      "nota": "Le presté para el transporte",
+      "archivado": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "pre_demo_mateo",
+      "persona": "Mateo Solís",
+      "direccion": "me_prestaron",
+      "saldo_inicial": 0,
+      "fecha": "2026-10-17",
+      "nota": "Pagó materiales por mí",
+      "archivado": false,
+      "_actualizadoEn": 0
+    }
+  ],
+  "cuentas": [
+    {
+      "id": "cue_demo_banco",
+      "nombre": "Cuenta principal",
+      "tipo": "banco",
+      "moneda": "CRC",
+      "saldo_inicial": 142500,
+      "afecta_saldo": true,
+      "limite": null,
+      "emoji": "🏦",
+      "archivada": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cue_demo_efectivo",
+      "nombre": "Efectivo",
+      "tipo": "efectivo",
+      "moneda": "CRC",
+      "saldo_inicial": 18500,
+      "afecta_saldo": true,
+      "limite": null,
+      "emoji": "💵",
+      "archivada": false,
+      "_actualizadoEn": 0
+    },
+    {
+      "id": "cue_demo_credito",
+      "nombre": "Tarjeta universitaria",
+      "tipo": "credito",
+      "moneda": "CRC",
+      "saldo_inicial": -18500,
+      "afecta_saldo": true,
+      "limite": 150000,
+      "emoji": "💳",
+      "archivada": false,
+      "_actualizadoEn": 0
+    }
+  ],
   "sesiones_estudio": [
     {
       "id": "ses-demo-1",
@@ -9552,8 +10225,50 @@
     }
   ],
   "notas": [
-    { "id": "nota-demo-ideas", "titulo": "Ideas para el semestre", "contenido": "<p>Revisar la bibliografía de la próxima semana.</p><ul><li><input type=\"checkbox\" data-nota-check=\"1\"> Actualizar el calendario</li><li><input type=\"checkbox\" checked data-nota-check=\"1\"> Preparar materiales</li></ul>", "color": "#fff2b3", "fijada": true, "orden_fijada": 1, "vence_en": null, "eliminada_en": null, "motivo_eliminacion": null, "enviada_a_wapper_en": null, "origen": "manual", "creada_en": 1792368000000, "modificada_en": 1792368000000 },
-    { "id": "nota-demo-enlace", "titulo": "Enlace de referencia", "contenido": "<p>Guardar este recurso para el proyecto:</p><p>https://example.org/recurso</p>", "color": "#dce8ff", "fijada": false, "orden_fijada": null, "vence_en": null, "eliminada_en": null, "motivo_eliminacion": null, "enviada_a_wapper_en": null, "origen": "manual", "creada_en": 1792454400000, "modificada_en": 1792454400000 },
-    { "id": "nota-demo-vencimiento", "titulo": "Recordatorio", "contenido": "<p>Entregar el borrador del trabajo.</p>", "color": "#d9f2e6", "fijada": false, "orden_fijada": null, "vence_en": "2026-12-01", "eliminada_en": null, "motivo_eliminacion": null, "enviada_a_wapper_en": null, "origen": "manual", "creada_en": 1792540800000, "modificada_en": 1792540800000 }
+    {
+      "id": "nota-demo-ideas",
+      "titulo": "Ideas para el semestre",
+      "contenido": "<p>Revisar la bibliografía de la próxima semana.</p><ul><li><input type=\"checkbox\" data-nota-check=\"1\"> Actualizar el calendario</li><li><input type=\"checkbox\" checked data-nota-check=\"1\"> Preparar materiales</li></ul>",
+      "color": "#fff2b3",
+      "fijada": true,
+      "orden_fijada": 1,
+      "vence_en": null,
+      "eliminada_en": null,
+      "motivo_eliminacion": null,
+      "enviada_a_wapper_en": null,
+      "origen": "manual",
+      "creada_en": 1792368000000,
+      "modificada_en": 1792368000000
+    },
+    {
+      "id": "nota-demo-enlace",
+      "titulo": "Enlace de referencia",
+      "contenido": "<p>Guardar este recurso para el proyecto:</p><p>https://example.org/recurso</p>",
+      "color": "#dce8ff",
+      "fijada": false,
+      "orden_fijada": null,
+      "vence_en": null,
+      "eliminada_en": null,
+      "motivo_eliminacion": null,
+      "enviada_a_wapper_en": null,
+      "origen": "manual",
+      "creada_en": 1792454400000,
+      "modificada_en": 1792454400000
+    },
+    {
+      "id": "nota-demo-vencimiento",
+      "titulo": "Recordatorio",
+      "contenido": "<p>Entregar el borrador del trabajo.</p>",
+      "color": "#d9f2e6",
+      "fijada": false,
+      "orden_fijada": null,
+      "vence_en": "2026-12-01",
+      "eliminada_en": null,
+      "motivo_eliminacion": null,
+      "enviada_a_wapper_en": null,
+      "origen": "manual",
+      "creada_en": 1792540800000,
+      "modificada_en": 1792540800000
+    }
   ]
 }

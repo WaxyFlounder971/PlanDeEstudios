@@ -38,16 +38,16 @@
    avisame si lo querés agregar.
    ========================================================================= */
 
-import { crearAdjunto, LIMITE_MB_ADJUNTO, sellarTimestamp } from "./schema.js";
+import { crearAdjunto, LIMITE_MB_ADJUNTO, sellarTimestamp } from "../schema.js";
 import {
   buscarOCrearCarpetaEnDrive,
   descargarArchivoBinarioDeDrive,
   eliminarArchivoDeDriveConId,
   subirArchivoBinarioADrive,
-} from "./auth.js";
+} from "../auth.js";
 import { conReintentoSi401, marcarCambioPendiente, registrarHookPostFusion } from "./storage-sync.js";
 import { estado } from "./storage.js";
-import { MODO_DEMO } from "./demo-mode.js";
+import { MODO_DEMO } from "../demo-mode.js";
 
 // Fix 2026-08-08: el import de arriba estaba pero nunca se USABA — faltaba
 // esta línea. Sin ella, storage-sync.js nunca se enteraba de que este

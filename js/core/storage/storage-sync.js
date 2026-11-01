@@ -5,16 +5,16 @@
    multi-dispositivo, subida/bajada de datos y el indicador de estado.
    ========================================================================= */
 
-import { renderizarAjustes } from "../config/config-ajustes.js";
-import { renderizarEnlacesRapidos } from "../config/config-enlaces.js";
-import { renderizarPerfil } from "../main.js";
-import { renderizarModoHardcore, renderizarSelectorPlan } from "../plan/plan-gestionar.js";
-import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { renderizarSemestres } from "../semestres/semestres.js";
-import { abrirModalTodosLosConflictos } from "../semestres/semestres-tarjetas.js";
-import { renderizarFinanzas } from "../finanzas/finanzas.js";
-import { mostrarToast } from "../ui/componentes.js";
-import { aplicarPaleta, obtenerModoTemaLocal } from "../ui/tema.js";
+import { renderizarAjustes } from "../../config/config-ajustes.js";
+import { renderizarEnlacesRapidos } from "../../config/config-enlaces.js";
+import { renderizarPerfil } from "../../main.js";
+import { renderizarModoHardcore, renderizarSelectorPlan } from "../../plan/plan-gestionar.js";
+import { renderizarPlanEstudios } from "../../plan/plan-vista-lista.js";
+import { renderizarSemestres } from "../../semestres/semestres.js";
+import { abrirModalTodosLosConflictos } from "../../semestres/semestres-tarjetas.js";
+import { renderizarFinanzas } from "../../finanzas/finanzas.js";
+import { mostrarToast } from "../../ui/componentes.js";
+import { aplicarPaleta, obtenerModoTemaLocal } from "../../ui/tema.js";
 import {
   NOMBRE_CARPETA_BACKUP,
   buscarArchivoEnCarpeta,
@@ -31,11 +31,11 @@ import {
   guardarRefreshTokenGoogle,
   leerRefreshTokenGoogle,
   refrescarAccessTokenViaWorker,
-} from "./auth.js";
-import { FRECUENCIAS_BACKUP_DRIVE, crearBackupDriveDefault, migrarDatosAntiguos, sellarTimestamp } from "./schema.js";
+} from "../auth.js";
+import { FRECUENCIAS_BACKUP_DRIVE, crearBackupDriveDefault, migrarDatosAntiguos, sellarTimestamp } from "../schema.js";
 import { fusionarDatos } from "./storage-merge.js";
 import { authListo, borrarTokenCache, establecerTokenActivo, estado, guardarCacheLocal, leerTokenCacheValido } from "./storage.js";
-import { MODO_DEMO } from "./demo-mode.js";
+import { MODO_DEMO } from "../demo-mode.js";
 
 /**
  * MIGRACIÓN 2026-08-25 (reemplaza el flujo implícito + refresco silencioso

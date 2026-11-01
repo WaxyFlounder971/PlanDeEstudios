@@ -1,6 +1,6 @@
-import { estado } from "../core/storage.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
-import { adjuntarArchivo, descargarAdjunto, eliminarAdjunto } from "../core/storage-adjuntos.js";
+import { estado } from "../core/storage/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { adjuntarArchivo, descargarAdjunto, eliminarAdjunto } from "../core/storage/storage-adjuntos.js";
 import { mostrarToast } from "../ui/componentes.js";
 
 function nombreAdjuntoAudio(id) {

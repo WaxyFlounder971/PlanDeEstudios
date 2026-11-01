@@ -24,9 +24,9 @@
    comentario completo en schema.js, junto a ese campo).
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { crearEventoAgenda, sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
 import { pedirAccessTokenGoogleTasks, haySesionGoogleTasksEnMemoria } from "../core/auth.js";
 import { MODO_DEMO } from "../core/demo-mode.js";

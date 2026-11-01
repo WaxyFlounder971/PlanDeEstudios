@@ -5,7 +5,7 @@
    módulo solo oculta (ver finanzas-derivados.js); nunca borra datos.
    ========================================================================= */
 
-import { sellarTimestamp } from "./schema.js";
+import { sellarTimestamp } from "../schema.js";
 import { MODULOS_FINANZAS_DEFAULT } from "./finanzas-modelo.js";
 import { obtenerModulosFinanzas } from "./finanzas-derivados.js";
 
@@ -42,14 +42,14 @@ function perfilDeModulos(modulos) {
 }
 
 /**
- * Pestañas visibles según módulos. Resumen siempre. Semestres y Beneficios
+ * Pestañas visibles según módulos. Resumen siempre. Semestres, Plan y Beneficios
  * viven de matrícula/beca; Movimientos de cualquier módulo; Metas de Ahorros.
  */
 function pestanasVisiblesFinanzas(modulos) {
   const m = normalizarModulos(modulos);
   const universidad = m.matricula || m.beca;
   const ids = ["resumen"];
-  if (universidad) ids.push("semestres");
+  if (universidad) ids.push("semestres", "plan");
   if (universidad || m.gastos || m.ahorros) ids.push("gastos-u");
   if (m.ahorros) ids.push("metas");
   if (universidad) ids.push("gastos-estudiantiles");

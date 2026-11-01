@@ -1,5 +1,5 @@
 import { cerrarSesionGoogle, eliminarArchivoDeDriveConId, eliminarCalendarioGoogle, URL_WORKER_OAUTH } from "./auth.js";
-import { CLAVE_CACHE_LOCAL, estado } from "./storage.js";
+import { CLAVE_CACHE_LOCAL, estado } from "./storage/storage.js";
 import { MODO_DEMO } from "./demo-mode.js";
 
 async function listarArchivosDirectosDrive(token, folderName, nombresPermitidos = null) {

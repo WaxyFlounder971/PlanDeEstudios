@@ -1,5 +1,5 @@
-import { estado } from "../core/storage.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { obtenerEstadoEfectivoSemestre, sellarTimestamp } from "../core/schema.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz } from "../core/i18n.js";
 

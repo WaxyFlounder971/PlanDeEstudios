@@ -18,7 +18,7 @@
       en vez de dejar al usuario sin ninguna salida.
    ========================================================================= */
 
-import { estado } from "./storage.js";
+import { estado } from "./storage/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
 
 /* ===================== Modal de copia manual (autocontenido) =====================

@@ -11,7 +11,7 @@
  * demo el almacenamiento está neutralizado: se mantiene solo en memoria.
  */
 import { mostrarToast } from "../ui/componentes.js";
-import { estado } from "./storage.js";
+import { estado } from "./storage/storage.js";
 
 const CLAVE = "modo_desarrollador_v1";
 const MS_PRESION = 10000;
@@ -52,11 +52,11 @@ function registrarBotonesBase() {
     mostrarCelebracionResultado(resultado("derrota"), () => {});
   } });
   registrarBotonDesarrollador({ id: "sync-forzar", grupo: "Conexión y sincronización", etiqueta: "🔄 Forzar sincronización", accion: async () => {
-    const { forzarSincronizacion } = await import("./storage-sync.js");
+    const { forzarSincronizacion } = await import("./storage/storage-sync.js");
     await forzarSincronizacion();
   } });
   registrarBotonDesarrollador({ id: "sync-reconexion", grupo: "Conexión y sincronización", etiqueta: "📡 Probar reconexión escalonada", accion: async () => {
-    const { recuperarConexionEscalonada } = await import("./storage-sync.js");
+    const { recuperarConexionEscalonada } = await import("./storage/storage-sync.js");
     const ok = await recuperarConexionEscalonada();
     mostrarToast(ok ? "Reconexión lograda." : "No se logró reconectar (revisa el indicador).");
   } });

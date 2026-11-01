@@ -1,8 +1,7 @@
 /* =========================================================================
    TIEMPO — Racha de estudio: CÁLCULO PURO (2026-09-19)
 
-   Sin imports a propósito: ni `estado`, ni DOM, ni nada de la app. Recibe el
-   arreglo de sesiones y el "ahora" por parámetro, así se prueba en Node con
+   Recibe el arreglo de sesiones y el "ahora" por parámetro, así se calcula con
    cualquier fecha (mismo criterio que calcularHorasTotalesPeriodos). La parte
    visual y el acceso a `estado.datos` viven en tiempo-estudio-racha-ui.js.
 
@@ -14,9 +13,8 @@
    REGLAS
    - Un día es "cumplido" si la suma de TODAS las sesiones de ese día (todas
      las materias, todos los orígenes, incluidas materias/semestres ya
-     borrados) llega a 30 min. El día es el día calendario LOCAL, y una
-     sesión cuenta ENTERA en el día donde empieza (misma regla que "Horas
-     totales" de Estadísticas, para que los dos números coincidan).
+     borrados) llega a 30 min. El día es el día calendario LOCAL; una sesión
+     que cruza medianoche aporta a cada fecha sus minutos reales.
    - Cada SEMANA (lunes–domingo, igual que el resto de Tiempo) da 2 días de
      descanso, gastados cuando la persona quiera o no gastados. Un 3.er día sin
      cumplir en la misma semana rompe la racha.
@@ -41,6 +39,8 @@
    inicio de la siguiente (4 seguidos) no rompen la racha. Es lo que pidió la
    regla; si se quisiera evitar, se agrega un tope de días seguidos acá mismo.
    ========================================================================= */
+
+import { minutosSesionPorDiaLocal } from "./tiempo-estudio-periodos.js";
 
 const MS_DIA = 86400000;
 
@@ -100,11 +100,15 @@ function agruparMinutosPorDia(sesiones, hoy, desdeIdx) {
       let min = Number(s.duracion_minutos);
       if (!Number.isFinite(min)) min = Math.round((Number(s.fin) - inicio) / 60000);
       if (!Number.isFinite(min) || min <= 0) continue;
-      const dia = indiceDia(inicio);
-      if (dia > hoy) continue; // una sesión "del futuro" no cuenta
-      if (desdeIdx !== null && desdeIdx !== undefined && dia < desdeIdx) continue;
-      porDia.set(dia, (porDia.get(dia) || 0) + min);
-      if (dia < primero) primero = dia;
+      const partes = minutosSesionPorDiaLocal(s);
+      const intervalos = partes.length ? partes : [{ fecha: new Date(inicio), minutos: min }];
+      for (const parte of intervalos) {
+        const dia = indiceDia(parte.fecha.getTime());
+        if (dia > hoy) continue;
+        if (desdeIdx !== null && desdeIdx !== undefined && dia < desdeIdx) continue;
+        porDia.set(dia, (porDia.get(dia) || 0) + parte.minutos);
+        if (dia < primero) primero = dia;
+      }
     }
   }
   return { porDia, primero };

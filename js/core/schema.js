@@ -6,7 +6,12 @@
    así que este archivo es el mapa de referencia de todo el modelo.
    ========================================================================= */
 
-import { MODULOS_FINANZAS_DEFAULT, migrarFinanzasAMovimientos } from "./finanzas-modelo.js";
+import { MODULOS_FINANZAS_DEFAULT, migrarFinanzasAMovimientos } from "./finanzas/finanzas-modelo.js";
+import { migrarFinanzas2V1 } from "./finanzas/finanzas-compromisos.js";
+import { migrarCategoriasV1 } from "./finanzas/finanzas-categorias.js";
+import { migrarPatronesMensajesV1 } from "./finanzas/finanzas-mensajes.js";
+import { migrarPrestamosV1 } from "./finanzas/finanzas-deudas.js";
+import { migrarCuentasV1 } from "./finanzas/finanzas-cuentas.js";
 
 /**
  * Devuelve el objeto de datos "vacío" para un usuario que recién inicia
@@ -196,6 +201,14 @@ function crearDatosUsuarioNuevo() {
       racha_ultimo_inicio_avisado: null,
       // Finanzas 2.0: módulos activables. Apagar solo oculta, no borra.
       finanzas_modulos: { ...MODULOS_FINANZAS_DEFAULT },
+      // Finanzas 2.0 (sesión 1, registro rápido). Preferencias por cuenta:
+      //  - plantillas_rapidas: mostrar las plantillas recientes en el registro rápido.
+      //  - horizonte_disponible_dias: 30 | "fin_periodo". Lo usa "Disponible" (F2); aquí solo se reserva.
+      //  - bloqueo_finanzas: reservado para el bloqueo opcional (F8, aplazado). Sin uso:
+      //    hoy siempre null. Sería por dispositivo (la excepción a la regla de por cuenta).
+      plantillas_rapidas: true,
+      horizonte_disponible_dias: 30,
+      bloqueo_finanzas: null,
     },
 
     // Un usuario puede tener más de un Plan de Estudios (ej. cambio de carrera/universidad).
@@ -378,6 +391,23 @@ function crearDatosUsuarioNuevo() {
     metas: [],
     _eliminados_movimientos: [],
     _eliminados_metas: [],
+    // Finanzas 2.0 (sesión 2): compromisos del Plan (cuotas de matrícula, desembolsos esperados). Ver finanzas-compromisos.js.
+    compromisos: [],
+    _eliminados_compromisos: [],
+    // Finanzas 2.0 (sesión 5): categorías y sobres. Ver finanzas-categorias.js y finanzas-sobres.js.
+    categorias_finanzas: [],
+    _eliminados_categorias_finanzas: [],
+    sobres: [],
+    _eliminados_sobres: [],
+    // Finanzas 2.0 (sesión 6): formatos personales para leer mensajes bancarios.
+    patrones_mensajes: [],
+    _eliminados_patrones_mensajes: [],
+    // Finanzas 2.0 (sesión 7A): préstamos entre personas y gastos divididos.
+    prestamos: [],
+    _eliminados_prestamos: [],
+    // Finanzas 2.0 (sesión 7B): cuentas propias y sus saldos por divisa.
+    cuentas: [],
+    _eliminados_cuentas: [],
 
     // Tiempo de Estudio (Parte 1): colección plana de nivel superior, mismo
     // patrón exacto que finanzas_semestre/gastos_u/agenda — una sesión de
@@ -1562,6 +1592,7 @@ function crearMateriaMatriculada({ materiaId, planEstudioId }) {
     // horario.js). Un solo campo, reusado para el borde de la tarjeta Y el
     // relleno de la barra de progreso — mismo criterio que horario.js, que
     // nunca separa "color de fondo" de "color de borde" para un bloque.
+    mostrar_en_tiempo_estudio: true,
     tiempo_estudio: {
       meta_horas_semana: null,
       pomodoro: null,
@@ -1648,6 +1679,7 @@ function crearMateriaEstudioIndependiente(nombre) {
     id: "tei_" + crypto.randomUUID(),
     tipo: "independiente",
     nombre: texto,
+    mostrar_en_tiempo_estudio: true,
     tiempo_estudio: {
       meta_horas_semana: null,
       pomodoro: null,
@@ -3438,6 +3470,9 @@ function migrarDatosAntiguos(datos) {
   if (datos.timer_estudio_activo === undefined) datos.timer_estudio_activo = null;
   if (!Array.isArray(datos.tiempo_estudio_materias)) datos.tiempo_estudio_materias = [];
   if (!Array.isArray(datos._eliminados_tiempo_estudio_materias)) datos._eliminados_tiempo_estudio_materias = [];
+  datos.tiempo_estudio_materias.forEach((materia) => {
+    if (materia.mostrar_en_tiempo_estudio === undefined) materia.mostrar_en_tiempo_estudio = true;
+  });
 
   // Competencias (Parte 1, 2026-09-09): mismo relleno defensivo.
   if (!Array.isArray(datos.competencias_unidas)) datos.competencias_unidas = [];
@@ -3553,6 +3588,7 @@ function migrarDatosAntiguos(datos) {
   if (Array.isArray(datos.semestres)) {
     datos.semestres.forEach((semestre) => {
       (semestre.materias_matriculadas || []).forEach((mm) => {
+        if (mm.mostrar_en_tiempo_estudio === undefined) mm.mostrar_en_tiempo_estudio = true;
         // Comunidad — Parte 1: mm creadas antes de este prompt no traen el
         // vínculo Profesor↔Semestre embebido — se rellena para que ninguna
         // lectura posterior (obtenerHistorialProfesor, UI de tarjeta, etc.)
@@ -3777,7 +3813,22 @@ function migrarDatosAntiguos(datos) {
   // Va al final, cuando semestres y gastos_u ya quedaron normalizados.
   if (!datos.configuracion) datos.configuracion = {};
   datos.configuracion.finanzas_modulos = { ...MODULOS_FINANZAS_DEFAULT, ...(datos.configuracion.finanzas_modulos || {}) };
+  // Sesión 1: relleno defensivo y idempotente de los campos nuevos (solo si faltan, nunca pisa un valor elegido).
+  // Sin sellarTimestamp a propósito: todos los dispositivos rellenan lo mismo, así que no hay conflicto que fusionar.
+  if (datos.configuracion.plantillas_rapidas === undefined) datos.configuracion.plantillas_rapidas = true;
+  if (datos.configuracion.horizonte_disponible_dias === undefined) datos.configuracion.horizonte_disponible_dias = 30;
+  if (datos.configuracion.bloqueo_finanzas === undefined) datos.configuracion.bloqueo_finanzas = null;
   migrarFinanzasAMovimientos(datos);
+  // Sesión 2: colecciones del Plan + flag (migracion_finanzas2_v1). No toca movimientos ni metas.
+  migrarFinanzas2V1(datos);
+  // Sesión 5: colecciones de categorías y sobres + juego básico (una sola vez, flag migracion_finanzas2_categorias_v1).
+  migrarCategoriasV1(datos);
+  // Sesión 6: asegura los formatos personales y sus tombstones de borrado.
+  migrarPatronesMensajesV1(datos);
+  // Sesión 7A: asegura préstamos y sus tombstones de borrado.
+  migrarPrestamosV1(datos);
+  // Sesión 7B: asegura cuentas y sus tombstones de borrado.
+  migrarCuentasV1(datos);
 
   return datos;
 }

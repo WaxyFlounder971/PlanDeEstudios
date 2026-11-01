@@ -7,7 +7,7 @@
    ========================================================================= */
 
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { TIPOS_ETIQUETA_AGENDA_DEFAULT } from "../core/schema.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { aplicarFormatoTexto } from "../core/utils.js";

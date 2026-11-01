@@ -28,7 +28,7 @@
    ========================================================================= */
 
 import { calcularNumeroSemanaSemestre, obtenerEstadoEfectivoSemestre } from "../core/schema.js";
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { construirItemEvento } from "../agenda/agenda.js";
 import { construirSeccionMateriasDia } from "../agenda/agenda-clases.js";

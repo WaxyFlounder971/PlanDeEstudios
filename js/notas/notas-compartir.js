@@ -1,6 +1,6 @@
 import { crearNota, guardarNota, opcionesNotas } from "./notas-datos.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
-import { estado } from "../core/storage.js";
+import { estado } from "../core/storage/storage.js";
 const CLAVE_COMPARTIDOS="notas_share_pendientes_v1";
 const tr=(x)=>t(x);
 function leerPendientes(){try{return JSON.parse(localStorage.getItem(CLAVE_COMPARTIDOS)||"[]");}catch(_){return[];}}

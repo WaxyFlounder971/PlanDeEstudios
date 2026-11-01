@@ -22,8 +22,8 @@
    ========================================================================= */
 
 import { sellarTimestamp } from "./schema.js";
-import { marcarCambioPendiente } from "./storage-sync.js";
-import { estado } from "./storage.js";
+import { marcarCambioPendiente } from "./storage/storage-sync.js";
+import { estado } from "./storage/storage.js";
 import { MODO_DEMO } from "./demo-mode.js";
 import { aplicarFormatoTexto } from "./utils.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";

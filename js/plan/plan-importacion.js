@@ -8,8 +8,8 @@
 
 import { abrirModalCopiaManualPortapapeles, copiarAlPortapapelesBlindado, copiarPromptConAviso } from "../core/clipboard.js";
 import { PRESETS_TIPOS_HORAS } from "../core/schema.js";
-import { marcarCambioPendiente, mostrarCargando, ocultarCargando } from "../core/storage-sync.js";
-import { estado } from "../core/storage.js";
+import { marcarCambioPendiente, mostrarCargando, ocultarCargando } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalCrearPlan } from "./plan-esquema.js";
 import { abrirModalGestionPlanes } from "./plan-gestionar.js";

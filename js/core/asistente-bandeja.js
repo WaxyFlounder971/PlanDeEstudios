@@ -25,7 +25,7 @@
    ver worker-notificaciones-agenda: A.1/A.2/A.3/A.4 en el prompt original).
    ========================================================================= */
 
-import { estado } from "./storage.js";
+import { estado } from "./storage/storage.js";
 import { mostrarToastAccion } from "../ui/componentes.js";
 import { extraerEventosDeTexto, guardarItemExtraidoComoEvento, transcribirBase64ConGemini } from "../asistente/asistente.js";
 

@@ -10,11 +10,11 @@
    (ver comentario de datosIniciales en agenda/agenda-modal.js).
    ========================================================================= */
 
-import { estado } from "../core/storage.js";
-import { agregarEnlaceAdjunto } from "../core/storage-adjuntos.js";
+import { estado } from "../core/storage/storage.js";
+import { agregarEnlaceAdjunto } from "../core/storage/storage-adjuntos.js";
 import { MODO_DEMO } from "../core/demo-mode.js";
 import { crearEventoAgenda } from "../core/schema.js";
-import { marcarCambioPendiente } from "../core/storage-sync.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalEventoAgenda, confirmarBorrarEventoAgenda, obtenerNombreMateriaEvento } from "../agenda/agenda-modal.js";
