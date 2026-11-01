@@ -43,7 +43,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.26.16"; // Filtros de categoría agrupados en Agenda.
+const VERSION = "v3.25.20"; // Filtros de categoría agrupados en Agenda.
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
