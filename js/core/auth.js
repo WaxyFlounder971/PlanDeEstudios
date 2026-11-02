@@ -96,6 +96,63 @@ async function fetchConTimeout(url, opciones) {
 // contra /oauth/exchange (ver manejarOAuthExchange en el Worker).
 const REDIRECT_URI_CODE_FLOW = "postmessage";
 
+// ---- Login por redirección (respaldo si el popup falla) ----
+const REDIRECT_URI_REDIRECCION = `${location.origin}/`;
+// Solo las URIs registradas en Google Cloud Console (Clientes → URIs de redirección).
+const URIS_REDIRECCION_REGISTRADAS = new Set(["https://wapper.pages.dev/"]);
+const CLAVE_STATE_REDIRECCION = "google_oauth_state_redireccion";
+let inicioIntentoPopup = 0;
+
+function puedeLoginPorRedireccion() {
+  return URIS_REDIRECCION_REGISTRADAS.has(REDIRECT_URI_REDIRECCION);
+}
+
+/** Lee y limpia ?code=/?error= al cargar. Devuelve null si no hay retorno
+ *  válido (sin state o con state distinto = se ignora, protege de CSRF). */
+function leerRetornoRedireccion() {
+  try {
+    const p = new URLSearchParams(location.search);
+    const code = p.get("code"), error = p.get("error"), state = p.get("state");
+    if (!code && !error) return null;
+    const scope = p.get("scope") || "";
+    const descripcion = p.get("error_description") || "";
+    const esperado = sessionStorage.getItem(CLAVE_STATE_REDIRECCION);
+    sessionStorage.removeItem(CLAVE_STATE_REDIRECCION);
+    ["code", "state", "scope", "authuser", "prompt", "iss", "hd", "error", "error_description"].forEach((k) => p.delete(k));
+    const resto = p.toString();
+    history.replaceState(history.state, "", location.pathname + (resto ? "?" + resto : "") + location.hash);
+    if (!state || !esperado || state !== esperado) return null;
+    return error ? { error, error_description: descripcion } : { code, scope };
+  } catch (e) {
+    return null;
+  }
+}
+const retornoRedireccion = leerRetornoRedireccion();
+
+function hayRetornoRedireccion() {
+  return Boolean(retornoRedireccion);
+}
+
+/** Navega a Google en esta misma pestaña. Devuelve false si no se puede. */
+function iniciarSesionPorRedireccion() {
+  if (!puedeLoginPorRedireccion()) return false;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const state = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  sessionStorage.setItem(CLAVE_STATE_REDIRECCION, state);
+  const params = new URLSearchParams({
+    client_id: CLIENT_ID,
+    redirect_uri: REDIRECT_URI_REDIRECCION,
+    response_type: "code",
+    scope: SCOPES,
+    access_type: "offline",
+    include_granted_scopes: "true",
+    prompt: "consent",
+    state,
+  });
+  window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
+  return true;
+}
+
 /**
  * 2026-08-25 — ALINEADO CON MAPA_FUNCIONES.md: al auditar el proyecto para
  * esta migración, MAPA_FUNCIONES.md YA documentaba `guardarRefreshTokenGoogle`/
@@ -174,11 +231,11 @@ function esperarGsiListo(timeoutMs = 10000) {
  * viene uno nuevo (ver callback de crearCodeClient), nunca se borra por su
  * ausencia en un canje puntual.
  */
-async function intercambiarCodePorTokens(code) {
+async function intercambiarCodePorTokens(code, redirectUri = REDIRECT_URI_CODE_FLOW) {
   const respuesta = await fetchConTimeout(`${URL_WORKER_OAUTH}/oauth/exchange`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, redirect_uri: REDIRECT_URI_CODE_FLOW }),
+    body: JSON.stringify({ code, redirect_uri: redirectUri }),
   });
   const datos = await respuesta.json().catch(() => ({}));
   if (!respuesta.ok) {
@@ -196,7 +253,7 @@ async function intercambiarCodePorTokens(code) {
  * perder los callbacks originales (guardados en callbacksAuth por
  * inicializarGoogleAuth).
  */
-async function manejarRespuestaCode(respuesta) {
+async function manejarRespuestaCode(respuesta, redirectUri = REDIRECT_URI_CODE_FLOW) {
   if (!callbacksAuth) return;
   const { alObtenerToken, alRechazarPermiso } = callbacksAuth;
 
@@ -244,7 +301,7 @@ async function manejarRespuestaCode(respuesta) {
 
   let datosTokens;
   try {
-    datosTokens = await intercambiarCodePorTokens(respuesta.code);
+    datosTokens = await intercambiarCodePorTokens(respuesta.code, redirectUri);
   } catch (e) {
     console.error("No se pudo canjear el code por tokens:", e);
     if (alRechazarPermiso) alRechazarPermiso("fallo_canje_code");
@@ -275,16 +332,30 @@ function crearCodeClient(prompt) {
     ux_mode: "popup",
     redirect_uri: REDIRECT_URI_CODE_FLOW,
     prompt,
-    callback: manejarRespuestaCode,
+    callback: (respuesta) => manejarRespuestaCode(respuesta),
     // DIAGNÓSTICO: GIS avisa aquí cuando el popup no abre o se cierra antes de
     // devolver el code (sin esto el usuario solo ve el aviso genérico de 6 s).
     error_callback: (err) => {
       console.error("[GIS error_callback]", err);
+      const tipo = err && err.type ? err.type : "desconocido";
+      // Fallo típico de popup: no abre, o se cierra casi al instante.
+      const falloRapido = tipo === "popup_closed" && Date.now() - inicioIntentoPopup < 3000;
+      if ((tipo === "popup_failed_to_open" || falloRapido) && iniciarSesionPorRedireccion()) return;
       const aviso = document.getElementById("aviso-login-bloqueado");
-      if (aviso) {
-        aviso.textContent = "Google reportó: " + (err && err.type ? err.type : "desconocido") + (err && err.message ? " — " + err.message : "");
-        aviso.classList.remove("oculto");
+      if (!aviso) return;
+      aviso.replaceChildren();
+      const texto = document.createElement("span");
+      texto.textContent = "Google reportó: " + tipo + (err && err.message ? " — " + err.message : "");
+      aviso.appendChild(texto);
+      if (puedeLoginPorRedireccion()) {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "btn btn-secondary btn-block";
+        btn.textContent = "Iniciar sesión en esta pestaña";
+        btn.addEventListener("click", iniciarSesionPorRedireccion);
+        aviso.appendChild(btn);
       }
+      aviso.classList.remove("oculto");
     },
   });
 }
@@ -297,18 +368,22 @@ function crearCodeClient(prompt) {
  * cargó.
  */
 async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRechazarPermiso }) {
+  callbacksAuth = { alObtenerToken, alRechazarPermiso };
+  const procesarRetorno = () => manejarRespuestaCode(retornoRedireccion, REDIRECT_URI_REDIRECCION);
+
   try {
     await esperarGsiListo();
   } catch (e) {
     console.error(e);
+    // Canjear el code no necesita el script de Google.
+    if (retornoRedireccion) { procesarRetorno(); return; }
     if (alFallar) alFallar();
     return;
   }
 
-  callbacksAuth = { alObtenerToken, alRechazarPermiso };
   codeClient = crearCodeClient("");
-
   if (alListo) alListo();
+  if (retornoRedireccion) procesarRetorno();
 }
 
 /**
@@ -323,6 +398,7 @@ async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRech
  * criterio para el botón de login en sí.
  */
 function iniciarSesionConGoogle() {
+  inicioIntentoPopup = Date.now();
   const yaAutorizado = localStorage.getItem(CLAVE_YA_AUTORIZADO) === "1";
   codeClient = crearCodeClient(yaAutorizado ? "" : "consent");
   codeClient.requestCode();
@@ -332,6 +408,7 @@ function iniciarSesionConGoogle() {
  * No cierra la sesión ni borra datos/tokens existentes. Se usa cuando el
  * usuario activa por primera vez la integración opcional con Calendar. */
 function solicitarPermisoCalendar() {
+  inicioIntentoPopup = Date.now();
   codeClient = crearCodeClient("consent");
   codeClient.requestCode();
 }
@@ -1237,6 +1314,8 @@ export {
   eliminarArchivoDeDriveConId,
   eliminarCalendarioGoogle,
   guardarDatos,
+  hayRetornoRedireccion,
+  iniciarSesionPorRedireccion,
   inicializarGoogleAuth,
   iniciarSesionConGoogle,
   solicitarPermisoCalendar,
