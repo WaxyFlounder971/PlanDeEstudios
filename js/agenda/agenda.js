@@ -1796,10 +1796,17 @@ function asegurarPistaVistasAgenda() {
     const filtro = document.getElementById("agenda-filtro-estados-cont");
     const busqueda = document.getElementById("agenda-busqueda-cont");
     const resultados = document.getElementById("agenda-busqueda-resultados");
+    // FIX: pista.children[0] ES `lista` (el primer panel), así que
+    // lista.insertBefore(x, lista) lanzaba NotFoundError y rompía todo el
+    // render de Agenda. Busqueda/resultados/filtro ya están justo encima
+    // de la pista (hermanos de lista), así que solo se mueven si el panel
+    // fuera un contenedor distinto de lista.
     const panelLista = pista.children[0];
-    if (busqueda) panelLista.insertBefore(busqueda, lista);
-    if (resultados) panelLista.insertBefore(resultados, lista);
-    if (filtro) panelLista.insertBefore(filtro, resultados || lista);
+    if (panelLista !== lista) {
+      if (busqueda) panelLista.insertBefore(busqueda, lista);
+      if (resultados) panelLista.insertBefore(resultados, lista);
+      if (filtro) panelLista.insertBefore(filtro, resultados || lista);
+    }
     pistaAgenda = { viewport, pista, paneles };
     inicializarGestosVistasAgenda();
   }
