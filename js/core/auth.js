@@ -96,19 +96,53 @@ async function fetchConTimeout(url, opciones) {
 // contra /oauth/exchange (ver manejarOAuthExchange en el Worker).
 const REDIRECT_URI_CODE_FLOW = "postmessage";
 
-// ---- Login por redirección (respaldo si el popup falla) ----
+// ---- Login por redirección: respaldo AUTOMÁTICO y modo preferido ----
+// El popup de Google puede fallar por causas ajenas a la app (cabecera
+// Cross-Origin-Opener-Policy, extensiones, bloqueadores, WebViews, PWA
+// instalada en iOS). El login por redirección no depende de nada de eso:
+// navega a Google en la misma pestaña y vuelve con ?code=. Aquí se decide
+// solo cuál usar y, si el popup falla, se continúa sin pedir nada al usuario.
 const REDIRECT_URI_REDIRECCION = `${location.origin}/`;
 // Solo las URIs registradas en Google Cloud Console (Clientes → URIs de redirección).
 const URIS_REDIRECCION_REGISTRADAS = new Set(["https://wapper.pages.dev/"]);
 const CLAVE_STATE_REDIRECCION = "google_oauth_state_redireccion";
+const CLAVE_PREFERIR_REDIRECCION = "login_preferir_redireccion_v1";
+const VIGENCIA_STATE_MS = 15 * 60 * 1000;
+const VIGENCIA_PREFERENCIA_MS = 30 * 24 * 60 * 60 * 1000;
+const UMBRAL_FALLO_RAPIDO_MS = 4000;
 let inicioIntentoPopup = 0;
+let cierresPopupSeguidos = 0;
+let ultimoCierrePopup = 0;
+let retornoRedireccionInvalido = false;
+
+function lsGet(clave) { try { return localStorage.getItem(clave); } catch (e) { return null; } }
+function lsSet(clave, valor) { try { localStorage.setItem(clave, valor); return true; } catch (e) { return false; } }
+function lsDel(clave) { try { localStorage.removeItem(clave); } catch (e) { /* sin almacenamiento */ }}
 
 function puedeLoginPorRedireccion() {
   return URIS_REDIRECCION_REGISTRADAS.has(REDIRECT_URI_REDIRECCION);
 }
 
+/** Muestra un mensaje en el aviso del login (solo texto, sin botones). */
+function mostrarAvisoLogin(texto) {
+  const aviso = document.getElementById("aviso-login-bloqueado");
+  if (!aviso) return;
+  aviso.textContent = texto;
+  aviso.classList.remove("oculto");
+}
+
+/** ¿Hay que usar redirección en vez de popup en este dispositivo? */
+function preferirRedireccion() {
+  const desde = Number(lsGet(CLAVE_PREFERIR_REDIRECCION) || 0);
+  return desde > 0 && Date.now() - desde < VIGENCIA_PREFERENCIA_MS;
+}
+function recordarPreferirRedireccion(motivo) {
+  console.warn("[login] El popup no es fiable aquí (" + motivo + "): se usará redirección.");
+  lsSet(CLAVE_PREFERIR_REDIRECCION, String(Date.now()));
+}
+
 /** Lee y limpia ?code=/?error= al cargar. Devuelve null si no hay retorno
- *  válido (sin state o con state distinto = se ignora, protege de CSRF). */
+ *  válido (sin state, con state distinto o vencido = se ignora: protege de CSRF). */
 function leerRetornoRedireccion() {
   try {
     const p = new URLSearchParams(location.search);
@@ -116,12 +150,14 @@ function leerRetornoRedireccion() {
     if (!code && !error) return null;
     const scope = p.get("scope") || "";
     const descripcion = p.get("error_description") || "";
-    const esperado = sessionStorage.getItem(CLAVE_STATE_REDIRECCION);
-    sessionStorage.removeItem(CLAVE_STATE_REDIRECCION);
+    let guardado = null;
+    try { guardado = JSON.parse(lsGet(CLAVE_STATE_REDIRECCION) || "null"); } catch (e) { guardado = null; }
+    lsDel(CLAVE_STATE_REDIRECCION);
     ["code", "state", "scope", "authuser", "prompt", "iss", "hd", "error", "error_description"].forEach((k) => p.delete(k));
     const resto = p.toString();
     history.replaceState(history.state, "", location.pathname + (resto ? "?" + resto : "") + location.hash);
-    if (!state || !esperado || state !== esperado) return null;
+    const valido = guardado && guardado.state && state === guardado.state && Date.now() - Number(guardado.t) < VIGENCIA_STATE_MS;
+    if (!valido) { retornoRedireccionInvalido = true; return null; }
     return error ? { error, error_description: descripcion } : { code, scope };
   } catch (e) {
     return null;
@@ -138,7 +174,10 @@ function iniciarSesionPorRedireccion() {
   if (!puedeLoginPorRedireccion()) return false;
   const bytes = crypto.getRandomValues(new Uint8Array(16));
   const state = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
-  sessionStorage.setItem(CLAVE_STATE_REDIRECCION, state);
+  // Sin poder guardar el state no se puede validar el retorno: no se intenta.
+  if (!lsSet(CLAVE_STATE_REDIRECCION, JSON.stringify({ state, t: Date.now() }))) return false;
+  // Consentimiento completo solo si hace falta un refresh_token nuevo.
+  const yaAutorizado = lsGet(CLAVE_YA_AUTORIZADO) === "1" && Boolean(leerRefreshTokenGoogle());
   const params = new URLSearchParams({
     client_id: CLIENT_ID,
     redirect_uri: REDIRECT_URI_REDIRECCION,
@@ -146,11 +185,33 @@ function iniciarSesionPorRedireccion() {
     scope: SCOPES,
     access_type: "offline",
     include_granted_scopes: "true",
-    prompt: "consent",
+    prompt: yaAutorizado ? "select_account" : "consent",
     state,
   });
+  // Evita el aviso "¿salir de la página?": los cambios locales ya están en la caché.
+  window.__redirigiendoALogin = true;
+  const btn = document.getElementById("btn-login-google");
+  if (btn) { btn.disabled = true; btn.textContent = "Redirigiendo a Google…"; }
+  document.getElementById("aviso-login-bloqueado")?.classList.add("oculto");
   window.location.assign(`https://accounts.google.com/o/oauth2/v2/auth?${params}`);
   return true;
+}
+
+// Al volver con "Atrás" la página puede restaurarse congelada (botón
+// deshabilitado, flag activo): se recarga para empezar limpia.
+window.addEventListener("pageshow", (e) => { if (e.persisted && window.__redirigiendoALogin) location.reload(); });
+
+/** Si el sitio manda Cross-Origin-Opener-Policy: same-origin, el popup de
+ *  Google pierde su vínculo con la página y GIS lo ve como "cerrado" aunque
+ *  el usuario acepte. Se detecta de antemano para ni intentarlo. */
+async function detectarBloqueoPopup() {
+  try {
+    const r = await fetch(location.pathname, { method: "HEAD", cache: "no-store" });
+    const coop = (r.headers.get("cross-origin-opener-policy") || "").toLowerCase().trim();
+    if (coop.startsWith("same-origin") && !coop.startsWith("same-origin-allow-popups")) {
+      recordarPreferirRedireccion("COOP " + coop);
+    }
+  } catch (e) { /* no crítico */ }
 }
 
 /**
@@ -299,11 +360,20 @@ async function manejarRespuestaCode(respuesta, redirectUri = REDIRECT_URI_CODE_F
     console.warn("Login sin permiso de Calendar — la sincronización con Google Calendar queda desactivada.");
   }
 
+  // Hasta 3 intentos si el fallo es de red/Worker (sin status o 5xx). Un 4xx
+  // (ej. invalid_grant: el code ya se usó) no se reintenta: no serviría.
   let datosTokens;
-  try {
-    datosTokens = await intercambiarCodePorTokens(respuesta.code, redirectUri);
-  } catch (e) {
-    console.error("No se pudo canjear el code por tokens:", e);
+  for (let intento = 0; intento < 3 && !datosTokens; intento++) {
+    try {
+      datosTokens = await intercambiarCodePorTokens(respuesta.code, redirectUri);
+    } catch (e) {
+      console.error(`No se pudo canjear el code por tokens (intento ${intento + 1}/3):`, e);
+      const reintentable = !e.status || e.status >= 500;
+      if (!reintentable || intento === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, [600, 1500][intento]));
+    }
+  }
+  if (!datosTokens) {
     if (alRechazarPermiso) alRechazarPermiso("fallo_canje_code");
     return;
   }
@@ -333,29 +403,26 @@ function crearCodeClient(prompt) {
     redirect_uri: REDIRECT_URI_CODE_FLOW,
     prompt,
     callback: (respuesta) => manejarRespuestaCode(respuesta),
-    // DIAGNÓSTICO: GIS avisa aquí cuando el popup no abre o se cierra antes de
-    // devolver el code (sin esto el usuario solo ve el aviso genérico de 6 s).
+    // GIS avisa aquí cuando el popup no abre o se cierra antes de devolver el
+    // code. Cualquier fallo que parezca del popup (no abrió, error raro, cierre
+    // inmediato o cierres repetidos) pasa SOLO a login por redirección y se
+    // recuerda para no volver a intentar el popup en este dispositivo.
     error_callback: (err) => {
       console.error("[GIS error_callback]", err);
       const tipo = err && err.type ? err.type : "desconocido";
-      // Fallo típico de popup: no abre, o se cierra casi al instante.
-      const falloRapido = tipo === "popup_closed" && Date.now() - inicioIntentoPopup < 3000;
-      if ((tipo === "popup_failed_to_open" || falloRapido) && iniciarSesionPorRedireccion()) return;
-      const aviso = document.getElementById("aviso-login-bloqueado");
-      if (!aviso) return;
-      aviso.replaceChildren();
-      const texto = document.createElement("span");
-      texto.textContent = "Google reportó: " + tipo + (err && err.message ? " — " + err.message : "");
-      aviso.appendChild(texto);
-      if (puedeLoginPorRedireccion()) {
-        const btn = document.createElement("button");
-        btn.type = "button";
-        btn.className = "btn btn-secondary btn-block";
-        btn.textContent = "Iniciar sesión en esta pestaña";
-        btn.addEventListener("click", iniciarSesionPorRedireccion);
-        aviso.appendChild(btn);
+      const ahora = Date.now();
+      if (tipo === "popup_closed") {
+        cierresPopupSeguidos = ahora - ultimoCierrePopup < 120000 ? cierresPopupSeguidos + 1 : 1;
+        ultimoCierrePopup = ahora;
       }
-      aviso.classList.remove("oculto");
+      const falloDelPopup = tipo !== "popup_closed" || ahora - inicioIntentoPopup < UMBRAL_FALLO_RAPIDO_MS || cierresPopupSeguidos >= 2;
+      if (falloDelPopup) {
+        recordarPreferirRedireccion("popup " + tipo);
+        if (iniciarSesionPorRedireccion()) return;
+      }
+      mostrarAvisoLogin(tipo === "popup_closed"
+        ? "Cerraste la ventana de Google antes de terminar. Pulsa «Iniciar sesión con Google» para intentarlo de nuevo."
+        : "Google reportó: " + tipo + (err && err.message ? " — " + err.message : ""));
     },
   });
 }
@@ -371,12 +438,19 @@ async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRech
   callbacksAuth = { alObtenerToken, alRechazarPermiso };
   const procesarRetorno = () => manejarRespuestaCode(retornoRedireccion, REDIRECT_URI_REDIRECCION);
 
+  if (retornoRedireccionInvalido) {
+    mostrarAvisoLogin("No se pudo validar el inicio de sesión (la solicitud venció o no coincide). Inténtalo de nuevo.");
+  }
+  detectarBloqueoPopup(); // en segundo plano; no retrasa nada
+
   try {
     await esperarGsiListo();
   } catch (e) {
     console.error(e);
     // Canjear el code no necesita el script de Google.
     if (retornoRedireccion) { procesarRetorno(); return; }
+    // Sin el script de Google (bloqueador, red) el login por redirección sigue funcionando.
+    if (puedeLoginPorRedireccion()) { if (alListo) alListo(); return; }
     if (alFallar) alFallar();
     return;
   }
@@ -384,6 +458,24 @@ async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRech
   codeClient = crearCodeClient("");
   if (alListo) alListo();
   if (retornoRedireccion) procesarRetorno();
+}
+
+/** Pide el code: redirección directa si el popup no es fiable en este
+ *  dispositivo; si no, popup, y ante cualquier excepción cae a redirección. */
+function pedirCodeConFallback(prompt) {
+  inicioIntentoPopup = Date.now();
+  const usarRedireccion = preferirRedireccion() || navigator.standalone === true || !window.google?.accounts?.oauth2;
+  if (usarRedireccion && iniciarSesionPorRedireccion()) return;
+  try {
+    codeClient = crearCodeClient(prompt);
+    codeClient.requestCode();
+  } catch (e) {
+    console.error("[login] El popup lanzó una excepción:", e);
+    recordarPreferirRedireccion("excepción");
+    if (!iniciarSesionPorRedireccion()) {
+      mostrarAvisoLogin("No se pudo abrir el inicio de sesión de Google. Recarga la página e inténtalo de nuevo.");
+    }
+  }
 }
 
 /**
@@ -398,19 +490,15 @@ async function inicializarGoogleAuth({ alObtenerToken, alListo, alFallar, alRech
  * criterio para el botón de login en sí.
  */
 function iniciarSesionConGoogle() {
-  inicioIntentoPopup = Date.now();
   const yaAutorizado = localStorage.getItem(CLAVE_YA_AUTORIZADO) === "1";
-  codeClient = crearCodeClient(yaAutorizado ? "" : "consent");
-  codeClient.requestCode();
+  pedirCodeConFallback(yaAutorizado ? "" : "consent");
 }
 
 /** Solicita permisos nuevos de forma incremental desde un botón pulsado.
  * No cierra la sesión ni borra datos/tokens existentes. Se usa cuando el
  * usuario activa por primera vez la integración opcional con Calendar. */
 function solicitarPermisoCalendar() {
-  inicioIntentoPopup = Date.now();
-  codeClient = crearCodeClient("consent");
-  codeClient.requestCode();
+  pedirCodeConFallback("consent");
 }
 
 /** Devuelve si el login/canje más reciente incluyó el scope de Calendar —
@@ -446,7 +534,7 @@ async function obtenerPerfilGoogle(token) {
  *  refresh_token todavía válido que refrescarAccessTokenViaWorker podría
  *  volver a usar sin que el usuario haya vuelto a loguearse. */
 function cerrarSesionGoogle() {
-  if (accessToken) {
+  if (accessToken && window.google?.accounts?.oauth2) {
     google.accounts.oauth2.revoke(accessToken, () => {});
   }
   accessToken = null;
