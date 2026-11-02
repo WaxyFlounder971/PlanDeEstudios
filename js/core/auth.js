@@ -202,6 +202,8 @@ async function manejarRespuestaCode(respuesta) {
 
   if (respuesta.error) {
     console.error("Error de autenticación:", respuesta);
+    const avisoErr = document.getElementById("aviso-login-bloqueado");
+    if (avisoErr) { avisoErr.textContent = "Google devolvió: " + respuesta.error + (respuesta.error_description ? " — " + respuesta.error_description : ""); avisoErr.classList.remove("oculto"); }
     // El caso más común: el usuario cerró la ventana de consentimiento o
     // rechazó el permiso de Drive. Sin ese permiso la app no puede
     // guardar nada, así que se lo hacemos explícito en vez de dejarla en
@@ -274,6 +276,16 @@ function crearCodeClient(prompt) {
     redirect_uri: REDIRECT_URI_CODE_FLOW,
     prompt,
     callback: manejarRespuestaCode,
+    // DIAGNÓSTICO: GIS avisa aquí cuando el popup no abre o se cierra antes de
+    // devolver el code (sin esto el usuario solo ve el aviso genérico de 6 s).
+    error_callback: (err) => {
+      console.error("[GIS error_callback]", err);
+      const aviso = document.getElementById("aviso-login-bloqueado");
+      if (aviso) {
+        aviso.textContent = "Google reportó: " + (err && err.type ? err.type : "desconocido") + (err && err.message ? " — " + err.message : "");
+        aviso.classList.remove("oculto");
+      }
+    },
   });
 }
 
@@ -637,8 +649,7 @@ async function refrescarAccessTokenViaWorker(refreshToken) {
       if (!respuesta.ok) {
         const error = new Error(datos.error || `El Worker respondió ${respuesta.status} al refrescar.`);
         error.status = respuesta.status;
-        const textoMotivo = [datos.error, datos.error_description, datos.message].filter(Boolean).join(" ");
-        error.invalidGrant = /invalid_grant|expired or revoked|token has been (expired|revoked)/i.test(textoMotivo);
+        error.invalidGrant = Boolean(datos.error && /invalid_grant/i.test(String(datos.error)));
         if (error.invalidGrant || (respuesta.status < 500 && respuesta.status !== 429)) throw error;
         ultimoError=error;
       } else {
