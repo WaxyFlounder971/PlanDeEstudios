@@ -361,7 +361,7 @@ function construirBarraFiltroEstadosAgenda() {
   });
   menuEstado.querySelectorAll(".agenda-filtro-estado-btn").forEach((btn) => btn.addEventListener("click", cerrarMenu, { once: true }));
   document.addEventListener("pointerdown", (ev) => { if (!grupoEstado.contains(ev.target)) cerrarMenu(); }, { signal: controladorPopoverEstadoAgenda.signal });
-  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarMenu(); }, { signal: controladorPopoverEstado.signal });
+  document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarMenu(); }, { signal: controladorPopoverEstadoAgenda.signal });
   grupoEstado.append(botonEstado, menuEstado);
   barra.appendChild(grupoEstado);
   return barra;
