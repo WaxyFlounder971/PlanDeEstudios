@@ -488,6 +488,7 @@ window.addEventListener("DOMContentLoaded", () => {
   // Aviso NATIVO del navegador (no personalizable, restricción de seguridad)
   // si se intenta recargar/cerrar la pestaña con cambios sin sincronizar.
   window.addEventListener("beforeunload", (e) => {
+    if (window.__redirigiendoALogin) return; // login por redirección: los cambios ya están en la caché local
     if (estado.pendienteSync || hayBorradorFinanzasPendiente()) {
       e.preventDefault();
       e.returnValue = "";
