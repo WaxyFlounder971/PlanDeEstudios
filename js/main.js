@@ -6,7 +6,7 @@
 
 import { aplicarModoRendimiento, renderizarAjustes } from "./config/config-ajustes.js";
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
-import { buscarOCrearArchivoDatos, cerrarSesionGoogle, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
+import { buscarOCrearArchivoDatos, cerrarSesionGoogle, hayRetornoRedireccion, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage/storage-merge.js";
 import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, recuperarConexionEscalonada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage/storage-sync.js";
@@ -320,6 +320,7 @@ window.addEventListener("DOMContentLoaded", () => {
     alListo: () => {
       btnLogin.disabled = false;
       btnLogin.textContent = textoOriginalBtnLogin;
+      if (hayRetornoRedireccion()) return; // auth.js ya está canjeando el code
       // Bug 1 (v8): si esta carga viene de una sesión guardada en caché
       // (usuario recurrente), la pantalla de login nunca se muestra y por lo
       // tanto iniciarSesionConGoogle() nunca se llama - sin esto, estado.token
@@ -425,6 +426,7 @@ window.addEventListener("DOMContentLoaded", () => {
       // igual que ya hacía ocultarAvisoLoginBloqueado() en el camino de
       // éxito.
       clearTimeout(temporizadorAvisoLogin);
+      if (!estado.datos) { ocultarPantallaCargaSesion(); document.getElementById("pantalla-login").classList.remove("oculto"); }
       // FIX (2026-08-25): clearTimeout arriba solo cancela el timer si
       // TODAVÍA no disparó - si el usuario tardó más de 6s en el popup real
       // de Google (algo normal, no un bloqueo), el banner de "VPN/bloqueador
@@ -446,7 +448,7 @@ window.addEventListener("DOMContentLoaded", () => {
       // mensaje genérico de "te faltó aceptar Drive", que es literalmente
       // falso en este caso y no le da al usuario ninguna pista real de qué
       // pasó ni qué reintentar.
-      if (motivo === "canje_fallido") {
+      if (motivo === "fallo_canje_code") {
         aviso.textContent =
           "Aceptaste el permiso de Google Drive correctamente, pero no se pudo completar la conexión con el servidor de la app. Puede ser un problema temporal de conexión - espera un momento y vuelve a intentarlo. Si sigue fallando, avisa a soporte.";
       } else if (motivo === "permiso_drive_no_otorgado") {
