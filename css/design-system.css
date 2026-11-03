@@ -2976,6 +2976,9 @@ img, svg { max-width: 100%; }
 }
 .agenda-filtro-grupo { display:flex; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; }
 .agenda-filtro-separador { display:block; flex:none; width:1px; height:18px; margin:0 2px; background:var(--border-glass); opacity:.8; }
+.agenda-filtro-estados--midiendo { flex-wrap:nowrap; justify-content:flex-start; }
+.agenda-filtro-estados--midiendo > .agenda-filtro-grupo { flex-wrap:nowrap; flex-shrink:0; }
+.agenda-filtro-estados--midiendo > .agenda-filtro-grupo > .agenda-filtro-estado-btn { flex-shrink:0; }
 .agenda-filtro-clase { grid-area:clase; }
 .agenda-filtro-categorias { grid-area:categorias; }
 .agenda-filtro-estado { grid-area:estado; }

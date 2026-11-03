@@ -745,16 +745,6 @@
            modal de alta/edición (más abajo, junto al resto de modales fijos
            del HTML). -->
       <div id="seccion-agenda" class="stack oculto">
-        <!-- Ronda de ajustes visuales #2 — punto A: Lista/Calendario sale del
-             panel de encabezado y pasa a ser el primer elemento de la
-             sección, arriba de todo (antes vivía adentro de #agenda-header,
-             compitiendo visualmente con el nombre del semestre). -->
-        <div class="pill-group" id="pills-agenda-vista">
-          <button type="button" class="pill-item active" data-vista="lista">Lista</button>
-          <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
-          <button type="button" class="pill-item" data-vista="materia">Cronograma</button>
-        </div>
-
         <!-- Ronda de ajustes visuales #3 — punto A: encabezado a 3 líneas
              bien aprovechadas. Línea 1: nombre(s) del/los semestre(s),
              centrado, tocable (abre #modal-agenda-semestres — idea "varios
@@ -778,6 +768,12 @@
             <button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda">⚙️</button>
           </div>
         </section>
+
+        <div class="pill-group" id="pills-agenda-vista">
+          <button type="button" class="pill-item active" data-vista="lista">Lista</button>
+          <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
+          <button type="button" class="pill-item" data-vista="materia">Cronograma</button>
+        </div>
 
         <div id="agenda-lista-dias" class="stack"></div>
 
