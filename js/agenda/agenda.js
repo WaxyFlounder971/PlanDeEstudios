@@ -368,20 +368,23 @@ function construirBarraFiltroEstadosAgenda() {
   barra.appendChild(grupoEstado);
   const medirMultilinea = () => {
     if (!barra.isConnected) return;
-    const anchoGrupo = (grupo) => {
-      const botones = [...grupo.querySelectorAll(":scope > .agenda-filtro-estado-btn")];
-      const gap = parseFloat(getComputedStyle(grupo).gap) || 0;
-      return botones.reduce((total, boton) => total + boton.getBoundingClientRect().width, 0) + Math.max(0, botones.length - 1) * gap;
-    };
-    const anchoContenido = anchoGrupo(grupoClase) + anchoGrupo(grupoCategorias)
-      + botonEstado.getBoundingClientRect().width
-      + [...barra.querySelectorAll(":scope > .agenda-filtro-separador")].reduce((total, sep) => total + sep.getBoundingClientRect().width + 4, 0)
-      + (barra.children.length - 1) * (parseFloat(getComputedStyle(barra).gap) || 0);
-    barra.classList.toggle("agenda-filtro-estados--multilinea", anchoContenido > barra.clientWidth + 1);
+    // Mide el acomodo FLEX original (sin forzar nuestro diseño de dos filas).
+    // Así se detectan también los saltos internos de categorías y no depende
+    // de estimar anchos, fuentes, zoom ni el espacio del contenedor padre.
+    barra.classList.remove("agenda-filtro-estados--multilinea");
+    const elementos = [
+      ...grupoClase.children,
+      ...barra.querySelectorAll(":scope > .agenda-filtro-separador"),
+      ...grupoCategorias.children,
+      botonEstado,
+    ];
+    const posiciones = elementos.map((el) => el.getBoundingClientRect().top);
+    const seParte = posiciones.some((top) => Math.abs(top - posiciones[0]) > 2);
+    barra.classList.toggle("agenda-filtro-estados--multilinea", seParte);
   };
   observadorAnchoFiltroAgenda = new ResizeObserver(medirMultilinea);
   observadorAnchoFiltroAgenda.observe(barra);
-  [...grupoClase.children, ...grupoCategorias.children, botonEstado].forEach((nodo) => observadorAnchoFiltroAgenda.observe(nodo));
+  barra.actualizarLayoutMultilinea = medirMultilinea;
   requestAnimationFrame(medirMultilinea);
   return barra;
 }
@@ -1669,7 +1672,9 @@ function renderizarAgendaInterno() {
   filtroCont.innerHTML = "";
   // Los filtros quedan siempre visibles en la vista principal de Agenda;
   // el editor de tipos sigue contraíble dentro de Ajustes de Agenda.
-  filtroCont.appendChild(construirBarraFiltroEstadosAgenda());
+  const barraFiltro = construirBarraFiltroEstadosAgenda();
+  filtroCont.appendChild(barraFiltro);
+  requestAnimationFrame(() => barraFiltro.actualizarLayoutMultilinea?.());
 
   if (modoTodo) {
     // Ronda de ajustes visuales #5 — punto D: el modo "Todo" es una lista
@@ -1875,11 +1880,11 @@ function inicializarGestosVistasAgenda() {
     const t = ev.touches?.[0];
     if (ev.touches.length !== 1 || ev.target.closest("input,textarea,select,[contenteditable='true'],[data-no-swipe]")) { inicio = null; return; }
     if (t) inicio = { x: t.clientX, y: t.clientY, t0: performance.now(), moviendo: false, indice: vistas.indexOf(estado.agendaVistaActiva || "lista") };
-  }, { passive: true });
+  }, { capture: true, passive: true });
   raiz.addEventListener("touchmove", (ev) => {
     if (!inicio || ev.touches.length !== 1) return;
     const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
-    if (!inicio.moviendo && (Math.abs(dx) < 6 || Math.abs(dx) <= Math.abs(dy) * 1.05)) return;
+    if (!inicio.moviendo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
     if (!inicio.moviendo) viewport.classList.add("nav-arrastrando"); // la vista vecina se mantiene visible mientras se arrastra
     inicio.moviendo = true;
     ev.preventDefault();
@@ -1888,26 +1893,31 @@ function inicializarGestosVistasAgenda() {
     viewport.querySelector(".nav-vistas-pista").style.transform = `translate3d(${pct}%,0,0)`;
     const thumb = document.querySelector("#pills-agenda-vista .pill-switch-thumb");
     if (thumb) thumb.style.setProperty("--nav-pill-progreso", String(Math.max(0, Math.min(2, inicio.indice - dx / width))));
-  }, { passive: false });
+  }, { capture: true, passive: false });
   raiz.addEventListener("touchend", (ev) => {
     if (!inicio) return;
+    const gesto = inicio;
     const t = ev.changedTouches?.[0];
-    const deltaX = t ? t.clientX - inicio.x : 0;
-    const flick = inicio.moviendo && performance.now() - inicio.t0 < 340 && Math.abs(deltaX) > 14;
+    const deltaX = t ? t.clientX - gesto.x : 0;
+    const flick = gesto.moviendo && performance.now() - gesto.t0 < 280 && Math.abs(deltaX) > 24;
     inicio = null;
     viewport.classList.remove("nav-arrastrando");
-    const actual = vistas.indexOf(estado.agendaVistaActiva || "lista");
-    const nuevo = Math.max(0, Math.min(2, actual + ((flick || Math.abs(deltaX) > Math.max(32, viewport.clientWidth * 0.1)) ? (deltaX < 0 ? 1 : -1) : 0)));
+    const actual = gesto.indice;
+    const navega = gesto.moviendo && (flick || Math.abs(deltaX) > Math.max(48, viewport.clientWidth * 0.16));
+    const nuevo = Math.max(
+      0,
+      Math.min(2, actual + (navega ? (deltaX < 0 ? 1 : -1) : 0))
+    );
     document.querySelector("#pills-agenda-vista .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
     cambiarVistaAgendaConGesto(vistas[nuevo]);
     if (pistaAgenda) pistaAgenda.pista.style.transform = `translate3d(-${nuevo * 100 / 3}%,0,0)`;
-  }, { passive: true });
+  }, { capture: true, passive: true });
   raiz.addEventListener("touchcancel", () => {
     inicio = null;
     viewport.classList.remove("nav-arrastrando");
     if (pistaAgenda) pistaAgenda.pista.style.transform = `translate3d(-${Math.max(0, vistas.indexOf(estado.agendaVistaActiva || "lista")) * 100 / 3}%,0,0)`;
     document.querySelector("#pills-agenda-vista .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
-  }, { passive: true });
+  }, { capture: true, passive: true });
 }
 
 function cambiarVistaAgendaConGesto(vista) {

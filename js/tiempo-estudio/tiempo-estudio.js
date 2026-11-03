@@ -354,7 +354,9 @@ function construirTarjetaMateria(item) {
   btnConfig.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
   btnConfig.title = "Configurar";
   btnConfig.setAttribute("aria-label", "Configurar");
-  btnConfig.textContent = "⚙️";
+  btnConfig.textContent = "⋮";
+  btnConfig.style.fontSize = "1.7rem";
+  btnConfig.style.lineHeight = "1";
   btnConfig.addEventListener("click", (e) => {
     e.stopPropagation();
     abrirModalConfigTiempoEstudio(mm, nombreMateria, () => alGuardarConfiguracionMateria(mm), confirmarEliminarMateriaPersonalizada);
@@ -423,8 +425,8 @@ function construirTarjetaMateria(item) {
  */
 function construirEncabezado(cont, contextoSemestre = null) {
   const encabezado = document.createElement("div");
-  encabezado.className = "glass-card row-between te-encabezado";
-  encabezado.style.cssText = "align-items:center; gap:10px;";
+  encabezado.className = "glass-panel row-between te-encabezado";
+  encabezado.style.cssText = "align-items:center; gap:6px; padding:10px 14px;";
 
   // Racha de estudio (2026-09-19): chip 🔥 + número pegado a la derecha del
   // título. Van en su propio grupo por la misma razón que los botones de la
@@ -657,7 +659,7 @@ function construirPillVistaSeccion(cont) {
 }
 
 const indicesVistaTE = { materias: 0, estadisticas: 1, competencias: 2 };
-const GAP_PANE_VISTA_TE = 8;
+const GAP_PANE_VISTA_TE = 12;
 let panelesVistaTE = null;
 let pistaVistaTE = null;
 function desplazamientoVistaTE(indice) {
@@ -696,7 +698,8 @@ function inicializarDeslizamientoVistasTE(viewport) {
   seccion.addEventListener("touchmove", (ev) => {
     if (!inicio || ev.touches.length !== 1) return;
     const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
-    if (!inicio.moviendo && (Math.abs(dx) < 6 || Math.abs(dx) <= Math.abs(dy) * 1.05)) return;
+    if (!inicio.moviendo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
+    if (!inicio.moviendo) viewport.classList.add("te-vistas-arrastrando");
     inicio.moviendo = true;
     ev.preventDefault();
     const ancho = viewport.clientWidth || 1;
@@ -714,10 +717,11 @@ function inicializarDeslizamientoVistasTE(viewport) {
     const t = ev.changedTouches?.[0];
     const dx = t ? t.clientX - inicio.x : 0;
     // v3.27.8: además de la distancia, un deslizamiento rápido (flick) también cambia de vista.
-    const flick = performance.now() - inicio.t0 < 340 && Math.abs(dx) > 14;
-    const navega = inicio.moviendo && (flick || Math.abs(dx) > Math.max(32, viewport.clientWidth * 0.1));
+    const flick = performance.now() - inicio.t0 < 280 && Math.abs(dx) > 24;
+    const navega = inicio.moviendo && (flick || Math.abs(dx) > Math.max(48, viewport.clientWidth * 0.16));
     const destino = Math.max(0, Math.min(2, inicio.indice + (navega ? (dx < 0 ? 1 : -1) : 0)));
     inicio = null;
+    viewport.classList.remove("te-vistas-arrastrando");
     const thumb = document.querySelector("#seccion-tiempo-estudio .pill-switch-thumb");
     if (thumb) thumb.style.removeProperty("--te-pill-progreso");
     cambiarVistaTiempoEstudio(Object.keys(indicesVistaTE).find((key) => indicesVistaTE[key] === destino));
@@ -726,6 +730,7 @@ function inicializarDeslizamientoVistasTE(viewport) {
   seccion.addEventListener("touchend", terminar, { passive: true });
   seccion.addEventListener("touchcancel", () => {
     inicio = null;
+    viewport.classList.remove("te-vistas-arrastrando");
     document.querySelector("#seccion-tiempo-estudio .pill-switch-thumb")?.style.removeProperty("--te-pill-progreso");
     if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${desplazamientoVistaTE(indicesVistaTE[vistaSeccionTE])}px,0,0)`;
   }, { passive: true });
@@ -1604,13 +1609,13 @@ function renderizarTiempoEstudio() {
     materiaDetalleActivaId = null;
   }
 
-  // Parte 3: encabezado + pill Materias/Estadísticas son comunes a las 2
-  // vistas de nivel superior — se arman acá UNA sola vez, y de ahí en más
-  // cada vista solo dibuja su contenido propio (ver nota en
-  // construirVistaPrincipal/construirVistaEstadisticas).
-  const contextoSemestre = construirSelectorSemestreTiempo(cont);
+  // Las pestañas siguen disponibles en las tres vistas. El encabezado solo
+  // acompaña Materias y Estadísticas; Competencias tiene su propio contenido.
   construirPillVistaSeccion(cont);
-  construirEncabezado(cont, contextoSemestre);
+  if (vistaSeccionTE !== "competencias") {
+    const contextoSemestre = construirSelectorSemestreTiempo(cont);
+    construirEncabezado(cont, contextoSemestre);
+  }
   if (!panelesVistaTE) {
     const viewport = document.createElement("div");
     viewport.className = "te-vistas-viewport";
@@ -1619,6 +1624,8 @@ function renderizarTiempoEstudio() {
     const panes = ["materias", "estadisticas", "competencias"].map((key) => {
       const pane = document.createElement("section");
       pane.className = "te-vista-pane";
+      pane.style.flex = `0 0 calc((100% - ${GAP_PANE_VISTA_TE * 2}px) / 3)`;
+      pane.style.width = `calc((100% - ${GAP_PANE_VISTA_TE * 2}px) / 3)`;
       pane.dataset.vista = key;
       pane.setAttribute("aria-hidden", String(key !== vistaSeccionTE));
       pista.appendChild(pane);
@@ -1634,6 +1641,7 @@ function renderizarTiempoEstudio() {
   const pista = pistaVistaTE;
   panelesVistaTE.panes.forEach((pane, i) => pane.setAttribute("aria-hidden", String(i !== indice)));
   const anchoViewport = viewport.clientWidth || cont.clientWidth || 0;
+  pista.style.width = `calc(300% + ${GAP_PANE_VISTA_TE * 2}px)`;
   pista.style.gap = `${GAP_PANE_VISTA_TE}px`;
   pista.style.transform = `translate3d(${-indice * (anchoViewport + GAP_PANE_VISTA_TE)}px,0,0)`;
   const paneActual = panelesVistaTE.panes[indice];

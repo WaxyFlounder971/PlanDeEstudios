@@ -45,18 +45,26 @@ const TEXTO_PREVIEW_PALETA = {
 // localStorage y nunca se leen de configuración sincronizada.
 const CLAVE_TEMA_LOCAL = "tema_modo";
 const CLAVE_TEMA_ELEGIDO_LOCAL = "tema_modo_elegido_v1";
+const CLAVE_TEMA_SISTEMA_LOCAL = "tema_modo_sistema_v1";
 const CLAVE_DISENO_LOCAL = "modo_diseno_local_v1";
 
 function obtenerModoTemaLocal() {
-  // Solo una elección hecha desde Ajustes cuenta como preferencia manual.
-  // `tema_modo` también se escribía durante el arranque y podía congelar el
-  // antiguo valor predeterminado aunque el dispositivo fuera claro.
+  // Una elección manual prevalece; si nunca se eligió, se detecta una vez y
+  // se conserva en este dispositivo para que recargar no cambie la apariencia.
   const guardado = localStorage.getItem(CLAVE_TEMA_ELEGIDO_LOCAL);
   if (guardado === "light" || guardado === "dark" || guardado === "true-dark") return guardado;
+  const detectado = localStorage.getItem(CLAVE_TEMA_SISTEMA_LOCAL);
+  if (detectado === "light" || detectado === "true-dark") return detectado;
   try {
-    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+    // El modo oscuro del sistema usa la apariencia «Oscuro»; «Color» queda
+    // únicamente como opción que el usuario puede elegir manualmente.
+    const modo = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "true-dark";
+    localStorage.setItem(CLAVE_TEMA_SISTEMA_LOCAL, modo);
+    localStorage.setItem(CLAVE_TEMA_LOCAL, modo);
+    return modo;
   } catch (_e) {
-    return "dark";
+    try { localStorage.setItem(CLAVE_TEMA_SISTEMA_LOCAL, "true-dark"); } catch (_error) {}
+    return "true-dark";
   }
 }
 
