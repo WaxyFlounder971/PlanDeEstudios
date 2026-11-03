@@ -248,6 +248,64 @@ function fechaSemana(ms) {
   return new Date(ms).toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" });
 }
 
+/* ===================== Mensajes del podio ===================== */
+
+/* 2026-11-03 — Mensajes de ánimo por posición (globo de texto en el top 3,
+   línea centrada a la altura del nombre del 4.º en adelante). Son frases FIJAS
+   elegidas por posición (no texto libre de nadie), así que el largo está
+   controlado: además se recorta a LIMITE_MENSAJE_CARACTERES por seguridad
+   (p. ej. traducciones largas) y el CSS deja que el texto salte de línea en vez
+   de cortarlo con "…". */
+const LIMITE_MENSAJE_CARACTERES = 34;
+const MENSAJES_TOP = [
+  ["¡Vamos ganando! 🏆", "We're winning! 🏆"],
+  ["¡Casi los alcanzo! 💪", "Almost catching up! 💪"],
+  ["¡Subiendo al podio! 😎", "Climbing to the podium! 😎"],
+];
+const MENSAJES_RESTO = [
+  ["¡Ahí voy, a por el podio! 🔥", "On my way to the podium! 🔥"],
+  ["¡No me rindo! 💪", "I won't give up! 💪"],
+  ["¡Todavía hay tiempo! ⏳", "There's still time! ⏳"],
+  ["¡Voy remontando! 🚀", "Coming back! 🚀"],
+  ["¡A seguir sumando! ✨", "Keep adding up! ✨"],
+  ["¡Esta semana se puede! 🍀", "This week is possible! 🍀"],
+];
+const COLORES_MENSAJE_TOP = ["#8f83ff", "#3ddc84", "#2ec4e6"]; // = globos del podio: 1.º violeta, 2.º verde, 3.º celeste
+// Colores del texto de las filas 4+ (se repiten en ciclo): lila, azul, verde, naranja, rosa.
+const COLORES_MENSAJE_FILA = ["#b3a6ff", "#66b8ff", "#5be3b0", "#ffb86b", "#ff8ab3"];
+
+function limitarMensaje(texto) {
+  const letras = Array.from(String(texto || ""));
+  return letras.length > LIMITE_MENSAJE_CARACTERES ? letras.slice(0, LIMITE_MENSAJE_CARACTERES - 1).join("").trimEnd() + "…" : letras.join("");
+}
+
+/** Mensaje de la posición `rank` (1-based), ya traducido y recortado. */
+function mensajeDePosicion(rank) {
+  const par = rank <= 3 ? MENSAJES_TOP[rank - 1] : MENSAJES_RESTO[(rank - 4) % MENSAJES_RESTO.length];
+  return limitarMensaje(traducirTextoInterfaz(par[0], par[1]));
+}
+
+const CLAVE_MENSAJES_PREFIJO = "te_comp_mensajes_";
+
+/** ¿Se muestran los mensajes en esta competencia? (por defecto sí). Es una
+ * preferencia de ESTE dispositivo, igual que la vista podio/filas. */
+function leerMensajesVisibles(competenciaId) {
+  try {
+    return localStorage.getItem(CLAVE_MENSAJES_PREFIJO + competenciaId) !== "0";
+  } catch (e) {
+    return true;
+  }
+}
+
+function guardarMensajesVisibles(competenciaId, visibles) {
+  try {
+    if (visibles) localStorage.removeItem(CLAVE_MENSAJES_PREFIJO + competenciaId);
+    else localStorage.setItem(CLAVE_MENSAJES_PREFIJO + competenciaId, "0");
+  } catch (e) {
+    // no crítico: solo se pierde la preferencia entre visitas
+  }
+}
+
 /* ===================== Iconos ===================== */
 
 const ICONO = {
@@ -314,7 +372,7 @@ function ordenarPorHoras(participantes) {
     .map((x) => x.p);
 }
 
-function filaHTML(p, i, ordenados, d, yoId) {
+function filaHTML(p, i, ordenados, d, yoId, conMensajes, incluirTop) {
   const rank = i + 1;
   const lider = i === 0;
   const yo = p.id === yoId;
@@ -323,10 +381,16 @@ function filaHTML(p, i, ordenados, d, yoId) {
   const tonos = tonosDeColor(p.color);
   const cls = ["cp-row", lider ? "cp-lead" : "", yo ? "cp-me-halo" : "", !p.horas ? "cp-zero" : "", tonos ? "cp-tinted" : ""].filter(Boolean).join(" ");
   const rk = `<span class="cp-rk ${rank <= 3 ? "cp-r" + rank : ""}">${rank}</span>`;
+  // Mensaje centrado a la altura del nombre (solo puestos 4+ en la vista podio: el top 3 usa globos).
+  // En la vista de lista (sin globos) también los 3 primeros llevan su mensaje, con el color de su puesto.
+  const colorMsg = rank <= 3 ? COLORES_MENSAJE_TOP[rank - 1] : COLORES_MENSAJE_FILA[(rank - 4) % COLORES_MENSAJE_FILA.length];
+  const msgFila = conMensajes && (rank >= 4 || incluirTop)
+    ? `<span class="cp-msg-fila" style="--cp-mc:${colorMsg}">${esc(mensajeDePosicion(rank))}</span>`
+    : "";
   return `<div class="${cls}" style="${varsDeColor(tonos)}--cp-d:${seg(d)};--cp-bd:${seg(d + 0.25)};--cp-dc:${seg(d + 0.6)}">
     ${rk}
     <span class="cp-avw">${lider ? CORONA : ""}${avatarHTML(p, lider ? 48 : 40)}</span>
-    <div class="cp-who"><div class="cp-name">${esc(p.apodo)}</div>
+    <div class="cp-who"><div class="cp-who-line"><div class="cp-name">${esc(p.apodo)}</div>${msgFila}</div>
       <div class="cp-sub"><div class="cp-bar"><i style="--cp-w:${pct}%"></i></div></div></div>
     <div class="cp-time">${fmtHoras(p.horas)}</div>
   </div>`;
@@ -336,7 +400,7 @@ function filaHTML(p, i, ordenados, d, yoId) {
  * Podio de 3. `ordenados` ya viene ordenado. `modo`: "card" (tarjeta, con
  * animación escalonada según T y la marca de "vos") o "modal" (historial).
  */
-function podioHTML(ordenados, modo, T, yoId) {
+function podioHTML(ordenados, modo, T, yoId, conMensajes) {
   const card = modo === "card";
   const t = card
     ? { ped: [T + 0.44, T + 0.22, T], jump: [T + 1.05, T + 0.67, T + 0.45] }
@@ -357,8 +421,12 @@ function podioHTML(ordenados, modo, T, yoId) {
       i === 0
         ? `<i class="cp-sp" style="left:-30px;top:6px;--cp-d:.2s"></i><i class="cp-sp" style="right:-28px;top:26px;--cp-d:1s"></i><i class="cp-sp" style="left:-16px;top:52px;--cp-d:1.7s;width:6px;height:6px"></i><i class="cp-sp" style="right:-12px;top:-4px;--cp-d:2.2s;width:6px;height:6px"></i>`
         : "";
+    // Globo de texto (solo en la tarjeta, no en el historial): va DENTRO de la columna, en el flujo,
+    // encima de la corona/avatar — así nunca tapa ni es tapado por la columna vecina ni por el título.
+    const globo = card && conMensajes ? `<div class="cp-bub cp-bub-${i + 1}" style="--cp-bd2:${seg(dn + 0.1)}"><span>${esc(mensajeDePosicion(i + 1))}</span></div>` : "";
     return `<div class="cp-pc ${cls}${yo ? " cp-me-halo" : ""}${tonos ? " cp-tinted" : ""}" style="${vars}">
       ${brillo}
+      ${globo}
       <span class="cp-avw">${i === 0 ? CORONA : ""}${chispas}${avatarHTML(p)}</span>
       <div class="cp-pn">${esc(p.apodo)}</div>
       <div class="cp-pt">${fmtHoras(p.horas)}</div>
@@ -366,12 +434,12 @@ function podioHTML(ordenados, modo, T, yoId) {
     </div>`;
   };
   const k = card ? `--cp-k1:${seg(t.jump[0] + 0.58)};--cp-k2:${seg(t.jump[0] + 0.93)}` : "";
-  return `<div class="cp-podium ${card ? "cp-card" : ""}" style="${k}">${slot(1, "cp-p2")}${slot(0, "cp-p1")}${slot(2, "cp-p3")}</div>`;
+  return `<div class="cp-podium ${card ? "cp-card" : ""}${card && conMensajes ? " cp-con-msg" : ""}" style="${k}">${slot(1, "cp-p2")}${slot(0, "cp-p1")}${slot(2, "cp-p3")}</div>`;
 }
 
 /* ===================== Tarjeta de competencia ===================== */
 
-function cuerpoTarjetaHTML(participantes, vista, yoId) {
+function cuerpoTarjetaHTML(participantes, vista, yoId, conMensajes) {
   const ord = ordenarPorHoras(participantes);
   const n = ord.length;
   if (vista === "podio") {
@@ -381,12 +449,12 @@ function cuerpoTarjetaHTML(participantes, vista, yoId) {
       .slice(3)
       .map((p, k) => {
         const rank = k + 4; // los de abajo entran primero
-        return filaHTML(p, rank - 1, ord, 0.25 + (n - rank) * 0.1, yoId);
+        return filaHTML(p, rank - 1, ord, 0.25 + (n - rank) * 0.1, yoId, conMensajes);
       })
       .join("");
-    return podioHTML(ord, "card", T, yoId) + (resto ? `<div class="cp-list">${filas}</div>` : "");
+    return podioHTML(ord, "card", T, yoId, conMensajes) + (resto ? `<div class="cp-list">${filas}</div>` : "");
   }
-  return `<div class="cp-list">${ord.map((p, i) => filaHTML(p, i, ord, 0.25 + (n - (i + 1)) * 0.16, yoId)).join("")}</div>`;
+  return `<div class="cp-list">${ord.map((p, i) => filaHTML(p, i, ord, 0.25 + (n - (i + 1)) * 0.16, yoId, conMensajes, true)).join("")}</div>`;
 }
 
 /**
@@ -409,7 +477,7 @@ function pintarTarjeta(tarjeta, o, cb) {
   if (o.estadoCuerpo === "cargando") cuerpo = `<p class="cp-msg">Cargando marcador…</p>`;
   else if (o.estadoCuerpo === "error") cuerpo = `<p class="cp-msg">No se pudo cargar el marcador. Revisá tu conexión.</p>`;
   else if (!o.participantes || o.participantes.length === 0) cuerpo = `<p class="cp-msg">Todavía no hay nadie en el marcador.</p>`;
-  else cuerpo = cuerpoTarjetaHTML(o.participantes, o.vista, o.yoId);
+  else cuerpo = cuerpoTarjetaHTML(o.participantes, o.vista, o.yoId, o.mensajes !== false);
   if (o.mensajeDesactualizado) cuerpo = `<p class="cp-msg cp-stale" role="status">${esc(o.mensajeDesactualizado)}</p>${cuerpo}`;
 
   const coronaTitulo = o.esCreador
@@ -564,15 +632,29 @@ function pintarHistorial(hoja, podios, yoId, abrirEn) {
     if (abrir) {
       wk.classList.add("cp-open");
       cab.setAttribute("aria-expanded", "true");
+      // La semana abierta empuja a las de abajo (el cuerpo del modal scrollea, sin barra visible) y,
+      // una vez armado el podio, se acomoda para que se vea completo.
+      setTimeout(() => mostrarSemanaCompleta(hoja.cuerpo, wk), 260);
     }
   });
 
-  if (abrirSem !== podios[0].semana_cerrada_en) {
-    setTimeout(() => {
-      const el = hoja.cuerpo.querySelector(`.cp-wk[data-semana="${CSS.escape(String(abrirSem))}"]`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 350);
-  }
+  setTimeout(() => {
+    const el = hoja.cuerpo.querySelector(`.cp-wk[data-semana="${CSS.escape(String(abrirSem))}"]`);
+    if (el) mostrarSemanaCompleta(hoja.cuerpo, el);
+  }, 350);
+}
+
+/** Desplaza el cuerpo scrolleable lo mínimo para que `wk` quede entero a la vista
+ * (si es más alta que el cuerpo, alinea su cabecera arriba). */
+function mostrarSemanaCompleta(cuerpo, wk) {
+  if (!cuerpo || !wk || !wk.isConnected || !wk.classList.contains("cp-open")) return;
+  const c = cuerpo.getBoundingClientRect();
+  const w = wk.getBoundingClientRect();
+  let delta = 0;
+  if (w.height >= c.height) delta = w.top - c.top - 4;
+  else if (w.bottom > c.bottom) delta = w.bottom - c.bottom + 8;
+  else if (w.top < c.top) delta = w.top - c.top - 4;
+  if (Math.abs(delta) > 1) cuerpo.scrollBy({ top: delta, behavior: "smooth" });
 }
 
 /* ===================== Aviso de posición (banner) ===================== */
@@ -678,6 +760,8 @@ export {
   leerColorAcentoActual,
   leerVistaPreferida,
   guardarVistaPreferida,
+  leerMensajesVisibles,
+  guardarMensajesVisibles,
   avatarHTML,
   activarFallbackAvatares,
   asegurarEstilosCompetenciasVisual,

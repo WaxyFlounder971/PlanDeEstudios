@@ -7,7 +7,7 @@ import { calcularNumeroSemanaSemestre, obtenerClasesEfectivasSemana, crearDiaCro
 import { estado } from "../core/storage/storage.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
-import { mostrarToast } from "../ui/componentes.js";
+import { mostrarToast, poblarVentanaSemestres, subtituloSemestreSelector } from "../ui/componentes.js";
 import { DIAS_SEMANA_CONFIG } from "../config/config-ajustes.js";
 import { obtenerSemestresOrdenCronologico, buscarSemestreVivoPorId, navegarAMateriaMatriculada } from "../semestres/semestres.js";
 import { obtenerPlanActivo } from "../plan/plan-esquema.js";
@@ -724,42 +724,37 @@ function abrirSelectorSemestre() {
   const modal = document.getElementById("modal-selector-semestre");
   const cont = document.getElementById("selector-semestre-contenido");
   if (!modal || !cont) return;
+  // Tocar el fondo oscuro (o la "X", que dispara un clic sobre el fondo) cierra la ventana.
+  if (!modal.dataset.cierreListo) {
+    modal.dataset.cierreListo = "1";
+    modal.addEventListener("click", (ev) => {
+      if (ev.target === modal) modal.classList.add("oculto");
+    });
+  }
   // obtenerSemestresOrdenCronologico() es ascendente (más viejo primero) -
   // otras partes del código dependen de ese orden (ej. obtenerSemestreHorarioActual
   // usa el último del arreglo como "el más reciente"), así que no se toca
   // esa función; para este listado se usa una copia invertida, solo para
-  // mostrar, de más reciente a más viejo como se pidió.
+  // mostrar, de más reciente a más viejo.
   const semestres = [...obtenerSemestresOrdenCronologico()].reverse();
+  const elegido = obtenerSemestreHorarioActual();
 
-  cont.innerHTML = `
-    <h3>Elegir semestre</h3>
-    <div class="stack" id="selector-semestre-lista" style="gap:8px; max-height:60vh; overflow-y:auto;"></div>
-  `;
-  const lista = document.getElementById("selector-semestre-lista");
-  if (semestres.length === 0) {
-    lista.innerHTML = `<p class="muted">No hay semestres todavía.</p>`;
-  }
-  semestres.forEach((s) => {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "glass-panel";
-    item.style.cssText = "text-align:left; padding:10px 14px; cursor:pointer; border:none; width:100%;";
-    const inicio = fechaLocalDesdeISO(s.fecha_inicio);
-    const finEstimado = new Date(inicio);
-    finEstimado.setDate(inicio.getDate() + (Number(s.duracion_semanas) || 16) * 7);
-    const fmt = (d) => (isNaN(d.getTime()) ? "" : d.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short", year: "numeric" }));
-    // Antes no tenía color propio y heredaba negro por defecto (ilegible
-    // en modo oscuro) - se fija al color de texto normal del tema, y el
-    // nombre queda 20% más grande (0.95rem ≈ 1.2 × 0.78rem, el tamaño base
-    // que ya traía la fecha de abajo) tal como se pidió.
-    item.innerHTML = `<div style="font-weight:600; font-size:0.95rem; color:var(--text-primary);">${s.nombre}</div><div class="muted" style="font-size:0.78rem;">${fmt(inicio)} – ${fmt(finEstimado)}</div>`;
-    item.addEventListener("click", () => {
-      estado.horarioSemestreId = s.id;
-      estado.horarioNumeroSemana = null; // recalcula al entrar a ese semestre
-      modal.classList.add("oculto");
-      renderizarHorario();
-    });
-    lista.appendChild(item);
+  // 2026-11-03: misma ventana que Agenda/Tiempo (ver poblarVentanaSemestres en ui/componentes.js);
+  // acá se elige UN solo semestre y la ventana se cierra al tocarlo.
+  poblarVentanaSemestres(cont, {
+    titulo: traducirTextoInterfaz("Semestres en Horario"),
+    descripcion: traducirTextoInterfaz("Elegí el semestre del que querés ver el horario."),
+    items: semestres.map((s) => ({
+      nombre: s.nombre || "Semestre",
+      subtitulo: subtituloSemestreSelector(s),
+      seleccionado: Boolean(elegido && elegido.id === s.id),
+      alTocar: () => {
+        estado.horarioSemestreId = s.id;
+        estado.horarioNumeroSemana = null; // recalcula al entrar a ese semestre
+        modal.classList.add("oculto");
+        renderizarHorario();
+      },
+    })),
   });
 
   modal.classList.remove("oculto");

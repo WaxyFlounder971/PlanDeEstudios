@@ -41,7 +41,7 @@ import {
   construirLinkInvitacion,
 } from "./tiempo-estudio-competencias.js";
 // 2026-09-21 — Rediseño: el menú Gestionar usa la hoja del módulo visual.
-import { abrirHoja, esc, ICONO } from "./tiempo-estudio-competencias-visual.js";
+import { abrirHoja, esc, ICONO, leerMensajesVisibles, guardarMensajesVisibles } from "./tiempo-estudio-competencias-visual.js";
 import { abrirAjustesAudioCompetencia } from "./tiempo-estudio-audio-competencias.js";
 
 /* ===================== Menú "Gestionar" (punto 4.1) ===================== */
@@ -94,7 +94,7 @@ function opcionesGestion(competencia) {
  * Una competencia finalizada no acepta gente nueva: en vez del enlace se
  * explica por qué (mismo criterio que tenía el botón "Enlace").
  */
-function abrirModalGestionCompetencia(competencia, refrescar) {
+function abrirModalGestionCompetencia(competencia, refrescar, alCambiarMensajes) {
   asegurarEstilosGestion();
   const finalizada = competencia.estado === "finalizada";
 
@@ -125,6 +125,7 @@ function abrirModalGestionCompetencia(competencia, refrescar) {
       <div class="cp-grp">Invitar</div>
       ${bloqueInvitar}
       <div class="cp-grp">Opciones</div>
+      <button type="button" class="cp-opt" data-cp="mensajes" role="switch" aria-checked="${leerMensajesVisibles(competencia.id)}"><span class="cp-opt-emoji">💬</span><span>${esc(traducirTextoInterfaz("Mensajes del podio", "Podium messages"))}</span><span class="cp-opt-sw" aria-hidden="true"></span></button>
       ${opciones
         .map(
           (o) =>
@@ -142,6 +143,18 @@ function abrirModalGestionCompetencia(competencia, refrescar) {
       setTimeout(() => {
         if (btnCopiar.isConnected) btnCopiar.textContent = "Copiar";
       }, 1600);
+    });
+  }
+
+  // Mostrar/ocultar los mensajes del podio: se guarda en este dispositivo y la tarjeta se
+  // redibuja al instante con los datos que ya tiene (sin volver a pedir nada a la red).
+  const btnMensajes = hoja.cuerpo.querySelector('[data-cp="mensajes"]');
+  if (btnMensajes) {
+    btnMensajes.addEventListener("click", () => {
+      const visibles = !leerMensajesVisibles(competencia.id);
+      guardarMensajesVisibles(competencia.id, visibles);
+      btnMensajes.setAttribute("aria-checked", String(visibles));
+      if (typeof alCambiarMensajes === "function") alCambiarMensajes(visibles);
     });
   }
 

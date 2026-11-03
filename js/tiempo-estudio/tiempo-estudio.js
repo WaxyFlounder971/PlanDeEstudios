@@ -32,7 +32,7 @@ import { obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente, registrarHookPostFusion } from "../core/storage/storage-sync.js";
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearMateriaEstudioIndependiente, sellarTimestamp } from "../core/schema.js";
-import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { abrirConfirmacion, mostrarToast, poblarVentanaSemestres, subtituloSemestreSelector } from "../ui/componentes.js";
 import { obtenerSemestresActuales } from "../semestres/semestres.js";
 import { obtenerSemestreActivoAgenda, obtenerFechaInicioSemanaAgenda } from "../agenda/agenda-utils.js";
 import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
@@ -40,7 +40,7 @@ import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
 import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estudio-registro.js";
 import { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria } from "./tiempo-estudio-estadisticas.js";
-import { construirVistaCompetencias, sincronizarHorasCompetencias, inicializarReintentoHorasCompetencias } from "./tiempo-estudio-competencias.js";
+import { construirVistaCompetencias, obtenerAccionesEncabezadoCompetencias, sincronizarHorasCompetencias, inicializarReintentoHorasCompetencias } from "./tiempo-estudio-competencias.js";
 import { montarIndicadoresTimer } from "./tiempo-estudio-indicador.js";
 import { construirChipRacha, inicializarRacha, alFusionarDatosRacha, simularAnimacionRachaDemo } from "./tiempo-estudio-racha-ui.js";
 import { minutosSesionEnRango } from "./tiempo-estudio-periodos.js";
@@ -419,110 +419,126 @@ function construirTarjetaMateria(item) {
 }
 
 /**
- * Encabezado (B.1): tarjetita con el título, engranaje y acceso al registro
- * manual. La lista usa el filtro Visibles/Todas definido en Ajustes; por
- * defecto respeta el switch de visibilidad de cada materia.
+ * Encabezado general de Tiempo de estudio (2026-11-03: encabezado UNIFICADO de la app, ver
+ * `.app-encabezado` en design-system.css). Misma forma y tamaño en las tres pestañas:
+ *   - arriba, el botón del semestre (igual al de Agenda/Horario); en Competencias no aplica y
+ *     queda un hueco invisible del mismo alto para que el encabezado no cambie de tamaño;
+ *   - debajo, izquierda · título "Semana N" centrado · derecha.
+ * Materias y Estadísticas: racha · ⋮ (ajustes) · ＋ (registrar sesión).
+ * Competencias: "Unirse" anclado a la izquierda y "+ Crear" anclado a la derecha (antes vivían en
+ * un encabezado propio "Competencias").
  */
-function construirEncabezado(cont, contextoSemestre = null) {
+function construirEncabezado(cont, botonSemestre = null) {
+  const enCompetencias = vistaSeccionTE === "competencias";
   const encabezado = document.createElement("div");
-  encabezado.className = "glass-panel row-between te-encabezado";
-  encabezado.style.cssText = "align-items:center; gap:6px; padding:10px 14px;";
+  encabezado.className = "app-encabezado";
 
-  // Racha de estudio (2026-09-19): chip 🔥 + número pegado a la derecha del
-  // título. Van en su propio grupo por la misma razón que los botones de la
-  // derecha (row-between reparte el espacio entre TODOS sus hijos). A la
-  // izquierda quedan los estados, a la derecha las acciones (＋ y ⚙️).
-  const grupoTitulo = document.createElement("div");
-  grupoTitulo.className = "te-encabezado-titulo-grupo";
+  if (botonSemestre && !enCompetencias) {
+    encabezado.appendChild(botonSemestre);
+  } else {
+    const hueco = document.createElement("span");
+    hueco.className = "btn-discreto app-encabezado__semestre app-encabezado__semestre--hueco";
+    hueco.setAttribute("aria-hidden", "true");
+    hueco.textContent = "\u00a0";
+    encabezado.appendChild(hueco);
+  }
+
+  const fila = document.createElement("div");
+  fila.className = "app-encabezado__fila";
+  const izquierda = document.createElement("div");
+  izquierda.className = "app-encabezado__izq";
+  const centro = document.createElement("div");
+  centro.className = "app-encabezado__centro";
+  const derecha = document.createElement("div");
+  derecha.className = "app-encabezado__der";
 
   const titulo = document.createElement("h2");
-  titulo.className = "texto-encabezado-seccion";
-  titulo.style.margin = "0";
+  titulo.className = "texto-encabezado-seccion app-encabezado__titulo";
   const semestreSemana = obtenerSemestreActivoAgenda();
   const numeroSemana = semestreSemana ? calcularNumeroSemanaParaFecha(semestreSemana, obtenerFechaInicioSemanaAgenda(0)) : null;
   titulo.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana actual");
-  grupoTitulo.appendChild(titulo);
-  grupoTitulo.appendChild(construirChipRacha());
-  if (MODO_DEMO && !PREVIEW_DEMO) {
-    const accionesRacha = document.createElement("div");
-    accionesRacha.className = "row";
-    accionesRacha.style.cssText = "gap:6px;flex-wrap:wrap;";
-    const agregar = document.createElement("button");
-    agregar.type = "button"; agregar.className = "btn btn-secondary"; agregar.textContent = "Agregar racha";
-    agregar.addEventListener("click", () => {
-      const id = "demo-racha-sesion";
-      estado.datos.sesiones_estudio = estado.datos.sesiones_estudio || [];
-      if (!estado.datos.sesiones_estudio.some((s) => s.id === id)) {
-        const fin = Date.now();
-        estado.datos.sesiones_estudio.push({ id, materia_matriculada_id: obtenerMateriasParaTiempoEstudio()[0]?.mm.id || null, inicio: fin - 35 * 60000, fin, duracion_minutos: 35, origen: "demo" });
-      }
-      notificarSesionesEstudioActualizadas();
-      renderizarTiempoEstudio();
-      simularAnimacionRachaDemo("inicio");
+  centro.appendChild(titulo);
+
+  if (enCompetencias) {
+    const acciones = obtenerAccionesEncabezadoCompetencias(renderizarTiempoEstudio);
+    const btnUnirse = document.createElement("button");
+    btnUnirse.type = "button";
+    btnUnirse.className = "btn btn-secondary";
+    btnUnirse.textContent = traducirTextoInterfaz("Unirse");
+    btnUnirse.addEventListener("click", () => acciones.alUnirse());
+    izquierda.appendChild(btnUnirse);
+
+    const btnCrear = document.createElement("button");
+    btnCrear.type = "button";
+    btnCrear.className = "btn btn-primary";
+    btnCrear.textContent = traducirTextoInterfaz("+ Crear");
+    btnCrear.addEventListener("click", () => acciones.alCrear());
+    derecha.appendChild(btnCrear);
+  } else {
+    // Racha de estudio: chip 🔥 + número, a la izquierda.
+    izquierda.appendChild(construirChipRacha());
+    if (MODO_DEMO && !PREVIEW_DEMO) {
+      const accionesRacha = document.createElement("div");
+      accionesRacha.className = "row";
+      accionesRacha.style.cssText = "gap:6px;flex-wrap:wrap;";
+      const agregar = document.createElement("button");
+      agregar.type = "button"; agregar.className = "btn btn-secondary"; agregar.textContent = traducirTextoInterfaz("Agregar racha");
+      agregar.addEventListener("click", () => {
+        const id = "demo-racha-sesion";
+        estado.datos.sesiones_estudio = estado.datos.sesiones_estudio || [];
+        if (!estado.datos.sesiones_estudio.some((s) => s.id === id)) {
+          const fin = Date.now();
+          estado.datos.sesiones_estudio.push({ id, materia_matriculada_id: obtenerMateriasParaTiempoEstudio()[0]?.mm.id || null, inicio: fin - 35 * 60000, fin, duracion_minutos: 35, origen: "demo" });
+        }
+        notificarSesionesEstudioActualizadas();
+        renderizarTiempoEstudio();
+        simularAnimacionRachaDemo("inicio");
+      });
+      const borrar = document.createElement("button");
+      borrar.type = "button"; borrar.className = "btn btn-secondary"; borrar.textContent = traducirTextoInterfaz("Borrar racha");
+      borrar.addEventListener("click", () => {
+        estado.datos.sesiones_estudio = (estado.datos.sesiones_estudio || []).filter((s) => s.id !== "demo-racha-sesion");
+        notificarSesionesEstudioActualizadas();
+        renderizarTiempoEstudio();
+        simularAnimacionRachaDemo("perdida");
+      });
+      accionesRacha.append(agregar, borrar);
+      izquierda.appendChild(accionesRacha);
+    }
+
+    // El filtro Visibles/Todas vive en Ajustes — el menú conserva la misma
+    // acción de ajustes, con el icono de tres puntos solicitado.
+    const btnAjustes = document.createElement("button");
+    btnAjustes.type = "button";
+    btnAjustes.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
+    btnAjustes.title = traducirTextoInterfaz("Ajustes de Tiempo");
+    btnAjustes.setAttribute("aria-label", traducirTextoInterfaz("Ajustes de Tiempo"));
+    btnAjustes.textContent = "⋮";
+    btnAjustes.style.fontSize = "1.7rem";
+    btnAjustes.style.lineHeight = "1";
+    btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
+    derecha.appendChild(btnAjustes);
+
+    // Parte 3: acceso al registro manual. Vive acá (nivel superior) y no adentro de una materia
+    // puntual porque el propio formulario ya elige la materia.
+    const btnRegistroManual = document.createElement("button");
+    btnRegistroManual.type = "button";
+    btnRegistroManual.className = "te-btn-icono te-btn-icono-iniciar te-btn-icono-grande";
+    btnRegistroManual.title = traducirTextoInterfaz("Registrar sesión pasada");
+    btnRegistroManual.setAttribute("aria-label", traducirTextoInterfaz("Registrar sesión pasada"));
+    btnRegistroManual.textContent = "＋";
+    btnRegistroManual.addEventListener("click", () => {
+      abrirModalRegistroManual(obtenerMateriasParaTiempoEstudio(), () => renderizarTiempoEstudio());
     });
-    const borrar = document.createElement("button");
-    borrar.type = "button"; borrar.className = "btn btn-secondary"; borrar.textContent = "Borrar racha";
-    borrar.addEventListener("click", () => {
-      estado.datos.sesiones_estudio = (estado.datos.sesiones_estudio || []).filter((s) => s.id !== "demo-racha-sesion");
-      notificarSesionesEstudioActualizadas();
-      renderizarTiempoEstudio();
-      simularAnimacionRachaDemo("perdida");
-    });
-    accionesRacha.append(agregar,borrar);
-    grupoTitulo.appendChild(accionesRacha);
+    derecha.appendChild(btnRegistroManual);
   }
-  encabezado.appendChild(grupoTitulo);
-  if (contextoSemestre) encabezado.appendChild(contextoSemestre);
 
-  // Grupo de botones a la derecha. Van en su propio contenedor (y no
-  // sueltos como hijos directos del row-between) porque row-between reparte
-  // el espacio entre TODOS sus hijos por igual — con 3 hijos sueltos (título,
-  // ⚙️, +) el + quedaba flotando a mitad de camino en vez de pegado al
-  // engranaje. Agrupándolos, row-between solo reparte título vs grupo.
-  // align-items:center + align-self:center en cada botón (abajo) los
-  // centra verticalmente respecto a la tarjeta del encabezado, sin importar
-  // la altura real del título al lado.
-  const grupoBotones = document.createElement("div");
-  grupoBotones.style.cssText = "display:flex; align-items:center; gap:8px;";
-
-  // El filtro Visibles/Todas vive en Ajustes — el menú conserva la misma
-  // acción de ajustes, con el icono de tres puntos solicitado.
-  const btnAjustes = document.createElement("button");
-  btnAjustes.type = "button";
-  btnAjustes.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
-  btnAjustes.style.alignSelf = "center";
-  btnAjustes.title = "Ajustes de Tiempo";
-  btnAjustes.setAttribute("aria-label", "Ajustes de Tiempo");
-  btnAjustes.textContent = "⋮";
-  btnAjustes.style.fontSize = "1.7rem";
-  btnAjustes.style.lineHeight = "1";
-  btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
-  grupoBotones.appendChild(btnAjustes);
-
-  // Parte 3: acceso al registro manual, ahora a la derecha del engranaje.
-  // Vive acá (nivel superior) y no adentro de una materia puntual porque
-  // el propio formulario ya elige la materia — un solo punto de entrada
-  // sin importar en qué pill (Materias/Estadísticas) estés parado.
-  // Mismo estilo relleno que el botón de play de las tarjetas
-  // (te-btn-icono-iniciar) para que combinen, en vez del fantasma que usa
-  // el engranaje — así no se pierde visualmente en el encabezado.
-  const btnRegistroManual = document.createElement("button");
-  btnRegistroManual.type = "button";
-  btnRegistroManual.className = "te-btn-icono te-btn-icono-iniciar te-btn-icono-grande";
-  btnRegistroManual.style.alignSelf = "center";
-  btnRegistroManual.title = "Registrar sesión pasada";
-  btnRegistroManual.setAttribute("aria-label", "Registrar sesión pasada");
-  btnRegistroManual.textContent = "＋";
-  btnRegistroManual.addEventListener("click", () => {
-    abrirModalRegistroManual(obtenerMateriasParaTiempoEstudio(), () => renderizarTiempoEstudio());
-  });
-  grupoBotones.appendChild(btnRegistroManual);
-
-  encabezado.appendChild(grupoBotones);
+  fila.append(izquierda, centro, derecha);
+  encabezado.appendChild(fila);
   if (PREVIEW_DEMO) {
-    const numeroRacha = grupoTitulo.querySelector(".te-racha-num");
+    const numeroRacha = izquierda.querySelector(".te-racha-num");
     if (numeroRacha) numeroRacha.textContent = "16";
-    const chip = grupoTitulo.querySelector(".te-racha-chip");
+    const chip = izquierda.querySelector(".te-racha-chip");
     if (chip) { chip.classList.remove("te-racha-chip--apagada"); chip.classList.add("te-racha-chip--encendida"); chip.title = "Racha de ejemplo: 16 días"; }
   }
   cont.appendChild(encabezado);
@@ -736,20 +752,67 @@ function inicializarDeslizamientoVistasTE(viewport) {
   }, { passive: true });
 }
 
-function construirSelectorSemestreTiempo(cont) {
-  const semestres=(estado.datos.semestres||[]).slice().sort((a,b)=>(b.fecha_inicio||"").localeCompare(a.fecha_inicio||""));
-  const vigente=semestres.find(s=>obtenerSemestresActuales().some(actual=>actual.id===s.id));
-  const seleccionado=semestreTiempoEstudioId||vigente?.id||"todos";
-  const contexto=document.createElement("div");contexto.className="te-contexto-semestre";
-  const nombre=seleccionado==="todos"?traducirTextoInterfaz("Todos los semestres"):semestres.find(s=>s.id===seleccionado)?.nombre||traducirTextoInterfaz("Sin semestres");
-  const boton=document.createElement("button");boton.type="button";boton.className="btn-discreto te-contexto-semestre-boton";boton.textContent=nombre;boton.setAttribute("aria-label",`${traducirTextoInterfaz("Semestre de Tiempo de Estudio")}: ${nombre}`);boton.setAttribute("aria-expanded","false");
-  const opciones=document.createElement("div");opciones.className="te-contexto-semestre-opciones oculto";
-  const elegir=(id)=>{semestreTiempoEstudioId=id;materiaDetalleActivaId=null;renderizarTiempoEstudio();};
-  const agregarOpcion=(etiqueta,id)=>{const opcion=document.createElement("button");opcion.type="button";opcion.className="te-contexto-semestre-opcion";opcion.textContent=etiqueta;opcion.setAttribute("aria-pressed",String(seleccionado===id));opcion.addEventListener("click",()=>elegir(id));opciones.append(opcion);};
-  agregarOpcion(traducirTextoInterfaz("Todos los semestres"),"todos");
-  semestres.forEach(s=>agregarOpcion(s.nombre||traducirTextoInterfaz("Semestre sin nombre"),s.id));
-  boton.addEventListener("click",()=>{const abierto=boton.getAttribute("aria-expanded")==="true";boton.setAttribute("aria-expanded",String(!abierto));opciones.classList.toggle("oculto",abierto);});
-  contexto.append(boton,opciones);return contexto;
+function obtenerSemestresTiempoOrdenados() {
+  return (estado.datos.semestres || []).slice().sort((a, b) => (b.fecha_inicio || "").localeCompare(a.fecha_inicio || ""));
+}
+
+function obtenerSemestreElegidoTiempoId(semestres = obtenerSemestresTiempoOrdenados()) {
+  const vigente = semestres.find((s) => obtenerSemestresActuales().some((actual) => actual.id === s.id));
+  return semestreTiempoEstudioId || vigente?.id || "todos";
+}
+
+/**
+ * Botón del semestre del encabezado. 2026-11-03: mismo botón (texto, color y tamaño, sin flecha) y
+ * misma ventana de elección que Agenda y Horario — antes era un desplegable propio con flecha.
+ */
+function construirBotonSemestreTiempo() {
+  const semestres = obtenerSemestresTiempoOrdenados();
+  const seleccionado = obtenerSemestreElegidoTiempoId(semestres);
+  const nombre = seleccionado === "todos"
+    ? traducirTextoInterfaz("Todos los semestres")
+    : semestres.find((s) => s.id === seleccionado)?.nombre || traducirTextoInterfaz("Sin semestres");
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "btn-discreto app-encabezado__semestre";
+  boton.textContent = nombre;
+  boton.setAttribute("aria-label", `${traducirTextoInterfaz("Semestre de Tiempo de Estudio")}: ${nombre}`);
+  boton.addEventListener("click", abrirVentanaSemestresTiempo);
+  return boton;
+}
+
+/** Ventana de elección (la misma de Agenda/Horario). Acá se elige uno solo, o "Todos", y se cierra al tocar. */
+function abrirVentanaSemestresTiempo() {
+  const modal = document.getElementById("modal-tiempo-semestres");
+  const cont = document.getElementById("tiempo-semestres-contenido");
+  if (!modal || !cont) return;
+  if (!modal.dataset.cierreListo) {
+    modal.dataset.cierreListo = "1";
+    modal.addEventListener("click", (ev) => {
+      if (ev.target === modal) modal.classList.add("oculto");
+    });
+  }
+  const semestres = obtenerSemestresTiempoOrdenados();
+  const seleccionado = obtenerSemestreElegidoTiempoId(semestres);
+  const elegir = (id) => {
+    semestreTiempoEstudioId = id;
+    materiaDetalleActivaId = null;
+    modal.classList.add("oculto");
+    renderizarTiempoEstudio();
+  };
+  poblarVentanaSemestres(cont, {
+    titulo: traducirTextoInterfaz("Semestres en Tiempo"),
+    descripcion: traducirTextoInterfaz("Elegí un semestre, o todos juntos, para ver sus materias y estadísticas."),
+    items: [
+      { nombre: traducirTextoInterfaz("Todos los semestres"), subtitulo: "", seleccionado: seleccionado === "todos", alTocar: () => elegir("todos") },
+      ...semestres.map((s) => ({
+        nombre: s.nombre || traducirTextoInterfaz("Semestre sin nombre"),
+        subtitulo: subtituloSemestreSelector(s),
+        seleccionado: seleccionado === s.id,
+        alTocar: () => elegir(s.id),
+      })),
+    ],
+  });
+  modal.classList.remove("oculto");
 }
 
 /**
@@ -775,7 +838,7 @@ function abrirModalAjustesTiempoEstudio() {
   const filtroActual = obtenerFiltroVista();
 
   caja.innerHTML = `
-    <h2 style="margin:0;">Ajustes de Tiempo</h2>
+    <h2 style="margin:0;">${traducirTextoInterfaz("Ajustes de Tiempo")}</h2>
 
     <div class="stack" style="gap:6px;">
       <span class="form-label" style="margin:0;">Materias en la lista</span>
@@ -1609,12 +1672,9 @@ function renderizarTiempoEstudio() {
     materiaDetalleActivaId = null;
   }
 
-  // El encabezado va antes de las pestañas en Materias/Estadísticas.
-  // Competencias conserva las pestañas pero no necesita ese encabezado.
-  if (vistaSeccionTE !== "competencias") {
-    const contextoSemestre = construirSelectorSemestreTiempo(cont);
-    construirEncabezado(cont, contextoSemestre);
-  }
+  // El encabezado general va antes de las pestañas en las TRES vistas (misma forma y tamaño);
+  // en Competencias lleva Unirse/Crear en vez de racha/⋮/＋ y no muestra el selector de semestre.
+  construirEncabezado(cont, vistaSeccionTE === "competencias" ? null : construirBotonSemestreTiempo());
   construirPillVistaSeccion(cont);
   if (!panelesVistaTE) {
     const viewport = document.createElement("div");

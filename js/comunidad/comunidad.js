@@ -131,7 +131,9 @@ import { abrirModalRequisito } from "../plan/plan-detalle.js";
     .com-popover {
       position: absolute; right: 0; top: calc(100% + 8px); z-index: 60;
       display: flex; flex-direction: column; gap: 12px;
-      width: min(320px, calc(100vw - 48px)); padding: 12px;
+      /* 2026-11-03: el panel de filtros crece lo que haga falta para que NINGÚN texto se corte
+         ("Recom…", "No fue…"); solo se limita al ancho de la pantalla. */
+      width: max-content; min-width: min(280px, calc(100vw - 48px)); max-width: calc(100vw - 48px); padding: 12px;
       border: 1px solid var(--border-glass); border-radius: 12px;
       background: var(--bg-card, var(--bg-panel));
       box-shadow: var(--shadow-float, 0 8px 24px #0005);
@@ -140,8 +142,8 @@ import { abrirModalRequisito } from "../plan/plan-detalle.js";
     .com-popover--menu { width: auto; min-width: 150px; gap: 6px; }
     .com-popover--menu .btn { justify-content: flex-start; text-align: left; white-space: nowrap; }
     .com-popover-grupo { display: flex; flex-direction: column; gap: 6px; }
-    .com-popover .pill-group { flex-wrap: wrap; }
-    .com-popover .pill-item { white-space: nowrap; }
+    .com-popover .pill-group { flex-wrap: wrap; overflow: visible; width: 100%; }
+    .com-popover .pill-item { white-space: nowrap; flex: 1 0 auto; min-width: max-content; overflow: visible; text-overflow: clip; }
     .com-popover-titulo { font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); }
     .com-fila-busqueda { display: flex; align-items: center; gap: 8px; }
     .com-fila-busqueda .form-input { flex: 1; min-width: 0; }
@@ -176,7 +178,7 @@ let controladorPopoversComunidad = null;
 let pistaVistasComunidad = null;
 // v3.27.8: qué vistas (Profesores, Compañeros) ya están armadas desde el último render completo.
 let panesComunidadListos = [false, false];
-estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos" (pills dicen "Fue profe"/"No fue profe")
+estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos" (pills dicen "Fue mi profe"/"No fue mi profe")
 // Filtro de recomendación en Profesores, entre el de "Fue profe/No fue profe" y el
 // de orden (Alfabético/Por bloque) — mismo patrón que ya existía en
 // Compañeros. Se basa en profesor.volveria_a_llevar.
@@ -3493,8 +3495,8 @@ function construirSeccionProfesores() {
           porDefecto: "todos",
           opciones: [
             { valor: "todos", texto: "Todos" },
-            { valor: "tuyos", texto: "Fue profe" },
-            { valor: "no-tuyos", texto: "No fue profe" },
+            { valor: "tuyos", texto: "Fue mi profe" },
+            { valor: "no-tuyos", texto: "No fue mi profe" },
           ],
           valor: estado.filtroComunidadProfesores,
           onCambiar: (valor) => {
@@ -4039,12 +4041,18 @@ function construirEncabezadoComunidad() {
   const nCompas = (datos.companeros || []).length;
 
   const encabezado = document.createElement("section");
-  encabezado.className = "glass-card stack com-encabezado";
+  // 2026-11-03: encabezado unificado de la app (`.app-encabezado`). TODO vive adentro del mismo panel:
+  // "+" a la izquierda, título + conteos al centro, ⋮ a la derecha y, debajo, el selector
+  // Profesores/Compañeros.
+  encabezado.className = "app-encabezado com-encabezado";
   encabezado.style.gap = "12px";
 
   const fila = document.createElement("div");
-  fila.className = "row-between";
-  fila.style.cssText = "gap:8px; align-items:center;";
+  fila.className = "app-encabezado__fila";
+  const zonaIzq = document.createElement("div");
+  zonaIzq.className = "app-encabezado__izq";
+  const zonaDer = document.createElement("div");
+  zonaDer.className = "app-encabezado__der";
 
   const btnAgregar = document.createElement("button");
   btnAgregar.type = "button";
@@ -4053,18 +4061,16 @@ function construirEncabezadoComunidad() {
   btnAgregar.title = enProfes ? "Agregar profesor" : "Agregar compañero";
   btnAgregar.setAttribute("aria-label", btnAgregar.title);
   btnAgregar.addEventListener("click", () => (enProfes ? abrirModalAltaProfesor() : abrirModalAltaCompanero()));
-  fila.appendChild(btnAgregar);
+  zonaIzq.appendChild(btnAgregar);
+  fila.appendChild(zonaIzq);
 
   const centro = document.createElement("div");
-  centro.className = "stack";
-  centro.style.cssText = "align-items:center; text-align:center; gap:2px; flex:1; min-width:0;";
+  centro.className = "app-encabezado__centro";
   const titulo = document.createElement("h2");
-  titulo.className = "texto-encabezado-seccion";
-  titulo.style.margin = "0";
+  titulo.className = "texto-encabezado-seccion app-encabezado__titulo";
   titulo.textContent = "Comunidad";
   const conteo = document.createElement("p");
-  conteo.className = "muted";
-  conteo.style.cssText = "margin:0; font-size:0.85rem;";
+  conteo.className = "muted app-encabezado__sub";
   conteo.textContent = `${nProfes} ${nProfes === 1 ? "profesor" : "profesores"} · ${nCompas} ${nCompas === 1 ? "compañero" : "compañeros"}`;
   centro.append(titulo, conteo);
   fila.appendChild(centro);
@@ -4118,7 +4124,8 @@ function construirEncabezadoComunidad() {
     document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrar(); }, { signal: senal });
   }
   menu.append(btnMenu, popover);
-  fila.appendChild(menu);
+  zonaDer.appendChild(menu);
+  fila.appendChild(zonaDer);
   encabezado.appendChild(fila);
 
   const grupo = document.createElement("div");

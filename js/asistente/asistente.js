@@ -4004,33 +4004,41 @@ function construirEsqueletoAsistente(contenedor) {
   // de la tarjeta entera).
   tarjeta.style.cssText = "gap:10px; display:flex; flex-direction:column; overflow:hidden;";
 
-  const encabezado = document.createElement("div");
-  encabezado.className = "row-between";
-  encabezado.style.alignItems = "center";
-  encabezado.style.flexShrink = "0";
-  // v3.27.6: sin título "✨ Asistente IA" — la tarjeta empieza directo en el
-  // chat y arriba solo queda la acción de nueva conversación, a la derecha.
-  encabezado.style.justifyContent = "space-between";
+  // 2026-11-03 — Encabezado UNIFICADO de la app (`.app-encabezado`): panel propio ARRIBA de la tarjeta
+  // del chat (antes era una fila chica, alineada a la izquierda, adentro de la tarjeta), con el título
+  // grande y centrado como en Resumen/Agenda y la acción "Nueva" a la derecha. La altura de la tarjeta
+  // se mide desde su propio borde superior (sincronizarEstadoAsistente), así que no hace falta ajustar nada.
+  const encabezado = document.createElement("section");
+  encabezado.id = "asistente-encabezado";
+  encabezado.className = "app-encabezado";
+  const filaEncabezado = document.createElement("div");
+  filaEncabezado.className = "app-encabezado__fila";
+  const izquierdaEnc = document.createElement("div");
+  izquierdaEnc.className = "app-encabezado__izq";
+  const centroEnc = document.createElement("div");
+  centroEnc.className = "app-encabezado__centro";
+  const derechaEnc = document.createElement("div");
+  derechaEnc.className = "app-encabezado__der";
   const semestreSemana = obtenerSemestreActivoAgenda();
   const numeroSemana = semestreSemana ? calcularNumeroSemanaParaFecha(semestreSemana, obtenerFechaInicioSemanaAgenda(0)) : null;
-  const tituloSemana = document.createElement("span");
-  tituloSemana.className = "texto-encabezado-seccion";
-  tituloSemana.style.fontSize = "1rem";
+  const tituloSemana = document.createElement("h2");
+  tituloSemana.className = "texto-encabezado-seccion app-encabezado__titulo";
   tituloSemana.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana actual");
-  encabezado.appendChild(tituloSemana);
+  centroEnc.appendChild(tituloSemana);
   const btnNueva = document.createElement("button");
+  btnNueva.type = "button";
+  btnNueva.className = "btn btn-secondary";
   btnNueva.title = "Nueva conversación";
   btnNueva.setAttribute("aria-label", "Nueva conversación");
   btnNueva.textContent = `⟳ ${traducirTextoInterfaz("Nueva")}`;
-  btnNueva.style.cssText =
-    "background:none; border:none; font-size:.95rem; line-height:1; cursor:pointer; padding:4px 6px; display:inline-flex; align-items:center; gap:6px; color:var(--color-luz, #6d5efc);";
   btnNueva.onclick = () => {
     const habiaAlgo = conversacionActual.length > 0;
     iniciarConversacionNueva(contenedor);
     if (habiaAlgo) mostrarToast("Conversación reiniciada");
   };
-  encabezado.appendChild(btnNueva);
-  tarjeta.appendChild(encabezado);
+  derechaEnc.appendChild(btnNueva);
+  filaEncabezado.append(izquierdaEnc, centroEnc, derechaEnc);
+  encabezado.appendChild(filaEncabezado);
 
   const scroll = document.createElement("div");
   scroll.id = "asistente-chat-scroll";
@@ -4074,6 +4082,7 @@ function construirEsqueletoAsistente(contenedor) {
   filaInput.appendChild(btnEnviar);
   tarjeta.appendChild(filaInput);
 
+  contenedor.appendChild(encabezado);
   contenedor.appendChild(tarjeta);
   ajustarAlturaInputAsistente(input);
   instalarObservadorVisibilidadAsistente(tarjeta);

@@ -83,6 +83,7 @@ import {
   leerColorAcentoActual,
   leerVistaPreferida,
   guardarVistaPreferida,
+  leerMensajesVisibles,
   pintarTarjeta,
   abrirHoja,
   pintarHistorial,
@@ -95,6 +96,30 @@ import {
 const CLAVE_CACHE_COMPETENCIA = "te_comp_marcador_cache_v1:";
 const vistasDemoPorId = new Map();
 let refrescoCompetenciasAlReconectarInstalado = false;
+
+/* 2026-11-03 — "Se actualiza a cada rato aunque no haya cambios".
+   `renderizarTiempoEstudio()` se llama tras CADA interacción de la sección y tras cada
+   fusión remota (~9 s), y cada vez reconstruía todas las tarjetas, volvía a pedir los
+   marcadores al Worker y mostraba "Actualizando marcador…". Ahora la vista ya armada se
+   CONSERVA (se vuelve a enganchar el mismo DOM, sin red ni animaciones) mientras:
+     - no pase TTL_VISTA_COMPETENCIAS_MS desde que se armó,
+     - la lista de competencias y la vista (podio/filas) sigan siendo las mismas, y
+     - nadie haya hecho un cambio real (crear/unirse/renombrar/salir…, que pasan por
+       `refrescarDatos` → `invalidarVistaCompetencias()`) ni vuelto la conexión.
+   Cuando sí se vuelve a pedir un marcador, solo se repinta la tarjeta si los datos
+   cambiaron de verdad. */
+const TTL_VISTA_COMPETENCIAS_MS = 90 * 1000;
+let vistaCompetenciasCache = null; // { firma, envoltorio, ancla, creadaEn, simulacionRevelada }
+const competenciasAnimadasEnSesion = new Set();
+
+function invalidarVistaCompetencias() {
+  vistaCompetenciasCache = null;
+}
+
+function firmaVistaCompetencias() {
+  const todas = (estado.datos && estado.datos.competencias_unidas) || [];
+  return JSON.stringify(todas.map((c) => [c.id, c.nombre, c.estado, c.apodo, c.participante_id, Boolean(c.es_creador)])) + "|" + leerVistaPreferida();
+}
 let colaSincronizacionHorasCompetencias = Promise.resolve();
 
 /* ---------------------------------------------------------------------------
@@ -230,6 +255,7 @@ function instalarRefrescoCompetenciasAlReconectar() {
   refrescoCompetenciasAlReconectarInstalado = true;
   window.addEventListener("online", () => {
     const seccion = document.getElementById("seccion-tiempo-estudio");
+    invalidarVistaCompetencias(); // volvió la conexión: ahora sí corresponde pedir el marcador de nuevo
     if (!seccion || seccion.classList.contains("oculto") || !seccion.querySelector(".cp-comp")) return;
     // El render pinta primero la última copia local y luego consulta el Worker.
     // Así el marcador nunca queda vacío mientras vuelve la conexión.
@@ -1280,43 +1306,62 @@ async function abrirModalHistorial(competencia, abrirEn) {
  * competencias a la vez (cada una carga a su propio ritmo).
  */
 async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincronizacionInicial) {
-  const vistaGuardada = leerVistaPreferida();
+  let vista = leerVistaPreferida();
+  let mensajes = leerMensajesVisibles(competencia.id);
   const base = {
     nombre: competencia.nombre,
     esCreador: Boolean(competencia.es_creador),
     apodo: competencia.apodo,
     yoId: competencia.participante_id,
-    vista: vistaGuardada,
+  };
+  // Lo que la tarjeta muestra ahora: permite redibujar (cambio de vista, mostrar/ocultar
+  // mensajes) sin tocar la red y decidir si un marcador recién llegado es realmente distinto.
+  let datosVista = null; // { nombre, participantes, aviso }
+  const redibujar = (animar) => {
+    if (!datosVista) return;
+    pintarTarjeta(tarjeta, {
+      ...base,
+      nombre: datosVista.nombre || base.nombre,
+      vista,
+      mensajes,
+      participantes: datosVista.participantes,
+      estadoCuerpo: "ok",
+      mensajeDesactualizado: datosVista.aviso || null,
+      animar,
+    }, cb);
   };
   const cb = {
     alHistorial: () => abrirModalHistorial(competencia),
-    alGestionar: () => abrirModalGestionCompetencia(competencia, refrescar),
-    alCambiarVista: null, // se asigna abajo, cuando ya hay participantes
+    alGestionar: () => abrirModalGestionCompetencia(competencia, refrescar, (visibles) => {
+      mensajes = visibles;
+      redibujar(false);
+    }),
+    alCambiarVista: (nueva) => {
+      vista = nueva;
+      guardarVistaPreferida(nueva);
+      redibujar(false);
+    },
+  };
+  // El podio "entra" con animación solo la primera vez de la sesión que se ve cada competencia.
+  const animarEstaVez = () => {
+    if (competenciasAnimadasEnSesion.has(competencia.id)) return false;
+    competenciasAnimadasEnSesion.add(competencia.id);
+    return true;
   };
 
-  let vista = vistaGuardada;
   const cacheInicial = leerCacheMarcador(competencia.id);
-  const dibujarCacheInicial = () => {
-    if (!cacheInicial) return;
-    pintarTarjeta(tarjeta, {
-      ...base,
+  if (cacheInicial) {
+    // Se pinta enseguida el último marcador guardado. Ya NO se avisa "Actualizando…" estando en
+    // línea: si hay algo nuevo, simplemente cambia; si no, no pasa nada. Solo se avisa sin conexión.
+    datosVista = {
       nombre: cacheInicial.nombre || base.nombre,
-      vista,
       participantes: cacheInicial.participantes,
-      estadoCuerpo: "ok",
-      mensajeDesactualizado: navigator.onLine === false
-        ? "Sin conexión. Mostrando el último marcador guardado en este dispositivo."
-        : "Actualizando marcador con el último guardado en este dispositivo…",
-      animar: false,
-    }, cb);
-  };
-  if (cacheInicial) dibujarCacheInicial();
-  else pintarTarjeta(tarjeta, { ...base, participantes: null, estadoCuerpo: "cargando", animar: false }, cb);
-  cb.alCambiarVista = (nueva) => {
-    vista = nueva;
-    guardarVistaPreferida(nueva);
-    if (cacheInicial) dibujarCacheInicial();
-  };
+      aviso: navigator.onLine === false ? "Sin conexión. Mostrando el último marcador guardado en este dispositivo." : null,
+    };
+    redibujar(animarEstaVez());
+  } else {
+    pintarTarjeta(tarjeta, { ...base, vista, mensajes, participantes: null, estadoCuerpo: "cargando", animar: false }, cb);
+  }
 
   try {
     if (navigator.onLine === false) throw new Error("Sin conexión; se muestra el último marcador local.");
@@ -1353,6 +1398,7 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
           horas: p.horas_semana_actual || 0,
         })),
       });
+      invalidarVistaCompetencias();
       if (typeof window.renderizarTiempoEstudio === "function") window.renderizarTiempoEstudio();
       return;
     }
@@ -1366,24 +1412,6 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
       color: p.color || null,
       horas: p.horas_semana_actual || 0,
     }));
-
-    // ===== DEBUG TEMPORAL (2026-09-22) — BORRAR después de mirar la consola =====
-    // Muestra el color CRUDO de cada participante tal cual llega del Worker,
-    // y si tonosDeColor() lo reconoce como "sin color propio" o no. Abrí la
-    // consola (F12), recargá con Ctrl+Shift+R y buscá la fila de Mochi.
-    console.log(
-      `[DEBUG color] "${competencia.nombre}":`,
-      participantes.map((p) => {
-        const normalizado = normalizarColorHex(p.color);
-        return {
-          apodo: p.apodo,
-          color_crudo: JSON.stringify(p.color),
-          color_normalizado: normalizado,
-          se_va_a_pintar_como_default: normalizado === null || normalizado === COLOR_PALETA_DEFAULT,
-        };
-      })
-    );
-    // ===== FIN DEBUG TEMPORAL =====
 
     // Foto y color propios: si el Worker tiene otros (o ninguno), se sube lo
     // actual de este dispositivo y mientras tanto se muestra directamente.
@@ -1409,43 +1437,85 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
       }
     }
 
-    guardarCacheMarcador(competencia.id, {
-      nombre: datos.nombre || competencia.nombre,
-      estado: estadoRemoto,
-      participantes,
-    });
+    const nombreFinal = datos.nombre || competencia.nombre;
+    guardarCacheMarcador(competencia.id, { nombre: nombreFinal, estado: estadoRemoto, participantes });
 
-    const dibujar = (animar) =>
-      pintarTarjeta(tarjeta, { ...base, vista, participantes, estadoCuerpo: "ok", mensajeDesactualizado: null, animar }, cb);
-    cb.alCambiarVista = (nueva) => {
-      vista = nueva;
-      guardarVistaPreferida(nueva);
-      dibujar(false);
-    };
-    dibujar(true);
+    // Sin cambios reales (mismos puestos, horas, fotos y colores, y sin aviso pendiente de
+    // quitar): no se repinta nada — ni parpadeo, ni animación, ni aviso.
+    const sinCambios = datosVista
+      && !datosVista.aviso
+      && datosVista.nombre === nombreFinal
+      && JSON.stringify(datosVista.participantes) === JSON.stringify(participantes);
+    if (sinCambios) return;
+
+    datosVista = { nombre: nombreFinal, participantes, aviso: null };
+    redibujar(datosVista && !cacheInicial ? animarEstaVez() : false);
   } catch (e) {
     console.error("[competencias] Falló cargar el marcador:", e);
     const cache = cacheInicial || leerCacheMarcador(competencia.id);
     if (cache) {
-      const dibujar = (animar) => pintarTarjeta(tarjeta, {
-        ...base,
+      datosVista = {
         nombre: cache.nombre || base.nombre,
-        vista,
         participantes: cache.participantes,
-        estadoCuerpo: "ok",
-        mensajeDesactualizado: textoCacheDesactualizada(cache.actualizadoEn),
-        animar,
-      }, cb);
-      cb.alCambiarVista = (nueva) => {
-        vista = nueva;
-        guardarVistaPreferida(nueva);
-        dibujar(false);
+        aviso: textoCacheDesactualizada(cache.actualizadoEn),
       };
-      dibujar(false);
+      redibujar(false);
     } else {
-      pintarTarjeta(tarjeta, { ...base, participantes: null, estadoCuerpo: "error", animar: false }, cb);
+      pintarTarjeta(tarjeta, { ...base, vista, mensajes, participantes: null, estadoCuerpo: "error", animar: false }, cb);
     }
   }
+}
+
+/**
+ * Acciones de los botones "Unirse" (izquierda) y "Crear" (derecha) que ahora viven en el
+ * encabezado general de Tiempo de estudio cuando la pestaña activa es Competencias
+ * (antes tenían un encabezado propio "Competencias"). `refrescar` es renderizarTiempoEstudio.
+ */
+function obtenerAccionesEncabezadoCompetencias(refrescar) {
+  const refrescarDatos = () => {
+    invalidarVistaCompetencias();
+    refrescar();
+  };
+  if (MODO_DEMO) {
+    return {
+      alUnirse: () => {
+        const ejemplo = (estado.datos.competencias_demo || [])[0];
+        if (ejemplo) {
+          mostrarAnimacionUnirseCompetencia({
+            nombreCompetencia: ejemplo.nombre,
+            apodoPropio: ejemplo.apodo_propio || "Lucía",
+            miFoto: null,
+            miColor: null,
+            participantes: ejemplo.participantes || [],
+          });
+        } else {
+          mostrarToast("La creación se simula en la demo; no crea competencias reales.");
+        }
+      },
+      alCrear: () => mostrarToast("La creación se simula en la demo; no crea competencias reales."),
+    };
+  }
+  return {
+    alUnirse: () => abrirModalUnirseCompetencia(refrescarDatos),
+    alCrear: () => abrirModalCrearCompetencia(refrescarDatos),
+  };
+}
+
+/**
+ * Engancha el long-press de 5 s sobre el título del encabezado de Tiempo (el h2 "Semana N"/
+ * "Semana actual") para revelar los botones de simulación. Se llama en CADA render porque el
+ * encabezado se reconstruye siempre, aunque la vista de Competencias se reutilice.
+ */
+function armarEasterEggSimulacion(entrada, refrescar) {
+  const titulo = document.querySelector("#seccion-tiempo-estudio .app-encabezado h2");
+  if (!titulo || !entrada || !entrada.ancla) return;
+  activarLongPress(titulo, DURACION_LONGPRESS_SIMULACION_MS, () => {
+    if (entrada.simulacionRevelada || !entrada.ancla.parentNode) return;
+    entrada.simulacionRevelada = true;
+    const contenedorSimulacion = document.createElement("div");
+    entrada.ancla.parentNode.insertBefore(contenedorSimulacion, entrada.ancla.nextSibling);
+    construirBotonesSimulacion(contenedorSimulacion, refrescar);
+  });
 }
 
 /**
@@ -1460,33 +1530,6 @@ function construirVistaCompetencias(cont, refrescar) {
     const envoltorio = document.createElement("div");
     envoltorio.className = "stack";
     envoltorio.style.gap = "8px";
-    const encabezado = document.createElement("div");
-    encabezado.className = "row-between";
-    encabezado.style.cssText = "align-items:center; gap:10px; flex-wrap:wrap;";
-    encabezado.innerHTML = '<h3 class="texto-encabezado-seccion" style="margin:0;">Competencias</h3>';
-    const acciones = document.createElement("div");
-    acciones.style.cssText = "display:flex; gap:8px;";
-    [{ texto: "Unirse", clase: "btn btn-secondary" }, { texto: "+ Crear", clase: "btn btn-primary" }].forEach(({ texto, clase }) => {
-      const boton = document.createElement("button");
-      boton.type = "button"; boton.className = clase; boton.textContent = texto;
-      boton.addEventListener("click", () => {
-        const ejemplo = (estado.datos.competencias_demo || [])[0];
-        if (texto === "Unirse" && ejemplo) {
-          mostrarAnimacionUnirseCompetencia({
-            nombreCompetencia: ejemplo.nombre,
-            apodoPropio: ejemplo.apodo_propio || "Lucía",
-            miFoto: null,
-            miColor: null,
-            participantes: ejemplo.participantes || [],
-          });
-        } else {
-          mostrarToast("La creación se simula en la demo; no crea competencias reales.");
-        }
-      });
-      acciones.appendChild(boton);
-    });
-    encabezado.appendChild(acciones);
-    envoltorio.appendChild(encabezado);
     construirAvisosResultados(envoltorio, refrescar, () => {});
     const pruebas = document.createElement("div");
     construirBotonesSimulacion(pruebas, refrescar);
@@ -1534,76 +1577,51 @@ function construirVistaCompetencias(cont, refrescar) {
     cont.appendChild(envoltorio);
     return;
   }
+  // 2026-11-03 — Vista ya armada y vigente: se vuelve a enganchar tal cual (sin red, sin
+  // repintar, sin avisos). Ver el comentario de TTL_VISTA_COMPETENCIAS_MS arriba.
+  const firma = firmaVistaCompetencias();
+  const previa = vistaCompetenciasCache;
+  if (previa && previa.firma === firma && Date.now() - previa.creadaEn < TTL_VISTA_COMPETENCIAS_MS) {
+    cont.appendChild(previa.envoltorio);
+    armarEasterEggSimulacion(previa, refrescar);
+    return;
+  }
+
   // Fire-and-forget: además de correr tras cada sesión de estudio, se
   // pincha acá para que una delegación pendiente (ver
   // abrirModalDelegarAntesDeSalir) llegue apenas alguien abre esta
   // pestaña, sin tener que esperar a la próxima vez que estudie.
   const sincronizacionInicial = sincronizarHorasCompetencias();
 
-  // 2026-09-26 — FIX "queda demasiado gap" (entre el título+botones
-  // "Competencias" y la primera tarjeta): ese espacio NO lo pone nada de
-  // este archivo — lo pone el gap del contenedor `cont` que nos pasa el
-  // caller (tiempo-estudio.js), la misma clase "stack" que usan Materias/
-  // Estadísticas. Achicarla ahí afectaría a esas otras pestañas también.
-  // Fix: en vez de colgar cada pieza (encabezado, avisos, lista, registro)
-  // directo de `cont`, se cuelgan de un `envoltorio` propio — así `cont`
-  // solo tiene UN hijo directo (no cuenta gap entre hermanos que no
-  // existen) y el espaciado interno de Competencias se controla acá,
-  // sin tocar la clase compartida. 8px ~ 60% menos que el gap de "stack"
-  // que traía por herencia.
+  // Todo cambio real (crear, unirse, salir, renombrar…) pasa por acá y descarta la vista guardada.
+  const refrescarDatos = () => {
+    invalidarVistaCompetencias();
+    refrescar();
+  };
+
+  // 2026-09-26 — FIX "queda demasiado gap": las piezas se cuelgan de un `envoltorio` propio
+  // (un solo hijo directo de `cont`) y el espaciado interno se controla acá, sin tocar la clase
+  // compartida "stack" de Materias/Estadísticas.
+  // 2026-11-03: el encabezado propio "Competencias" (título + Unirse + Crear) se quitó: esos botones
+  // viven ahora en el encabezado general de Tiempo (ver obtenerAccionesEncabezadoCompetencias).
   const envoltorio = document.createElement("div");
   envoltorio.className = "stack";
   envoltorio.style.gap = "8px";
 
-  const encabezado = document.createElement("div");
-  encabezado.className = "row-between";
-  encabezado.style.cssText = "align-items:center;";
-  encabezado.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">Competencias</h3>`;
-  const tituloCompetencias = encabezado.querySelector("h3");
-
-  const botones = document.createElement("div");
-  botones.style.cssText = "display:flex; gap:8px;";
-  const btnUnirse = document.createElement("button");
-  btnUnirse.type = "button";
-  btnUnirse.className = "btn btn-secondary";
-  btnUnirse.textContent = "Unirse";
-  btnUnirse.addEventListener("click", () => abrirModalUnirseCompetencia(refrescar));
-  const btnCrear = document.createElement("button");
-  btnCrear.type = "button";
-  btnCrear.className = "btn btn-primary";
-  btnCrear.textContent = "+ Crear";
-  btnCrear.addEventListener("click", () => abrirModalCrearCompetencia(refrescar));
-  botones.appendChild(btnUnirse);
-  botones.appendChild(btnCrear);
-  encabezado.appendChild(botones);
-  envoltorio.appendChild(encabezado);
-
   // Punto 3.3: los avisos de resultado nuevo van arriba de todo, y son el
   // ÚNICO camino a la pantalla de celebración con sonido. Nada suena solo.
-  construirAvisosResultados(envoltorio, refrescar, abrirModalHistorial);
+  construirAvisosResultados(envoltorio, refrescarDatos, abrirModalHistorial);
   construirAvisoHorasPendientes(envoltorio);
 
-  // 2026-09-23 — los botones de simulación (encolan un aviso falso de
-  // victoria/derrota para ajustar el diseño de celebración sin esperar a un
-  // cierre de semana real) ya NO se muestran por defecto: quedan ocultos
-  // detrás de un easter egg — mantener presionado 5s el título "Competencias"
-  // los revela para desarrollador.
-  // Ancla de comentario (no un <div>): un nodo de comentario no genera caja
-  // de render, así que no cuenta como hijo para el `gap` del contenedor y no
-  // deja un hueco cuando el easter egg no se activó. El <div> real recién se
-  // crea e inserta si el long-press se completa.
+  // 2026-09-23 — los botones de simulación ya NO se muestran por defecto: quedan ocultos
+  // detrás de un easter egg — mantener presionado 5s el título del encabezado de Tiempo
+  // (estando en Competencias) los revela para desarrollador.
+  // Ancla de comentario (no un <div>): un nodo de comentario no genera caja de render, así que no
+  // cuenta como hijo para el `gap` y no deja un hueco cuando el easter egg no se activó.
   const marcaSimulacion = document.createComment("cp-sim-anchor");
   envoltorio.appendChild(marcaSimulacion);
-  let simulacionRevelada = false;
-  if (tituloCompetencias) {
-    activarLongPress(tituloCompetencias, DURACION_LONGPRESS_SIMULACION_MS, () => {
-      if (simulacionRevelada) return;
-      simulacionRevelada = true;
-      const contenedorSimulacion = document.createElement("div");
-      marcaSimulacion.parentNode.insertBefore(contenedorSimulacion, marcaSimulacion.nextSibling);
-      construirBotonesSimulacion(contenedorSimulacion, refrescar);
-    });
-  }
+  const entrada = { firma, envoltorio, ancla: marcaSimulacion, creadaEn: Date.now(), simulacionRevelada: false };
+  armarEasterEggSimulacion(entrada, refrescar);
 
   const todas = estado.datos.competencias_unidas;
   // Parte 5: las finalizadas salen de la lista principal y se muestran en
@@ -1619,6 +1637,7 @@ function construirVistaCompetencias(cont, refrescar) {
       <p class="muted" style="margin:0; font-size:0.82rem;">Creá una y compartí el link, o unite con uno que te pasen.</p>
     `;
     envoltorio.appendChild(vacio);
+    vistaCompetenciasCache = entrada;
     cont.appendChild(envoltorio);
     return;
   }
@@ -1641,7 +1660,7 @@ function construirVistaCompetencias(cont, refrescar) {
     // "cargando" y luego con los datos del Worker.
     const tarjeta = document.createElement("article");
     lista.appendChild(tarjeta);
-    cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincronizacionInicial);
+    cargarMarcadorEnTarjeta(competencia, tarjeta, refrescarDatos, sincronizacionInicial);
   });
 
   envoltorio.appendChild(lista);
@@ -1649,13 +1668,16 @@ function construirVistaCompetencias(cont, refrescar) {
   // Parte 5 — sección "Registro de competencias" (no dibuja nada si no hay
   // ninguna finalizada; el botón "Recuperar historial" que tuvo brevemente
   // se sacó, no aportaba nada al caso de uso real).
-  construirRegistroCompetencias(envoltorio, refrescar);
+  construirRegistroCompetencias(envoltorio, refrescarDatos);
 
+  vistaCompetenciasCache = entrada;
   cont.appendChild(envoltorio);
 }
 
 export {
   construirVistaCompetencias,
+  obtenerAccionesEncabezadoCompetencias,
+  invalidarVistaCompetencias,
   sincronizarHorasCompetencias,
   inicializarReintentoHorasCompetencias,
   revisarLinkInvitacionAlCargar,

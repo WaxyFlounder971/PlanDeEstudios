@@ -353,10 +353,10 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-overlay{position:fixed;inset:0;z-index:290;display:grid;place-items:center;
     padding:calc(16px + env(safe-area-inset-top,0px)) 14px calc(16px + env(safe-area-inset-bottom,0px));
     background:rgba(4,3,16,.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
-    opacity:0;transition:opacity .25s}
+    opacity:0;transition:opacity .25s;overflow:hidden;grid-template-rows:minmax(0,1fr)}
   .cp-overlay[hidden]{display:none}
   .cp-overlay.cp-show{opacity:1}
-  .cp-sheet{width:min(100%,440px);max-height:min(88vh,760px);display:flex;flex-direction:column;border-radius:26px;overflow:hidden;
+  .cp-sheet{width:min(100%,440px);min-height:0;max-height:100%;max-height:min(88vh,760px);max-height:min(88dvh,760px);display:flex;flex-direction:column;border-radius:26px;overflow:hidden;
     border:1px solid var(--cp-line);background:linear-gradient(180deg,color-mix(in srgb,var(--cp-accent) 16%,var(--bg-header-solido, #0a0920) 84%),var(--bg-header-solido, #0a0920));
     box-shadow:0 30px 80px -20px rgba(0,0,0,.8);transform:translateY(14px) scale(.98);transition:transform .35s cubic-bezier(.2,.9,.3,1)}
   .cp-overlay.cp-show .cp-sheet{transform:none}
@@ -371,7 +371,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-sh-head > div:nth-child(2){flex:1;min-width:0}
   .cp-x{width:34px;height:34px;border-radius:50%;border:1px solid var(--cp-line);background:rgba(255,255,255,.06);display:grid;place-items:center;flex:none}
   .cp-x svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;fill:none}
-  .cp-sh-body{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:4px 14px 18px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none}
+  .cp-sh-body{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:4px 14px 18px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;touch-action:pan-y}
   .cp-sh-body::-webkit-scrollbar{display:none;width:0;height:0}
   .cp-grp{font-size:12px;font-weight:700;color:var(--cp-muted);padding:10px 6px 2px}
   .cp-grp:first-child{padding-top:2px}
@@ -515,6 +515,42 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-res-1 .cp-res-title{background:linear-gradient(90deg,var(--cp-accent2),var(--cp-accent));-webkit-background-clip:text;background-clip:text;color:transparent}
   .cp-res-1 .cp-res-time{color:var(--cp-accent)}
   .cp-res-1 .cp-sp{background:var(--cp-accent)}
+
+  /* 2026-11-03 — Mensajes del podio.
+     TOP 3: globo DENTRO de cada columna del podio (en el flujo, encima de la corona/avatar), así
+     nunca se superpone con la columna de al lado ni con el título de la tarjeta; el texto salta de
+     línea (nunca se corta con "…") y el globo no pasa del ancho de su columna.
+     4.º EN ADELANTE: texto centrado a la altura del nombre; si no entra al lado del nombre baja a su
+     propia línea (centrado) en vez de pisar el nombre o el tiempo. */
+  .cp-podium.cp-con-msg{padding-top:4px}
+  .cp-comp .cp-podium.cp-con-msg{padding-top:6px}
+  .cp-bub{--cp-bub-c:#8f83ff;position:relative;z-index:3;box-sizing:border-box;max-width:100%;min-width:0;padding:6px 9px;margin-bottom:11px;
+    border-radius:13px;text-align:center;font-size:11.5px;font-weight:700;line-height:1.25;white-space:normal;overflow-wrap:anywhere;
+    color:color-mix(in srgb,var(--cp-bub-c) 62%,var(--cp-text));
+    background:color-mix(in srgb,var(--cp-bub-c) 16%,var(--bg-header-solido,#0a0920));
+    border:1px solid color-mix(in srgb,var(--cp-bub-c) 55%,transparent);
+    box-shadow:0 0 14px -3px color-mix(in srgb,var(--cp-bub-c) 55%,transparent)}
+  .cp-bub::after{content:"";position:absolute;left:50%;bottom:-6px;width:9px;height:9px;transform:translateX(-50%) rotate(45deg);
+    background:color-mix(in srgb,var(--cp-bub-c) 16%,var(--bg-header-solido,#0a0920));
+    border-right:1px solid color-mix(in srgb,var(--cp-bub-c) 55%,transparent);border-bottom:1px solid color-mix(in srgb,var(--cp-bub-c) 55%,transparent)}
+  .cp-bub-1{--cp-bub-c:#8f83ff;font-size:12.5px;padding:7px 11px;margin-bottom:calc(24px*var(--cp-u))}
+  .cp-bub-2{--cp-bub-c:#3ddc84}
+  .cp-bub-3{--cp-bub-c:#2ec4e6}
+  .cp-comp.cp-anim .cp-bub{animation:cp-fadeUp .45s ease var(--cp-bd2,0s) both}
+  /* las chispas del 1.º son decoración: nunca por encima de un globo */
+  .cp-pc .cp-sp{z-index:0;pointer-events:none}
+
+  .cp-who-line{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;min-width:0}
+  .cp-who-line .cp-name{flex:0 1 auto;min-width:0;max-width:100%}
+  .cp-msg-fila{flex:1 1 104px;min-width:0;text-align:center;font-size:12px;font-weight:700;line-height:1.25;white-space:normal;overflow-wrap:anywhere;
+    color:color-mix(in srgb,var(--cp-mc,#b3a6ff) 72%,var(--cp-text))}
+  .cp-comp.cp-anim .cp-msg-fila{animation:cp-fadeUp .4s ease var(--cp-d,0s) both}
+
+  /* interruptor de la hoja Gestionar ("Mensajes del podio") */
+  .cp-opt-sw{margin-left:auto;flex:none;position:relative;width:38px;height:22px;border-radius:99px;background:rgba(255,255,255,.16);transition:background .2s}
+  .cp-opt-sw::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s}
+  .cp-opt[aria-checked="true"] .cp-opt-sw{background:var(--cp-accent)}
+  .cp-opt[aria-checked="true"] .cp-opt-sw::after{transform:translateX(16px)}
 
 `;
 
