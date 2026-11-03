@@ -2974,6 +2974,23 @@ img, svg { max-width: 100%; }
 }
 .agenda-filtro-grupo { display:flex; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; }
 .agenda-filtro-separador { display:block; flex:none; width:1px; height:18px; margin:0 2px; background:var(--border-glass); opacity:.8; }
+.agenda-filtro-clase { grid-area:clase; }
+.agenda-filtro-categorias { grid-area:categorias; }
+.agenda-filtro-estado { grid-area:estado; }
+.agenda-filtro-separador-principal { grid-area:separador; }
+.agenda-filtro-estados--multilinea {
+  display:grid;
+  grid-template-columns:auto 1px auto;
+  grid-template-areas:"clase separador estado" "categorias categorias categorias";
+  justify-content:center;
+  align-items:center;
+  row-gap:6px;
+}
+.agenda-filtro-estados--multilinea .agenda-filtro-clase,
+.agenda-filtro-estados--multilinea .agenda-filtro-estado { justify-content:center; }
+.agenda-filtro-estados--multilinea .agenda-filtro-separador-principal { height:100%; min-height:20px; margin:0 5px; }
+.agenda-filtro-estados--multilinea .agenda-filtro-separador-secundario { display:none; }
+.agenda-filtro-estados--multilinea .agenda-filtro-categorias { justify-content:center; }
 .agenda-filtro-estado-menu { position:relative; }
 .agenda-filtro-estado-trigger { min-height:24px; padding-inline:12px; }
 .agenda-filtro-estado-trigger.active { border-color:var(--accent-1); color:var(--accent-1); background:color-mix(in srgb,var(--accent-1) 14%,transparent); }

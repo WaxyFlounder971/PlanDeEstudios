@@ -3,6 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+  // Sin preferencia elegida en este dispositivo, usar el modo del sistema
+  // antes de que se pinte la interfaz para evitar el flash oscuro inicial.
+  try {
+    var modoElegido = localStorage.getItem("tema_modo_elegido_v1");
+    document.documentElement.dataset.mode = ["light", "dark", "true-dark"].includes(modoElegido)
+      ? modoElegido
+      : (window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark");
+  } catch (_e) {}
+</script>
 <title>App Académica</title>
 <script>
   // Animación de apertura: si el folder va a reemplazar al cargador de siempre, este ni se
@@ -782,8 +792,8 @@
         <section class="glass-panel stack" id="horario-header" style="padding:12px 14px;">
           <div class="row-between">
             <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;">‹</button>
-            <div class="stack" style="align-items:center; text-align:center; gap:2px;">
-              <span class="muted" id="horario-nombre-semestre" style="font-size:0.82rem;"></span>
+              <div class="stack" style="align-items:center; text-align:center; gap:3px; min-width:0;">
+                <button type="button" class="btn btn-primary" id="horario-nombre-semestre" style="padding:5px 10px; font-size:0.78rem; max-width:100%;"></button>
               <span id="horario-semana-actual" class="texto-encabezado-seccion"></span>
               <span class="muted" id="horario-fecha-actual" style="font-size:0.72rem;"></span>
             </div>
@@ -802,6 +812,7 @@
               <button type="button" class="btn btn-secondary" id="btn-horario-amigos" style="padding:8px 14px; font-size:0.85rem;">Amigos</button>
             </div>
           </div>
+          <div id="horario-dias-semana" style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; text-align:center;"></div>
         </section>
 
         <section class="glass-panel" id="horario-grid-contenedor">
