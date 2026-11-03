@@ -2021,6 +2021,7 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
             responseMimeType: "application/json",
             responseSchema: ESQUEMA_RESPUESTA_GEMINI,
             temperature: 0.2,
+            thinkingConfig: { thinkingLevel: "minimal" },
           },
         }),
       });
@@ -2126,12 +2127,15 @@ function parsearJsonGeminiTolerante(texto) {
 }
 
 /**
- * Llamada "en vivo" del chat — arma `contents` con TODO el historial visible
- * en pantalla (conversacionActual) más el mensaje nuevo. Sigue siendo el
+ * Llamada "en vivo" del chat — arma `contents` con el historial reciente
+ * visible en pantalla más el mensaje nuevo. Sigue siendo el
  * único punto de entrada para manejarEnvioMensaje (el chat interactivo).
  */
 async function llamarGemini(mensajeNuevo) {
-  const contents = conversacionActual.map((turno) => ({
+  // Reenvía solo el contexto reciente: mantiene referencias al chat y evita
+  // enviar conversaciones largas completas en cada solicitud.
+  const historialReciente = conversacionActual.slice(-8);
+  const contents = historialReciente.map((turno) => ({
     role: turno.rol === "usuario" ? "user" : "model",
     parts: [{ text: turno.rol === "usuario" ? turno.texto : turno.crudo }],
   }));
@@ -3130,12 +3134,11 @@ function crearTarjetaEventoGuardado(eventoId) {
   const badgeTipo = document.createElement("span");
   badgeTipo.className = "badge";
   badgeTipo.textContent = tipoVisible;
+  badgeTipo.style.cssText = "flex:0 1 auto; max-width:min(46vw, 240px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
   if (/^#[0-9a-f]{6}$/i.test(evento.tipo_etiqueta_color || etiquetaEvento?.color || "")) {
     badgeTipo.style.borderColor = evento.tipo_etiqueta_color || etiquetaEvento.color;
     badgeTipo.style.color = evento.tipo_etiqueta_color || etiquetaEvento.color;
   }
-  card.appendChild(badgeTipo);
-
   const detalle = document.createElement("div");
   detalle.className = "muted";
   detalle.style.fontSize = "0.85rem";
@@ -3178,7 +3181,11 @@ function crearTarjetaEventoGuardado(eventoId) {
   };
   filaBotones.appendChild(btnEliminar);
 
-  card.appendChild(filaBotones);
+  const filaAcciones = document.createElement("div");
+  filaAcciones.className = "row";
+  filaAcciones.style.cssText = "gap:8px; justify-content:space-between; align-items:center; margin-top:2px;";
+  filaAcciones.append(badgeTipo, filaBotones);
+  card.appendChild(filaAcciones);
   return card;
 }
 
