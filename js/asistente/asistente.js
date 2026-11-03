@@ -67,6 +67,8 @@ import { iniciarProcesoAnalitico } from "../core/analitica.js";
  * paso es subir a gemini-3.5-flash antes de tocar el prompt.
  */
 const MODELO_GEMINI = "gemini-3.1-flash-lite";
+// Respaldo ligero con endpoint estable independiente para saturación 503.
+const MODELO_GEMINI_RESPALDO = "gemini-3.5-flash-lite";
 
 /**
  * Historial de conversación (2026-08-22): vive SOLO en localStorage de
@@ -1979,8 +1981,6 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
     throw err;
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
-
   // Bug real reportado (2026-08-31): "modalidad de la próxima clase de
   // inglés"/"¿tengo que ir presencial?" cayeron en "Algo salió mal de mi
   // lado" — la consola mostraba 503 de generativelanguage.googleapis.com
@@ -1989,8 +1989,10 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
   // rendirse con tipoError "desconocido" se reintenta un par de veces con
   // una pausa corta — un error real (clave inválida, límite, etc.) nunca
   // entra acá porque esos códigos no cuentan como transitorios.
-  const MAX_REINTENTOS_GEMINI_TRANSITORIO = 3;
+  const MAX_REINTENTOS_GEMINI_TRANSITORIO = 2;
   const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  let modeloActivo = MODELO_GEMINI;
+  let usandoRespaldo = false;
   const esperaSugeridaGemini = (respuesta, datos, intento) => {
     const retryAfter = Number(respuesta.headers?.get("Retry-After"));
     const retryDelay = datos?.error?.details?.find?.((detalle) => detalle?.retryDelay)?.retryDelay;
@@ -2008,6 +2010,7 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
   let datos;
   for (let intento = 0; ; intento++) {
     try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modeloActivo}:generateContent?key=${encodeURIComponent(claveApi)}`;
       respuesta = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -2046,6 +2049,14 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
     const esTransitorio = [408, 429, 500, 502, 503, 504].includes(codigo) || estadoError === "UNAVAILABLE" || estadoError === "RESOURCE_EXHAUSTED";
     if (esTransitorio && intento < MAX_REINTENTOS_GEMINI_TRANSITORIO) {
       await esperar(esperaSugeridaGemini(respuesta, datos, intento));
+      continue;
+    }
+
+    const esServicioSaturado = codigo === 503 || estadoError === "UNAVAILABLE";
+    if (esServicioSaturado && !usandoRespaldo) {
+      modeloActivo = MODELO_GEMINI_RESPALDO;
+      usandoRespaldo = true;
+      intento = -1;
       continue;
     }
 
