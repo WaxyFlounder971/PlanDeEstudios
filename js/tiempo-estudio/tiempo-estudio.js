@@ -1609,13 +1609,13 @@ function renderizarTiempoEstudio() {
     materiaDetalleActivaId = null;
   }
 
-  // Las pestañas siguen disponibles en las tres vistas. El encabezado solo
-  // acompaña Materias y Estadísticas; Competencias tiene su propio contenido.
-  construirPillVistaSeccion(cont);
+  // El encabezado va antes de las pestañas en Materias/Estadísticas.
+  // Competencias conserva las pestañas pero no necesita ese encabezado.
   if (vistaSeccionTE !== "competencias") {
     const contextoSemestre = construirSelectorSemestreTiempo(cont);
     construirEncabezado(cont, contextoSemestre);
   }
+  construirPillVistaSeccion(cont);
   if (!panelesVistaTE) {
     const viewport = document.createElement("div");
     viewport.className = "te-vistas-viewport";

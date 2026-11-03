@@ -368,18 +368,13 @@ function construirBarraFiltroEstadosAgenda() {
   barra.appendChild(grupoEstado);
   const medirMultilinea = () => {
     if (!barra.isConnected) return;
-    // Mide el acomodo FLEX original (sin forzar nuestro diseño de dos filas).
-    // Así se detectan también los saltos internos de categorías y no depende
-    // de estimar anchos, fuentes, zoom ni el espacio del contenedor padre.
     barra.classList.remove("agenda-filtro-estados--multilinea");
-    const elementos = [
-      ...grupoClase.children,
-      ...barra.querySelectorAll(":scope > .agenda-filtro-separador"),
-      ...grupoCategorias.children,
-      botonEstado,
-    ];
-    const posiciones = elementos.map((el) => el.getBoundingClientRect().top);
-    const seParte = posiciones.some((top) => Math.abs(top - posiciones[0]) > 2);
+    // Comprueba si la fila completa cabe sin permitir que flex envuelva ni
+    // comprima las categorías. Así la segunda fila solo aparece cuando hace
+    // falta; si cabe, conserva el orden lineal Clase | categorías | Estado.
+    barra.classList.add("agenda-filtro-estados--midiendo");
+    const seParte = barra.scrollWidth > barra.clientWidth + 1;
+    barra.classList.remove("agenda-filtro-estados--midiendo");
     barra.classList.toggle("agenda-filtro-estados--multilinea", seParte);
   };
   observadorAnchoFiltroAgenda = new ResizeObserver(medirMultilinea);
@@ -721,7 +716,8 @@ function asegurarBarraBusquedaAgenda() {
     const input=document.createElement("input");input.type="search";input.id="agenda-busqueda-input";input.className="form-input";input.placeholder="Buscar en toda la Agenda…";input.setAttribute("aria-label","Buscar en toda la Agenda");input.value=estado.agendaBusquedaConsulta||"";
     input.addEventListener("input",()=>{estado.agendaBusquedaConsulta=input.value;window.clearTimeout(temporizadorBusquedaAgenda);temporizadorBusquedaAgenda=window.setTimeout(renderizarResultadosBusquedaAgenda,100);});
     barra.append(input);
-    const header=document.getElementById("agenda-header");header?.insertAdjacentElement("afterend",barra);
+    const referencia=document.getElementById("pills-agenda-vista")||document.getElementById("agenda-header");
+    referencia?.insertAdjacentElement("afterend",barra);
   }
   let resultados=document.getElementById("agenda-busqueda-resultados");
   if(!resultados){resultados=document.createElement("div");resultados.id="agenda-busqueda-resultados";resultados.className="agenda-busqueda-resultados oculto";barra.insertAdjacentElement("afterend",resultados);}
