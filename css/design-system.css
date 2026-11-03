@@ -510,6 +510,7 @@ a { color: var(--accent-1); }
   overflow-y: visible;
   touch-action: pan-y;
 }
+.te-vistas-viewport.te-vistas-arrastrando .te-vistas-pista { transition: none; }
 .te-vistas-pista {
   display: flex;
   width: 100%;
@@ -525,6 +526,7 @@ a { color: var(--accent-1); }
 .nav-vista-pane[aria-hidden="true"] { pointer-events: none; max-height: 0; overflow: hidden; transition: max-height 0s linear 380ms; }
 /* v3.27.8: mientras se arrastra, la vista vecina se ve completa (sin colapsar) para no mostrar un hueco en blanco; al soltar vuelve a colapsar con el mismo retraso. */
 .nav-vistas-viewport.nav-arrastrando .nav-vista-pane { max-height: 100000px; transition: none; }
+.nav-vistas-viewport.nav-arrastrando .nav-vistas-pista { transition: none; }
 .nav-vistas-pista--dos { width: 200%; }
 .nav-vista-pane--dos { flex-basis: 50%; width: 50%; }
 .pill-switch-binario .pill-switch-thumb[style*="--nav-pill-progreso"] {
@@ -5939,6 +5941,10 @@ html[data-text-size="grande"] .ajuste-seccion-cabecera * { min-width:0; white-sp
 .te-encabezado-titulo-grupo > .te-racha-chip { grid-column:1!important; }
 .te-encabezado > div:last-child { grid-column:3!important; }
 .te-contexto-semestre-boton { min-height:28px; padding:2px 8px; font-size:.84rem; font-weight:650; }
+.te-encabezado { min-height:0!important; padding:10px 14px!important; grid-template-rows:auto auto!important; row-gap:0!important; }
+.te-encabezado-titulo-grupo > .te-racha-chip { min-height:34px!important; padding:3px 8px 3px 6px; font-size:.9rem; }
+.te-encabezado-titulo-grupo > .te-racha-chip .te-racha-num { font-size:.92rem; }
+.te-contexto-semestre-boton { min-height:24px; padding:0 8px; }
 .onboarding-paletas { margin-inline:auto; }
 .onboarding-logo-heading > button:first-child { display:inline-flex; align-items:center; justify-content:flex-start; gap:8px; line-height:1; }
 .onboarding-wapper-cta-wrap { width:100%; margin:14px 0 4px; }
