@@ -49,6 +49,7 @@ import { procesarAsociacionPendienteDeAmigo, iniciarRefrescoPeriodicoAmigos } fr
 // se ejecute (mostrarSeccion() más abajo la llama vía window, no vía
 // import directo, para no acoplar main.js a cada sección una por una).
 import "./asistente/asistente.js";
+import { inicializarBloqueoScrollModales } from "./ui/modal-scroll.js";
 import { abrirConfirmacion, agregarLongPress, inicializarAutoScrollSelectoresEnModales, inicializarBotonesCerrarModal, inicializarLayoutResponsivo, inicializarModalConfirmacion, inicializarNavegacionBotonesMouse, mostrarPantallaCargaSesion as mostrarPantallaCargaSesionBase, mostrarToast, mostrarToastAccion, ocultarPantallaCargaSesion as ocultarPantallaCargaSesionBase, restaurarEstadoSidebar } from "./ui/componentes.js";
 import { confirmarUniversidadNoInvertida } from "./ui/aviso-universidad.js";
 import { aplicarPaleta, aplicarTemaGuardadoLocalmente, obtenerModoTemaLocal, obtenerModoDisenoLocal, guardarModoTemaLocal } from "./ui/tema.js";
@@ -524,6 +525,7 @@ window.addEventListener("DOMContentLoaded", () => {
   inicializarTiempoEstudio();
   inicializarBotonesCerrarModal();
   inicializarAutoScrollSelectoresEnModales();
+  inicializarBloqueoScrollModales();
   inicializarPullToRefresh();
 
   const cache = FORZAR_LOGIN_DESDE_DEMO ? null : leerCacheLocal();
@@ -735,6 +737,7 @@ async function iniciarAplicacionDemo() {
     inicializarTiempoEstudio();
     inicializarBotonesCerrarModal();
     inicializarAutoScrollSelectoresEnModales();
+  inicializarBloqueoScrollModales();
     document.title = PREVIEW_DEMO ? "App Académica" : "Demo Académico";
     document.getElementById("pantalla-login")?.classList.add("oculto");
     document.querySelectorAll('#app-shell img[alt="Logo App Académica"]').forEach((logo) => {

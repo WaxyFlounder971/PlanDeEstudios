@@ -38,7 +38,7 @@ import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
 import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estudio-registro.js";
 import { construirVistaEstadisticas, construirEstadisticasMateria, calcularMetaDiariaMateria } from "./tiempo-estudio-estadisticas.js";
-import { construirVistaCompetencias, sincronizarHorasCompetencias } from "./tiempo-estudio-competencias.js";
+import { construirVistaCompetencias, sincronizarHorasCompetencias, inicializarReintentoHorasCompetencias } from "./tiempo-estudio-competencias.js";
 import { montarIndicadoresTimer } from "./tiempo-estudio-indicador.js";
 import { construirChipRacha, inicializarRacha, alFusionarDatosRacha, simularAnimacionRachaDemo } from "./tiempo-estudio-racha-ui.js";
 import { minutosSesionEnRango } from "./tiempo-estudio-periodos.js";
@@ -679,7 +679,7 @@ function inicializarDeslizamientoVistasTE(viewport) {
   viewport.addEventListener("touchstart", (ev) => {
     if (ev.touches.length !== 1 || ev.target.closest("button,a,input,textarea,select,[contenteditable='true']")) { inicio = null; return; }
     const t = ev.touches[0];
-    inicio = { x: t.clientX, y: t.clientY, indice: indicesVistaTE[vistaSeccionTE], moviendo: false };
+    inicio = { x: t.clientX, y: t.clientY, t0: performance.now(), indice: indicesVistaTE[vistaSeccionTE], moviendo: false };
   }, { passive: true });
   viewport.addEventListener("touchmove", (ev) => {
     if (!inicio || ev.touches.length !== 1) return;
@@ -700,7 +700,9 @@ function inicializarDeslizamientoVistasTE(viewport) {
     if (!inicio) return;
     const t = ev.changedTouches?.[0];
     const dx = t ? t.clientX - inicio.x : 0;
-    const navega = inicio.moviendo && Math.abs(dx) > Math.max(48, viewport.clientWidth * 0.16);
+    // v3.27.8: además de la distancia, un deslizamiento rápido (flick) también cambia de vista.
+    const flick = performance.now() - inicio.t0 < 280 && Math.abs(dx) > 24;
+    const navega = inicio.moviendo && (flick || Math.abs(dx) > Math.max(48, viewport.clientWidth * 0.16));
     const destino = Math.max(0, Math.min(2, inicio.indice + (navega ? (dx < 0 ? 1 : -1) : 0)));
     inicio = null;
     const thumb = document.querySelector("#seccion-tiempo-estudio .pill-switch-thumb");
@@ -1562,8 +1564,11 @@ function renderizarTiempoEstudio() {
     panelesVistaTE = null;
     pistaVistaTE = null;
   } else {
-    const viewportAnterior = panelesVistaTE.viewport;
-    cont.replaceChildren(...[...cont.children].filter((el) => el !== viewportAnterior));
+    // FIX v3.27.2: el filtro estaba invertido (conservaba todo MENOS el
+    // viewport), así que el encabezado y la pill de la pasada anterior se
+    // quedaban y se duplicaban en cada re-render. Se conserva solo el
+    // viewport; el encabezado y la pill se vuelven a construir abajo.
+    cont.replaceChildren(panelesVistaTE.viewport);
   }
 
   if (desuscribirTimerDetalle) {
@@ -1656,6 +1661,8 @@ function inicializarTiempoEstudio() {
   // no revisar con datos viejos antes de que llegue la primera sincronización
   // y es idempotente — si el hook ya hizo la revisión de hoy, no repite nada.
   inicializarRacha();
+  // v3.27.3: reintento automático de las horas que no llegaron al marcador.
+  inicializarReintentoHorasCompetencias();
   setTimeout(() => alFusionarDatosRacha(), 12000);
 
   // Parte 2 (punto 4, salvavidas): se revisa una sola vez al arrancar, no
@@ -1761,6 +1768,8 @@ function obtenerEstudioParaHoy() {
   hoy.setHours(0, 0, 0, 0);
 
   return obtenerMateriasParaTiempoEstudio()
+    // Materia en "Ocultar" (config de la materia): tampoco aparece en Agenda.
+    .filter((item) => item.mm.mostrar_en_tiempo_estudio !== false)
     .map((item) => {
       const calculo = calcularMetaDiariaMateria(item.mm, 0);
       if (!calculo) return null; // sin meta configurada, nada que repartir

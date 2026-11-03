@@ -25,6 +25,8 @@
    `resolverInfo` — así se puede probar con el CSS real sin levantar la app.
    ========================================================================= */
 
+import { mostrarToast } from "../ui/componentes.js";
+
 const COLOR_POR_DEFECTO = "var(--accent-1)";
 
 function esColorHex(valor) {
@@ -140,7 +142,17 @@ function montarIndicadoresTimer({ elementos, resolverInfo, alTocar, alPip, alTog
     const doc = ventanaPiP.document;
     let tarjeta = doc.getElementById("timer-pip-card");
     if (!tarjeta) {
-      doc.head.innerHTML = `<title>Timer de estudio</title><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#11131b;color:#f5f4fb;font:14px system-ui}body{padding:10px}.card{height:100%;padding:14px;border:1px solid #ffffff20;border-radius:16px;background:#191a25;display:flex;flex-direction:column;justify-content:center;gap:11px}.row{display:flex;align-items:center;gap:10px;min-width:0}.dot{width:10px;height:10px;border-radius:50%;flex:none}.name{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.time{font-size:1.45rem;font-weight:750;font-variant-numeric:tabular-nums}.state{color:#aaa;font-size:.8rem}.controls{display:flex;gap:8px}.controls button{flex:1;border:1px solid #ffffff22;border-radius:10px;padding:8px;background:#ffffff0d;color:inherit;font:inherit;cursor:pointer}.controls .stop{color:#ff8585}</style>`;
+      // v3.27.7: misma técnica que la ventana de Notas — se copian los estilos
+      // reales de la app y el tema (atributos de <html>), en vez de colores propios.
+      doc.title = "Timer de estudio";
+      for (const nodo of document.head.querySelectorAll('link[rel="stylesheet"],style')) {
+        const copia = doc.importNode(nodo, true);
+        if (copia.tagName === "LINK") copia.href = nodo.href;
+        doc.head.append(copia);
+      }
+      const estilo = doc.createElement("style");
+      estilo.textContent = `*{box-sizing:border-box}html,body{margin:0;padding:0;width:100%;height:100%;min-height:0;overflow:hidden}body{padding:10px;background-attachment:fixed;font:14px var(--font-body,system-ui)}.card{height:100%;padding:14px;border:1px solid var(--border-glass,#ffffff20);border-radius:16px;background:var(--bg-header-solido,#191a25);color:var(--text-primary,#f5f4fb);display:flex;flex-direction:column;justify-content:center;gap:11px}.row{display:flex;align-items:center;gap:10px;min-width:0}.dot{width:10px;height:10px;border-radius:50%;flex:none}.name{font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}.time{font-size:1.45rem;font-weight:750;font-variant-numeric:tabular-nums}.state{color:var(--text-muted,#aaa);font-size:.8rem}.controls{display:flex;gap:8px}.controls button{flex:1;border:1px solid var(--border-glass,#ffffff22);border-radius:10px;padding:8px;background:var(--bg-panel,#ffffff0d);color:inherit;font:inherit;cursor:pointer}.controls .stop{color:var(--color-danger,#ff8585)}`;
+      doc.head.append(estilo);
       tarjeta = doc.createElement("div"); tarjeta.id = "timer-pip-card"; tarjeta.className = "card";
       tarjeta.innerHTML = `<div class="row"><i class="dot"></i><span class="name"></span></div><div class="time"></div><div class="state"></div><div class="controls"><button class="pause"></button><button class="stop">Detener</button></div>`;
       tarjeta.querySelector(".pause").addEventListener("click", () => alTogglePausa?.());
@@ -152,12 +164,11 @@ function montarIndicadoresTimer({ elementos, resolverInfo, alTocar, alPip, alTog
     tarjeta.querySelector(".time").textContent = infoActual.tiempo || "00:00";
     tarjeta.querySelector(".state").textContent = infoActual.estado || "Sesión activa";
     tarjeta.querySelector(".pause").textContent = infoActual.pausado ? "Reanudar" : "Pausar";
-    const referenciaVisual = document.querySelector(".glass-panel, .glass-card") || document.body;
-    const colores = getComputedStyle(referenciaVisual);
-    tarjeta.style.background = colores.backgroundColor || "#191a25";
-    tarjeta.style.color = getComputedStyle(document.body).color || "#f5f4fb";
-    tarjeta.style.borderColor = colores.borderColor || "#ffffff20";
-    doc.body.style.background = getComputedStyle(document.body).backgroundColor || "#11131b";
+    // El tema (modo, paleta, tamaño de texto) vive en los atributos de <html>:
+    // se copian en cada pintado para que un cambio de tema se vea sin reabrir.
+    const origen = document.documentElement, destino = doc.documentElement;
+    for (const { name, value } of [...origen.attributes]) if (destino.getAttribute(name) !== value) destino.setAttribute(name, value);
+    for (const { name } of [...destino.attributes]) if (!origen.hasAttribute(name)) destino.removeAttribute(name);
   };
   const pintarCanvasPiP = () => {
     if (!canvasPiP || !infoActual) return;
@@ -169,6 +180,9 @@ function montarIndicadoresTimer({ elementos, resolverInfo, alTocar, alPip, alTog
     ctx.font = "700 36px system-ui"; ctx.fillText(String(infoActual.tiempo || "00:00"), 48, h / 2 + 25);
     if (infoActual.estado) { ctx.font = "15px system-ui"; ctx.fillStyle = "#bbb"; ctx.fillText(infoActual.estado, w - 100, h / 2 + 23, 90); }
   };
+  // Respaldo: sin Document PiP ni PiP de video el timer sigue a la vista en la
+  // propia app (indicador de la barra o tarjeta flotante); se avisa en vez de no hacer nada.
+  const avisarSinPiP = () => mostrarToast("Tu navegador no permite la ventana flotante. El timer sigue visible en la app.");
   const abrirPiP = async () => {
     if (!infoActual) return;
     // En escritorio se usa una ventana Document PiP interactiva con controles.
@@ -191,8 +205,10 @@ function montarIndicadoresTimer({ elementos, resolverInfo, alTocar, alPip, alTog
         pintarCanvasPiP(); video.srcObject = canvas.captureStream(2); await video.play(); await video.requestPictureInPicture();
         intervaloPiP = setInterval(pintarCanvasPiP, 1000);
         video.addEventListener("leavepictureinpicture", () => { clearInterval(intervaloPiP); intervaloPiP = null; video.srcObject?.getTracks().forEach((t) => t.stop()); video.remove(); videoPiP = null; canvasPiP = null; }, { once: true });
-      } catch (_) { video.srcObject?.getTracks().forEach((t) => t.stop()); video.remove(); videoPiP = null; canvasPiP = null; }
+      } catch (_) { video.srcObject?.getTracks().forEach((t) => t.stop()); video.remove(); videoPiP = null; canvasPiP = null; avisarSinPiP(); }
+      return;
     }
+    avisarSinPiP();
   };
 
   return function pintar(activo) {

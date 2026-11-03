@@ -124,6 +124,44 @@ import { abrirModalRequisito } from "../plan/plan-detalle.js";
       /* ---- Listas (bloques / tarjetas de Profes y Compañeros): ocupan todo el ancho de la tarjeta que las contiene ---- */
       .com-lista-tarjetas { margin-left: -16px; margin-right: -16px; }
     }
+
+    /* ---- Rediseño: encabezado con acciones + buscador con filtros en popover ---- */
+    .com-encabezado { position: relative; z-index: 10; }
+    .com-menu-cont { position: relative; flex: none; }
+    .com-popover {
+      position: absolute; right: 0; top: calc(100% + 8px); z-index: 60;
+      display: flex; flex-direction: column; gap: 12px;
+      width: min(320px, calc(100vw - 48px)); padding: 12px;
+      border: 1px solid var(--border-glass); border-radius: 12px;
+      background: var(--bg-card, var(--bg-panel));
+      box-shadow: var(--shadow-float, 0 8px 24px #0005);
+    }
+    .com-popover.oculto { display: none; }
+    .com-popover--menu { width: auto; min-width: 150px; gap: 6px; }
+    .com-popover--menu .btn { justify-content: flex-start; text-align: left; white-space: nowrap; }
+    .com-popover-grupo { display: flex; flex-direction: column; gap: 6px; }
+    .com-popover .pill-group { flex-wrap: wrap; }
+    .com-popover .pill-item { white-space: nowrap; }
+    .com-popover-titulo { font-size: 0.78rem; font-weight: 600; color: var(--text-secondary); }
+    .com-fila-busqueda { display: flex; align-items: center; gap: 8px; }
+    .com-fila-busqueda .form-input { flex: 1; min-width: 0; }
+    .com-btn-filtros { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; padding: 10px 14px; }
+    .com-badge-filtros {
+      min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+      background: var(--accent-1); color: #fff; font-size: 0.72rem; line-height: 18px; text-align: center;
+    }
+    .com-chips-filtros { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .com-chip-filtro {
+      display: inline-flex; align-items: center; gap: 4px; min-height: 24px; padding: 2px 10px;
+      border: 1px solid var(--accent-1); border-radius: 999px; cursor: pointer;
+      background: color-mix(in srgb, var(--accent-1) 14%, transparent);
+      color: var(--accent-1); font-size: 0.78rem; font-family: inherit;
+    }
+    .com-cuenta-filtros { margin-left: auto; font-size: 0.78rem; }
+    .com-btn-agregar-redondo {
+      width: 38px; height: 38px; padding: 0; flex: none; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; font-size: 1.35rem; line-height: 1;
+    }
   `;
   document.head.appendChild(style);
 })();
@@ -132,7 +170,12 @@ import { abrirModalRequisito } from "../plan/plan-detalle.js";
 // estado.modoEdicionSemestres en semestres.js: vive en memoria, se resetea
 // solo al recargar la página.
 estado.tabComunidad = "profesores"; // "profesores" | "companeros"
+// Estado de los popovers de filtros y limpieza de listeners entre renderizados.
+let filtrosComunidadAbiertos = false;
+let controladorPopoversComunidad = null;
 let pistaVistasComunidad = null;
+// v3.27.8: qué vistas (Profesores, Compañeros) ya están armadas desde el último render completo.
+let panesComunidadListos = [false, false];
 estado.filtroComunidadProfesores = "todos"; // "todos" | "tuyos" | "no-tuyos" (pills dicen "Fue profe"/"No fue profe")
 // Filtro de recomendación en Profesores, entre el de "Fue profe/No fue profe" y el
 // de orden (Alfabético/Por bloque) — mismo patrón que ya existía en
@@ -3266,35 +3309,6 @@ function importarCompaneros(itemsImportados) {
   });
 }
 
-/** Fila de dos botones (Exportar/Importar) — pedido explícito: "se acomodan
- *  horizontalmente siempre... ocupan todo el espacio horizontal
- *  disponible", mismo patrón que la fila de 3 botones de los modales de
- *  alta (flex-wrap:nowrap + flex:1 en cada uno) — nunca se apilan
- *  verticalmente sin importar el ancho de pantalla. */
-function construirFilaExportarImportar(onExportar, onImportar) {
-  const fila = document.createElement("div");
-  fila.className = "row";
-  fila.style.cssText = "gap:8px; flex-wrap:nowrap; width:100%;";
-
-  const btnExportar = document.createElement("button");
-  btnExportar.type = "button";
-  btnExportar.className = "btn btn-secondary";
-  btnExportar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
-  btnExportar.textContent = "⬆ Exportar";
-  btnExportar.addEventListener("click", onExportar);
-  fila.appendChild(btnExportar);
-
-  const btnImportar = document.createElement("button");
-  btnImportar.type = "button";
-  btnImportar.className = "btn btn-secondary";
-  btnImportar.style.cssText = "flex:1; min-width:0; padding:10px 6px; font-size:0.85rem;";
-  btnImportar.textContent = "⬇ Importar";
-  btnImportar.addEventListener("click", onImportar);
-  fila.appendChild(btnImportar);
-
-  return fila;
-}
-
 /**
  * Input de búsqueda por texto, genérico para Profesores/Compañeros.
  *
@@ -3328,74 +3342,121 @@ function construirInputBusqueda({ id, placeholder, valorActual, onCambiar }) {
   return input;
 }
 
+/**
+ * Rediseño de Comunidad: la barra de arriba de cada lista es UNA fila —
+ * buscador + botón "Filtros" (con un contador de filtros activos). Los
+ * grupos de pills (antes 3 filas fijas) viven en un popover; los filtros
+ * activos se ven debajo como chips que se quitan con un toque. Como
+ * renderizarComunidad() reconstruye todo en cada cambio, la apertura del
+ * popover se guarda en `filtrosComunidadAbiertos` para que elegir una opción
+ * no lo cierre.
+ *
+ * `grupos`: [{ titulo, opciones, valor, porDefecto, esFiltro, onCambiar }].
+ * `esFiltro:false` (ej. el orden) aparece en el popover pero no cuenta como
+ * filtro activo ni genera chip.
+ */
+function construirBarraBusquedaFiltrosComunidad({ idInput, placeholder, busqueda, onBusqueda, grupos, total, visibles }) {
+  const cont = document.createElement("div");
+  cont.className = "stack";
+  cont.style.gap = "10px";
+
+  const activos = grupos.filter((g) => g.esFiltro && g.valor !== g.porDefecto);
+  const hayBusqueda = Boolean((busqueda || "").trim());
+
+  const fila = document.createElement("div");
+  fila.className = "com-fila-busqueda";
+  fila.appendChild(construirInputBusqueda({ id: idInput, placeholder, valorActual: busqueda, onCambiar: onBusqueda }));
+
+  const menu = document.createElement("div");
+  menu.className = "com-menu-cont";
+
+  const btnFiltros = document.createElement("button");
+  btnFiltros.type = "button";
+  btnFiltros.className = "btn btn-secondary com-btn-filtros";
+  btnFiltros.setAttribute("aria-haspopup", "true");
+  btnFiltros.setAttribute("aria-expanded", String(filtrosComunidadAbiertos));
+  btnFiltros.append("Filtros");
+  if (activos.length > 0) {
+    const badge = document.createElement("span");
+    badge.className = "com-badge-filtros";
+    badge.textContent = String(activos.length);
+    btnFiltros.appendChild(badge);
+  }
+
+  const popover = document.createElement("div");
+  popover.className = "com-popover" + (filtrosComunidadAbiertos ? "" : " oculto");
+  popover.setAttribute("role", "group");
+  popover.setAttribute("aria-label", "Filtros");
+  grupos.forEach((g) => {
+    const bloque = document.createElement("div");
+    bloque.className = "com-popover-grupo";
+    const titulo = document.createElement("span");
+    titulo.className = "com-popover-titulo";
+    titulo.textContent = g.titulo;
+    bloque.append(titulo, construirGrupoPills(g.opciones, g.valor, g.onCambiar));
+    popover.appendChild(bloque);
+  });
+  if (activos.length > 0) {
+    const limpiar = document.createElement("button");
+    limpiar.type = "button";
+    limpiar.className = "btn btn-secondary";
+    limpiar.textContent = "Quitar filtros";
+    limpiar.addEventListener("click", () => {
+      // Cada onCambiar re-renderiza; el estado ya queda en su valor por
+      // defecto antes del último render, así que alcanza con disparar todos.
+      activos.forEach((g) => g.onCambiar(g.porDefecto));
+    });
+    popover.appendChild(limpiar);
+  }
+
+  const cerrar = () => {
+    filtrosComunidadAbiertos = false;
+    popover.classList.add("oculto");
+    btnFiltros.setAttribute("aria-expanded", "false");
+  };
+  btnFiltros.addEventListener("click", () => {
+    const abrir = popover.classList.contains("oculto");
+    filtrosComunidadAbiertos = abrir;
+    popover.classList.toggle("oculto", !abrir);
+    btnFiltros.setAttribute("aria-expanded", String(abrir));
+  });
+  const senal = controladorPopoversComunidad?.signal;
+  if (senal) {
+    document.addEventListener("pointerdown", (ev) => { if (!menu.contains(ev.target)) cerrar(); }, { signal: senal });
+    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrar(); }, { signal: senal });
+  }
+
+  menu.append(btnFiltros, popover);
+  fila.appendChild(menu);
+  cont.appendChild(fila);
+
+  if (activos.length > 0 || hayBusqueda) {
+    const chips = document.createElement("div");
+    chips.className = "com-chips-filtros";
+    activos.forEach((g) => {
+      const textoOpcion = g.opciones.find((o) => o.valor === g.valor)?.texto || g.valor;
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "com-chip-filtro";
+      chip.textContent = `${textoOpcion} ✕`;
+      chip.setAttribute("aria-label", `Quitar filtro ${textoOpcion}`);
+      chip.addEventListener("click", () => g.onCambiar(g.porDefecto));
+      chips.appendChild(chip);
+    });
+    const cuenta = document.createElement("span");
+    cuenta.className = "muted com-cuenta-filtros";
+    cuenta.textContent = `${visibles} de ${total}`;
+    chips.appendChild(cuenta);
+    cont.appendChild(chips);
+  }
+
+  return cont;
+}
+
 function construirSeccionProfesores() {
   const datos = estado.datos;
   const seccion = document.createElement("section");
   seccion.className = "glass-card stack";
-
-  // Pedido explícito: buscador ANTES de los filtros.
-  seccion.appendChild(
-    construirInputBusqueda({
-      id: "com-busqueda-profesores",
-      placeholder: "Buscar profesor por nombre...",
-      valorActual: estado.busquedaProfesores,
-      onCambiar: (valor) => {
-        estado.busquedaProfesores = valor;
-        renderizarComunidad();
-      },
-    })
-  );
-
-  seccion.appendChild(
-    construirGrupoPills(
-      [
-        { valor: "todos", texto: "Todos" },
-        { valor: "tuyos", texto: "Fue profe" },
-        { valor: "no-tuyos", texto: "No fue profe" },
-      ],
-      estado.filtroComunidadProfesores,
-      (valor) => {
-        estado.filtroComunidadProfesores = valor;
-        renderizarComunidad();
-      }
-    )
-  );
-
-  // Pedido explícito: filtro de recomendación en Profesores, entre el de
-  // "Fue profe/No fue profe" y el de orden (Alfabético/Por bloque) — mismo patrón
-  // que ya existía en Compañeros, basado en profesor.volveria_a_llevar
-  // (mismo campo que ya se usa para el badge Recomendado/No recomendado).
-  seccion.appendChild(
-    construirGrupoPills(
-      [
-        { valor: "todos", texto: "Todos" },
-        { valor: "recomendados", texto: "Recomendados" },
-        { valor: "no-recomendados", texto: "No recomendados" },
-      ],
-      estado.filtroRecomendacionProfesores,
-      (valor) => {
-        estado.filtroRecomendacionProfesores = valor;
-        renderizarComunidad();
-      }
-    )
-  );
-
-  // Pedido explícito: filtro/orden — Alfabético (default) o Por bloque
-  // (agrupados en tarjetas retraíbles por semestre, ver
-  // agruparProfesoresPorBloque / construirBloqueSemestreProfesores).
-  seccion.appendChild(
-    construirGrupoPills(
-      [
-        { valor: "alfabetico", texto: "Alfabético" },
-        { valor: "bloque", texto: "Por bloque" },
-      ],
-      estado.ordenComunidadProfesores,
-      (valor) => {
-        estado.ordenComunidadProfesores = valor;
-        renderizarComunidad();
-      }
-    )
-  );
 
   const todos = datos.profesores || [];
   const consultaBusqueda = normalizarNombreComparable(estado.busquedaProfesores);
@@ -3414,12 +3475,70 @@ function construirSeccionProfesores() {
     })
     .sort((a, b) => a.nombre.localeCompare(b.nombre, "es"));
 
+  seccion.appendChild(
+    construirBarraBusquedaFiltrosComunidad({
+      idInput: "com-busqueda-profesores",
+      placeholder: "Buscar profesor por nombre...",
+      busqueda: estado.busquedaProfesores,
+      onBusqueda: (valor) => {
+        estado.busquedaProfesores = valor;
+        renderizarComunidad();
+      },
+      total: todos.length,
+      visibles: filtrados.length,
+      grupos: [
+        {
+          titulo: "Relación",
+          esFiltro: true,
+          porDefecto: "todos",
+          opciones: [
+            { valor: "todos", texto: "Todos" },
+            { valor: "tuyos", texto: "Fue profe" },
+            { valor: "no-tuyos", texto: "No fue profe" },
+          ],
+          valor: estado.filtroComunidadProfesores,
+          onCambiar: (valor) => {
+            estado.filtroComunidadProfesores = valor;
+            renderizarComunidad();
+          },
+        },
+        {
+          titulo: "Opinión",
+          esFiltro: true,
+          porDefecto: "todos",
+          opciones: [
+            { valor: "todos", texto: "Todos" },
+            { valor: "recomendados", texto: "Recomendados" },
+            { valor: "no-recomendados", texto: "No recomendados" },
+          ],
+          valor: estado.filtroRecomendacionProfesores,
+          onCambiar: (valor) => {
+            estado.filtroRecomendacionProfesores = valor;
+            renderizarComunidad();
+          },
+        },
+        {
+          titulo: "Ordenar por",
+          esFiltro: false,
+          porDefecto: "alfabetico",
+          opciones: [
+            { valor: "alfabetico", texto: "Alfabético" },
+            { valor: "bloque", texto: "Por bloque" },
+          ],
+          valor: estado.ordenComunidadProfesores,
+          onCambiar: (valor) => {
+            estado.ordenComunidadProfesores = valor;
+            renderizarComunidad();
+          },
+        },
+      ],
+    })
+  );
+
   // Pedido explícito: SOLO si no hay espacio en pantalla, las tarjetas de
   // bloques/profes deben ocupar todo el ancho disponible dentro de la
   // tarjeta que las contiene (ver .com-lista-tarjetas en el estilo
-  // inyectado) — con espacio de sobra queda EXACTAMENTE igual que antes
-  // (margin 0, ningún cambio visual). Los pills de filtro y el botón
-  // "Agregar" quedan FUERA de este wrapper, nunca se bleeding.
+  // inyectado) — con espacio de sobra queda EXACTAMENTE igual que antes.
   const listaTarjetas = document.createElement("div");
   listaTarjetas.className = "stack com-lista-tarjetas";
 
@@ -3437,20 +3556,6 @@ function construirSeccionProfesores() {
     filtrados.forEach((p) => listaTarjetas.appendChild(construirTarjetaProfesor(p, datos)));
   }
   seccion.appendChild(listaTarjetas);
-
-  const btnAgregar = document.createElement("button");
-  btnAgregar.type = "button";
-  btnAgregar.className = "btn btn-primary btn-block";
-  btnAgregar.textContent = "+ Agregar profesor";
-  btnAgregar.addEventListener("click", () => abrirModalAltaProfesor());
-  seccion.appendChild(btnAgregar);
-
-  seccion.appendChild(
-    construirFilaExportarImportar(
-      () => exportarProfesores(),
-      () => abrirSelectorArchivoImportar("profesores", (items) => importarProfesores(items))
-    )
-  );
 
   return seccion;
 }
@@ -3561,72 +3666,6 @@ function construirSeccionCompaneros() {
   const seccion = document.createElement("section");
   seccion.className = "glass-card stack";
 
-  // Pedido explícito: buscador ANTES de los filtros — mismo helper que
-  // Profesores, pero con su propio estado independiente
-  // (estado.busquedaCompaneros), así que escribir acá nunca toca lo que
-  // haya en el buscador de Profesores.
-  seccion.appendChild(
-    construirInputBusqueda({
-      id: "com-busqueda-companeros",
-      placeholder: "Buscar compañero por nombre...",
-      valorActual: estado.busquedaCompaneros,
-      onCambiar: (valor) => {
-        estado.busquedaCompaneros = valor;
-        renderizarComunidad();
-      },
-    })
-  );
-
-  // Pedido explícito: "Todos, Compañeros, Conocidos" — para diferenciar
-  // compañeros con los que YA se compartió alguna materia real (validada,
-  // ver esCompanero/obtenerMateriasCompartidasValidas) de los que solo
-  // están agregados pero todavía no comparten ninguna clase ("conocidos").
-  seccion.appendChild(
-    construirGrupoPills(
-      [
-        { valor: "todos", texto: "Todos" },
-        { valor: "companeros", texto: "Compañeros" },
-        { valor: "conocidos", texto: "Conocidos" },
-      ],
-      estado.filtroTipoCompaneros,
-      (valor) => {
-        estado.filtroTipoCompaneros = valor;
-        renderizarComunidad();
-      }
-    )
-  );
-
-  seccion.appendChild(
-    construirGrupoPills(
-      [
-        { valor: "todos", texto: "Todos" },
-        { valor: "recomendados", texto: "Recomendados" },
-        { valor: "no-recomendados", texto: "No recomendados" },
-      ],
-      estado.filtroComunidadCompaneros,
-      (valor) => {
-        estado.filtroComunidadCompaneros = valor;
-        renderizarComunidad();
-      }
-    )
-  );
-
-  // Pedido explícito: "mismos filtros que en profes", incluye Alfabético/Por
-  // bloque — ver agruparCompanerosPorBloque / construirBloqueSemestreCompaneros.
-  seccion.appendChild(
-    construirGrupoPills(
-      [
-        { valor: "alfabetico", texto: "Alfabético" },
-        { valor: "bloque", texto: "Por bloque" },
-      ],
-      estado.ordenComunidadCompaneros,
-      (valor) => {
-        estado.ordenComunidadCompaneros = valor;
-        renderizarComunidad();
-      }
-    )
-  );
-
   const todos = datos.companeros || [];
   const consultaBusqueda = normalizarNombreComparable(estado.busquedaCompaneros);
   const filtrados = todos
@@ -3643,6 +3682,70 @@ function construirSeccionCompaneros() {
       return true;
     })
     .sort((a, b) => a.nombre_completo.localeCompare(b.nombre_completo, "es"));
+
+  // Pedido explícito: "Todos, Compañeros, Conocidos" — para diferenciar
+  // compañeros con los que YA se compartió alguna materia real (validada,
+  // ver esCompanero/obtenerMateriasCompartidasValidas) de los que solo
+  // están agregados pero todavía no comparten ninguna clase ("conocidos").
+  seccion.appendChild(
+    construirBarraBusquedaFiltrosComunidad({
+      idInput: "com-busqueda-companeros",
+      placeholder: "Buscar compañero por nombre...",
+      busqueda: estado.busquedaCompaneros,
+      onBusqueda: (valor) => {
+        estado.busquedaCompaneros = valor;
+        renderizarComunidad();
+      },
+      total: todos.length,
+      visibles: filtrados.length,
+      grupos: [
+        {
+          titulo: "Tipo",
+          esFiltro: true,
+          porDefecto: "todos",
+          opciones: [
+            { valor: "todos", texto: "Todos" },
+            { valor: "companeros", texto: "Compañeros" },
+            { valor: "conocidos", texto: "Conocidos" },
+          ],
+          valor: estado.filtroTipoCompaneros,
+          onCambiar: (valor) => {
+            estado.filtroTipoCompaneros = valor;
+            renderizarComunidad();
+          },
+        },
+        {
+          titulo: "Opinión",
+          esFiltro: true,
+          porDefecto: "todos",
+          opciones: [
+            { valor: "todos", texto: "Todos" },
+            { valor: "recomendados", texto: "Recomendados" },
+            { valor: "no-recomendados", texto: "No recomendados" },
+          ],
+          valor: estado.filtroComunidadCompaneros,
+          onCambiar: (valor) => {
+            estado.filtroComunidadCompaneros = valor;
+            renderizarComunidad();
+          },
+        },
+        {
+          titulo: "Ordenar por",
+          esFiltro: false,
+          porDefecto: "alfabetico",
+          opciones: [
+            { valor: "alfabetico", texto: "Alfabético" },
+            { valor: "bloque", texto: "Por bloque" },
+          ],
+          valor: estado.ordenComunidadCompaneros,
+          onCambiar: (valor) => {
+            estado.ordenComunidadCompaneros = valor;
+            renderizarComunidad();
+          },
+        },
+      ],
+    })
+  );
 
   // Mismo wrapper full-bleed que Profesores — ver comentario en
   // construirSeccionProfesores.
@@ -3663,20 +3766,6 @@ function construirSeccionCompaneros() {
     filtrados.forEach((c) => listaTarjetas.appendChild(construirTarjetaCompanero(c, datos)));
   }
   seccion.appendChild(listaTarjetas);
-
-  const btnAgregar = document.createElement("button");
-  btnAgregar.type = "button";
-  btnAgregar.className = "btn btn-primary btn-block";
-  btnAgregar.textContent = "+ Agregar compañero";
-  btnAgregar.addEventListener("click", () => abrirModalAltaCompanero());
-  seccion.appendChild(btnAgregar);
-
-  seccion.appendChild(
-    construirFilaExportarImportar(
-      () => exportarCompaneros(),
-      () => abrirSelectorArchivoImportar("companeros", (items) => importarCompaneros(items))
-    )
-  );
 
   return seccion;
 }
@@ -3937,23 +4026,101 @@ function inicializarComunidad() {
 }
 
 /**
- * Reconstruye #seccion-comunidad COMPLETO cada vez que se llama — mismo
- * patrón que renderizarSemestres/renderizarPlanEstudios. Requiere
- * estado.datos ya cargado (se llama desde mostrarApp() en main.js, después
- * del login/caché — nunca antes).
+ * Encabezado de Comunidad — mismo patrón que Agenda: tarjeta con acción
+ * principal a la izquierda ("+" redondo, agrega según la pestaña activa),
+ * título y conteos al centro, y un menú "⋯" a la derecha que guarda
+ * Exportar/Importar (antes eran 3 botones fijos al pie de cada lista). Abajo,
+ * el pill que cambia entre Profesores y Compañeros.
  */
-function renderizarComunidad() {
-  const cont = document.getElementById("seccion-comunidad");
-  if (!cont || !estado.datos) return;
-
-  cont.replaceChildren();
+function construirEncabezadoComunidad() {
+  const datos = estado.datos;
+  const enProfes = estado.tabComunidad !== "companeros";
+  const nProfes = (datos.profesores || []).length;
+  const nCompas = (datos.companeros || []).length;
 
   const encabezado = document.createElement("section");
-  encabezado.className = "glass-card stack";
-  encabezado.innerHTML = `
-    <h2 class="texto-encabezado-seccion" style="margin:0;">Comunidad</h2>
-    <p class="muted" style="margin:0;">Profesores y compañeros con los que compartiste clase.</p>
-  `;
+  encabezado.className = "glass-card stack com-encabezado";
+  encabezado.style.gap = "12px";
+
+  const fila = document.createElement("div");
+  fila.className = "row-between";
+  fila.style.cssText = "gap:8px; align-items:center;";
+
+  const btnAgregar = document.createElement("button");
+  btnAgregar.type = "button";
+  btnAgregar.className = "btn btn-primary com-btn-agregar-redondo";
+  btnAgregar.textContent = "+";
+  btnAgregar.title = enProfes ? "Agregar profesor" : "Agregar compañero";
+  btnAgregar.setAttribute("aria-label", btnAgregar.title);
+  btnAgregar.addEventListener("click", () => (enProfes ? abrirModalAltaProfesor() : abrirModalAltaCompanero()));
+  fila.appendChild(btnAgregar);
+
+  const centro = document.createElement("div");
+  centro.className = "stack";
+  centro.style.cssText = "align-items:center; text-align:center; gap:2px; flex:1; min-width:0;";
+  const titulo = document.createElement("h2");
+  titulo.className = "texto-encabezado-seccion";
+  titulo.style.margin = "0";
+  titulo.textContent = "Comunidad";
+  const conteo = document.createElement("p");
+  conteo.className = "muted";
+  conteo.style.cssText = "margin:0; font-size:0.85rem;";
+  conteo.textContent = `${nProfes} ${nProfes === 1 ? "profesor" : "profesores"} · ${nCompas} ${nCompas === 1 ? "compañero" : "compañeros"}`;
+  centro.append(titulo, conteo);
+  fila.appendChild(centro);
+
+  const menu = document.createElement("div");
+  menu.className = "com-menu-cont";
+  const btnMenu = document.createElement("button");
+  btnMenu.type = "button";
+  btnMenu.className = "agenda-btn-ajustes";
+  btnMenu.textContent = "⋯";
+  btnMenu.title = "Exportar o importar";
+  btnMenu.setAttribute("aria-label", "Exportar o importar");
+  btnMenu.setAttribute("aria-haspopup", "true");
+  btnMenu.setAttribute("aria-expanded", "false");
+  const popover = document.createElement("div");
+  popover.className = "com-popover com-popover--menu oculto";
+  popover.setAttribute("role", "menu");
+  const cerrar = () => {
+    popover.classList.add("oculto");
+    btnMenu.setAttribute("aria-expanded", "false");
+  };
+  [
+    ["⬆ Exportar", () => (enProfes ? exportarProfesores() : exportarCompaneros())],
+    [
+      "⬇ Importar",
+      () =>
+        enProfes
+          ? abrirSelectorArchivoImportar("profesores", (items) => importarProfesores(items))
+          : abrirSelectorArchivoImportar("companeros", (items) => importarCompaneros(items)),
+    ],
+  ].forEach(([texto, accion]) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "btn btn-secondary";
+    item.setAttribute("role", "menuitem");
+    item.textContent = texto;
+    item.addEventListener("click", () => {
+      cerrar();
+      accion();
+    });
+    popover.appendChild(item);
+  });
+  btnMenu.addEventListener("click", () => {
+    const abrir = popover.classList.contains("oculto");
+    popover.classList.toggle("oculto", !abrir);
+    btnMenu.setAttribute("aria-expanded", String(abrir));
+  });
+  const senal = controladorPopoversComunidad?.signal;
+  if (senal) {
+    document.addEventListener("pointerdown", (ev) => { if (!menu.contains(ev.target)) cerrar(); }, { signal: senal });
+    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrar(); }, { signal: senal });
+  }
+  menu.append(btnMenu, popover);
+  fila.appendChild(menu);
+  encabezado.appendChild(fila);
+
   const grupo = document.createElement("div");
   grupo.className = "pill-group pill-group-fijo pill-switch-binario";
   grupo.dataset.opciones = "2";
@@ -3974,7 +4141,25 @@ function renderizarComunidad() {
   });
   thumb.classList.toggle("pill-switch-thumb--derecha", estado.tabComunidad === "companeros");
   encabezado.appendChild(grupo);
-  cont.appendChild(encabezado);
+
+  return encabezado;
+}
+
+/**
+ * Reconstruye #seccion-comunidad COMPLETO cada vez que se llama — mismo
+ * patrón que renderizarSemestres/renderizarPlanEstudios. Requiere
+ * estado.datos ya cargado (se llama desde mostrarApp() en main.js, después
+ * del login/caché — nunca antes).
+ */
+function renderizarComunidad() {
+  const cont = document.getElementById("seccion-comunidad");
+  if (!cont || !estado.datos) return;
+
+  cont.replaceChildren();
+  controladorPopoversComunidad?.abort();
+  controladorPopoversComunidad = new AbortController();
+
+  cont.appendChild(construirEncabezadoComunidad());
   if (!pistaVistasComunidad) {
     const viewport = document.createElement("div");
     viewport.className = "te-vistas-viewport nav-vistas-viewport";
@@ -3997,13 +4182,40 @@ function renderizarComunidad() {
   pistaVistasComunidad.paneles.forEach((pane, i) => pane.setAttribute("aria-hidden", String(i !== indice)));
   const paneActivo = pistaVistasComunidad.paneles[indice];
   paneActivo.replaceChildren(indice ? construirSeccionCompaneros() : construirSeccionProfesores());
+  // v3.27.8: un render completo arma solo la vista activa; la vecina se arma bajo
+  // demanda (al empezar a arrastrar o al tocar su pestaña) y queda en caché hasta
+  // el próximo render completo, así al deslizar nunca se ve una página en blanco.
+  panesComunidadListos = [indice === 0, indice === 1];
+  pistaVistasComunidad.paneles[1 - indice].replaceChildren();
   cont.appendChild(pistaVistasComunidad.viewport);
 }
 
+/** Arma la vista `indice` (0 Profesores, 1 Compañeros) si todavía no está en caché. */
+function asegurarVistaComunidadArmada(indice) {
+  if (!pistaVistasComunidad || panesComunidadListos[indice]) return;
+  pistaVistasComunidad.paneles[indice].replaceChildren(indice ? construirSeccionCompaneros() : construirSeccionProfesores());
+  panesComunidadListos[indice] = true;
+}
+
+/**
+ * v3.27.8: cambio de pestaña SIN reconstruir el encabezado: la pill existente
+ * se desliza (antes se creaba una nueva ya en su sitio y no había animación) y
+ * la pista anima hacia la vista, armándola solo si no estaba en caché.
+ */
 function cambiarVistaComunidad(vista) {
   if (!["profesores", "companeros"].includes(vista) || vista === estado.tabComunidad) return;
   estado.tabComunidad = vista;
-  renderizarComunidad();
+  const grupo = document.querySelector("#seccion-comunidad > section .pill-switch-binario");
+  if (!pistaVistasComunidad || !grupo) { renderizarComunidad(); return; }
+  const indice = vista === "companeros" ? 1 : 0;
+  asegurarVistaComunidadArmada(indice);
+  pistaVistasComunidad.paneles.forEach((pane, i) => pane.setAttribute("aria-hidden", String(i !== indice)));
+  pistaVistasComunidad.pista.style.transform = `translate3d(-${indice * 50}%,0,0)`;
+  grupo.querySelectorAll(".pill-item").forEach((btn, i) => {
+    btn.classList.toggle("active", i === indice);
+    btn.setAttribute("aria-pressed", String(i === indice));
+  });
+  grupo.querySelector(".pill-switch-thumb")?.classList.toggle("pill-switch-thumb--derecha", indice === 1);
 }
 
 function inicializarGestosComunidad(viewport) {
@@ -4011,13 +4223,17 @@ function inicializarGestosComunidad(viewport) {
   viewport.addEventListener("touchstart", (ev) => {
     const t = ev.touches[0];
     if (ev.touches.length !== 1 || ev.target.closest("input,textarea,select,button,a,[contenteditable='true'],[data-no-swipe]")) { inicio = null; return; }
-    inicio = { x: t.clientX, y: t.clientY, activo: false, indice: estado.tabComunidad === "companeros" ? 1 : 0 };
+    inicio = { x: t.clientX, y: t.clientY, t0: performance.now(), activo: false, indice: estado.tabComunidad === "companeros" ? 1 : 0 };
   }, { passive: true });
   viewport.addEventListener("touchmove", (ev) => {
     if (!inicio || ev.touches.length !== 1) return;
     const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
     if (!inicio.activo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
-    inicio.activo = true;
+    if (!inicio.activo) {
+      inicio.activo = true;
+      viewport.classList.add("nav-arrastrando");
+      asegurarVistaComunidadArmada(1 - inicio.indice);
+    }
     ev.preventDefault();
     const pct = -inicio.indice * 50 + dx / (viewport.clientWidth || 1) * 50;
     pistaVistasComunidad.pista.style.transform = `translate3d(${pct}%,0,0)`;
@@ -4027,16 +4243,20 @@ function inicializarGestosComunidad(viewport) {
   viewport.addEventListener("touchend", (ev) => {
     if (!inicio) return;
     const dx = (ev.changedTouches?.[0]?.clientX ?? inicio.x) - inicio.x;
-    const siguiente = inicio.activo && Math.abs(dx) > Math.max(48, viewport.clientWidth * 0.16)
+    // v3.27.8: además de la distancia, un deslizamiento rápido (flick) también cambia de vista.
+    const flick = performance.now() - inicio.t0 < 280 && Math.abs(dx) > 24;
+    const siguiente = inicio.activo && (flick || Math.abs(dx) > Math.max(48, viewport.clientWidth * 0.16))
       ? (dx < 0 ? "companeros" : "profesores")
       : estado.tabComunidad;
     inicio = null;
+    viewport.classList.remove("nav-arrastrando");
     document.querySelector("#seccion-comunidad .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
     cambiarVistaComunidad(siguiente);
     pistaVistasComunidad.pista.style.transform = `translate3d(-${estado.tabComunidad === "companeros" ? 50 : 0}%,0,0)`;
   }, { passive: true });
   viewport.addEventListener("touchcancel", () => {
     inicio = null;
+    viewport.classList.remove("nav-arrastrando");
     pistaVistasComunidad.pista.style.transform = `translate3d(-${estado.tabComunidad === "companeros" ? 50 : 0}%,0,0)`;
     document.querySelector("#seccion-comunidad .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
   }, { passive: true });
