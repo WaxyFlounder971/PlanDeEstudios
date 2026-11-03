@@ -1989,8 +1989,20 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
   // rendirse con tipoError "desconocido" se reintenta un par de veces con
   // una pausa corta — un error real (clave inválida, límite, etc.) nunca
   // entra acá porque esos códigos no cuentan como transitorios.
-  const MAX_REINTENTOS_GEMINI_TRANSITORIO = 2;
+  const MAX_REINTENTOS_GEMINI_TRANSITORIO = 3;
   const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  const esperaSugeridaGemini = (respuesta, datos, intento) => {
+    const retryAfter = Number(respuesta.headers?.get("Retry-After"));
+    const retryDelay = datos?.error?.details?.find?.((detalle) => detalle?.retryDelay)?.retryDelay;
+    const segundosGemini = retryDelay ? Number.parseFloat(retryDelay) : NaN;
+    const sugerida = Number.isFinite(retryAfter) && retryAfter > 0
+      ? retryAfter * 1000
+      : Number.isFinite(segundosGemini) && segundosGemini > 0
+      ? segundosGemini * 1000
+      : 2000 * (2 ** intento);
+    // No esperar indefinidamente por un Retry-After malformado o excesivo.
+    return Math.min(15000, Math.max(1000, sugerida));
+  };
 
   let respuesta;
   let datos;
@@ -2011,7 +2023,7 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
       });
     } catch (e) {
       if (intento < MAX_REINTENTOS_GEMINI_TRANSITORIO) {
-        await esperar(700 * (intento + 1));
+        await esperar(2000 * (2 ** intento));
         continue;
       }
       const err = new Error("No se pudo conectar con Gemini.");
@@ -2033,7 +2045,7 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
     const estadoError = datos && datos.error && datos.error.status;
     const esTransitorio = [408, 429, 500, 502, 503, 504].includes(codigo) || estadoError === "UNAVAILABLE" || estadoError === "RESOURCE_EXHAUSTED";
     if (esTransitorio && intento < MAX_REINTENTOS_GEMINI_TRANSITORIO) {
-      await esperar(700 * (intento + 1)); // 700ms, luego 1400ms
+      await esperar(esperaSugeridaGemini(respuesta, datos, intento));
       continue;
     }
 
