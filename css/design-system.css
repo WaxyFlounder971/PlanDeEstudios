@@ -510,6 +510,7 @@ a { color: var(--accent-1); }
   overflow-y: visible;
   touch-action: pan-y;
 }
+.te-vistas-viewport.te-vistas-arrastrando .te-vistas-pista { transition: none; }
 .te-vistas-pista {
   display: flex;
   width: 100%;
@@ -525,6 +526,7 @@ a { color: var(--accent-1); }
 .nav-vista-pane[aria-hidden="true"] { pointer-events: none; max-height: 0; overflow: hidden; transition: max-height 0s linear 380ms; }
 /* v3.27.8: mientras se arrastra, la vista vecina se ve completa (sin colapsar) para no mostrar un hueco en blanco; al soltar vuelve a colapsar con el mismo retraso. */
 .nav-vistas-viewport.nav-arrastrando .nav-vista-pane { max-height: 100000px; transition: none; }
+.nav-vistas-viewport.nav-arrastrando .nav-vistas-pista { transition: none; }
 .nav-vistas-pista--dos { width: 200%; }
 .nav-vista-pane--dos { flex-basis: 50%; width: 50%; }
 .pill-switch-binario .pill-switch-thumb[style*="--nav-pill-progreso"] {
@@ -2974,6 +2976,26 @@ img, svg { max-width: 100%; }
 }
 .agenda-filtro-grupo { display:flex; align-items:center; flex-wrap:wrap; gap:6px; min-width:0; }
 .agenda-filtro-separador { display:block; flex:none; width:1px; height:18px; margin:0 2px; background:var(--border-glass); opacity:.8; }
+.agenda-filtro-estados--midiendo { flex-wrap:nowrap; justify-content:flex-start; }
+.agenda-filtro-estados--midiendo > .agenda-filtro-grupo { flex-wrap:nowrap; flex-shrink:0; }
+.agenda-filtro-estados--midiendo > .agenda-filtro-grupo > .agenda-filtro-estado-btn { flex-shrink:0; }
+.agenda-filtro-clase { grid-area:clase; }
+.agenda-filtro-categorias { grid-area:categorias; }
+.agenda-filtro-estado { grid-area:estado; }
+.agenda-filtro-separador-principal { grid-area:separador; }
+.agenda-filtro-estados--multilinea {
+  display:grid;
+  grid-template-columns:auto 1px auto;
+  grid-template-areas:"clase separador estado" "categorias categorias categorias";
+  justify-content:center;
+  align-items:center;
+  row-gap:6px;
+}
+.agenda-filtro-estados--multilinea .agenda-filtro-clase,
+.agenda-filtro-estados--multilinea .agenda-filtro-estado { justify-content:center; }
+.agenda-filtro-estados--multilinea .agenda-filtro-separador-principal { height:100%; min-height:20px; margin:0 5px; }
+.agenda-filtro-estados--multilinea .agenda-filtro-separador-secundario { display:none; }
+.agenda-filtro-estados--multilinea .agenda-filtro-categorias { justify-content:center; }
 .agenda-filtro-estado-menu { position:relative; }
 .agenda-filtro-estado-trigger { min-height:24px; padding-inline:12px; }
 .agenda-filtro-estado-trigger.active { border-color:var(--accent-1); color:var(--accent-1); background:color-mix(in srgb,var(--accent-1) 14%,transparent); }
@@ -5922,6 +5944,10 @@ html[data-text-size="grande"] .ajuste-seccion-cabecera * { min-width:0; white-sp
 .te-encabezado-titulo-grupo > .te-racha-chip { grid-column:1!important; }
 .te-encabezado > div:last-child { grid-column:3!important; }
 .te-contexto-semestre-boton { min-height:28px; padding:2px 8px; font-size:.84rem; font-weight:650; }
+.te-encabezado { min-height:0!important; padding:10px 14px!important; grid-template-rows:auto auto!important; row-gap:0!important; }
+.te-encabezado-titulo-grupo > .te-racha-chip { min-height:34px!important; padding:3px 8px 3px 6px; font-size:.9rem; }
+.te-encabezado-titulo-grupo > .te-racha-chip .te-racha-num { font-size:.92rem; }
+.te-contexto-semestre-boton { min-height:24px; padding:0 8px; }
 .onboarding-paletas { margin-inline:auto; }
 .onboarding-logo-heading > button:first-child { display:inline-flex; align-items:center; justify-content:flex-start; gap:8px; line-height:1; }
 .onboarding-wapper-cta-wrap { width:100%; margin:14px 0 4px; }

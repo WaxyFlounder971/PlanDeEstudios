@@ -3,6 +3,23 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+  // Sin preferencia elegida en este dispositivo, usar el modo del sistema
+  // antes de que se pinte la interfaz para evitar el flash oscuro inicial.
+  try {
+    var modoElegido = localStorage.getItem("tema_modo_elegido_v1");
+    var modoSistema = localStorage.getItem("tema_modo_sistema_v1");
+    if (!["light", "dark", "true-dark"].includes(modoElegido)) {
+      if (!["light", "true-dark"].includes(modoSistema)) {
+        modoSistema = window.matchMedia && matchMedia("(prefers-color-scheme: light)").matches ? "light" : "true-dark";
+        localStorage.setItem("tema_modo_sistema_v1", modoSistema);
+        localStorage.setItem("tema_modo", modoSistema);
+      }
+      modoElegido = modoSistema;
+    }
+    document.documentElement.dataset.mode = ["light", "dark", "true-dark"].includes(modoElegido) ? modoElegido : "dark";
+  } catch (_e) {}
+</script>
 <title>App Académica</title>
 <script>
   // Animación de apertura: si el folder va a reemplazar al cargador de siempre, este ni se
@@ -728,16 +745,6 @@
            modal de alta/edición (más abajo, junto al resto de modales fijos
            del HTML). -->
       <div id="seccion-agenda" class="stack oculto">
-        <!-- Ronda de ajustes visuales #2 — punto A: Lista/Calendario sale del
-             panel de encabezado y pasa a ser el primer elemento de la
-             sección, arriba de todo (antes vivía adentro de #agenda-header,
-             compitiendo visualmente con el nombre del semestre). -->
-        <div class="pill-group" id="pills-agenda-vista">
-          <button type="button" class="pill-item active" data-vista="lista">Lista</button>
-          <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
-          <button type="button" class="pill-item" data-vista="materia">Cronograma</button>
-        </div>
-
         <!-- Ronda de ajustes visuales #3 — punto A: encabezado a 3 líneas
              bien aprovechadas. Línea 1: nombre(s) del/los semestre(s),
              centrado, tocable (abre #modal-agenda-semestres — idea "varios
@@ -762,6 +769,12 @@
           </div>
         </section>
 
+        <div class="pill-group" id="pills-agenda-vista">
+          <button type="button" class="pill-item active" data-vista="lista">Lista</button>
+          <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
+          <button type="button" class="pill-item" data-vista="materia">Cronograma</button>
+        </div>
+
         <div id="agenda-lista-dias" class="stack"></div>
 
         <div id="agenda-vista-calendario" class="stack oculto"></div>
@@ -782,8 +795,8 @@
         <section class="glass-panel stack" id="horario-header" style="padding:12px 14px;">
           <div class="row-between">
             <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;">‹</button>
-            <div class="stack" style="align-items:center; text-align:center; gap:2px;">
-              <span class="muted" id="horario-nombre-semestre" style="font-size:0.82rem;"></span>
+              <div class="stack" style="align-items:center; text-align:center; gap:3px; min-width:0;">
+                <button type="button" class="btn-discreto" id="horario-nombre-semestre" style="padding:2px 10px; font-size:0.85rem; font-weight:700; max-width:100%; text-align:center;"></button>
               <span id="horario-semana-actual" class="texto-encabezado-seccion"></span>
               <span class="muted" id="horario-fecha-actual" style="font-size:0.72rem;"></span>
             </div>
@@ -792,7 +805,7 @@
           <div style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center; padding:0 6px;">
             <div style="justify-self:start;">
               <button type="button" class="btn btn-primary" id="btn-horario-agregar" style="padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
-              <button type="button" class="btn btn-secondary oculto" id="btn-salir-modo-conjunto" style="padding:8px 14px; font-size:0.85rem;">← Salir del modo conjunto</button>
+              <button type="button" class="btn btn-secondary oculto" id="btn-salir-modo-conjunto" style="padding:8px 14px; font-size:0.85rem;">Salir</button>
             </div>
             <div style="justify-self:center; display:flex; align-items:center; gap:10px;">
               <button type="button" class="btn-icono-fantasma" id="btn-horario-descargar" title="Descargar horario como imagen" style="font-size:1.2rem;">⬇</button>
@@ -802,6 +815,7 @@
               <button type="button" class="btn btn-secondary" id="btn-horario-amigos" style="padding:8px 14px; font-size:0.85rem;">Amigos</button>
             </div>
           </div>
+          <div id="horario-dias-semana" style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; text-align:center;"></div>
         </section>
 
         <section class="glass-panel" id="horario-grid-contenedor">
@@ -1592,11 +1606,17 @@
 <!-- ===================== MODAL: Horario entre Amigos — panel principal (botón "Amigos" del header de Horario) ===================== -->
 <div id="modal-panel-amigos" class="modal-overlay oculto">
   <div class="glass-card modal-card stack">
-    <h2 style="margin:0;">👥 Horario entre Amigos</h2>
+    <h2 style="margin:0;">Horario entre Amigos</h2>
     <p class="muted">Compartí tu horario por un enlace de solo lectura, o gestioná lo que ya compartiste.</p>
-    <button type="button" id="btn-horario-conjunto" class="btn btn-primary btn-block oculto">🗓️ Horario conjunto</button>
-    <button type="button" id="btn-compartir-horario" class="btn btn-primary btn-block">🔗 Compartir mi horario</button>
-    <button type="button" id="btn-ir-enlaces-generados" class="btn btn-secondary btn-block">Ver mis enlaces compartidos</button>
+    <button type="button" id="btn-horario-conjunto" class="btn btn-primary btn-block oculto">Abrir Horario Conjunto</button>
+    <div class="row-between" style="width:100%; align-items:center;">
+      <button type="button" id="btn-ir-enlaces-generados" class="btn-icono-fantasma" title="Ver mis enlaces compartidos" aria-label="Ver mis enlaces compartidos" style="width:42px; height:42px;">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 2.93l-1.72 1.72"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.72-1.72"/></svg>
+      </button>
+      <button type="button" id="btn-compartir-horario" class="btn-icono-fantasma" title="Compartir mi horario" aria-label="Compartir mi horario" style="width:42px; height:42px;">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4"/></svg>
+      </button>
+    </div>
 
     <div class="stack" style="gap:6px; margin-top:4px;">
       <span class="form-label">Horarios Activos</span>
