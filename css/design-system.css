@@ -172,6 +172,10 @@ a { color: var(--accent-1); }
   border-radius: var(--radius-pill);
   padding: 12px 22px;
   transition: transform var(--transition-fast), box-shadow var(--transition-fast), opacity var(--transition-fast);
+  /* El body usa overflow-wrap:anywhere y partía palabras ("Reinte ntar").
+     En botones solo se rompe en espacios. */
+  overflow-wrap: normal;
+  word-break: normal;
   /* Pedido explícito: en teléfono, mantener presionado un botón (long-press,
      ej. el indicador de sync) no debe activar la selección/lupa de texto
      nativa del navegador — solo debe disparar la acción del botón. */
@@ -514,7 +518,13 @@ a { color: var(--accent-1); }
   will-change: transform;
 }
 .nav-vistas-pista { width: 300%; }
-.nav-vista-pane { flex: 0 0 33.333333%; width: 33.333333%; min-width: 0; }
+.nav-vista-pane { flex: 0 0 33.333333%; width: 33.333333%; min-width: 0; max-height: 100000px; }
+/* v3.27.4: los paneles fuera de pantalla no reciben toques y, pasada la
+   animación (380 ms > 360 ms de la pista), dejan de ocupar alto: así el
+   alto de la sección es el de la vista activa y no el del panel más largo. */
+.nav-vista-pane[aria-hidden="true"] { pointer-events: none; max-height: 0; overflow: hidden; transition: max-height 0s linear 380ms; }
+/* v3.27.8: mientras se arrastra, la vista vecina se ve completa (sin colapsar) para no mostrar un hueco en blanco; al soltar vuelve a colapsar con el mismo retraso. */
+.nav-vistas-viewport.nav-arrastrando .nav-vista-pane { max-height: 100000px; transition: none; }
 .nav-vistas-pista--dos { width: 200%; }
 .nav-vista-pane--dos { flex-basis: 50%; width: 50%; }
 .pill-switch-binario .pill-switch-thumb[style*="--nav-pill-progreso"] {
@@ -955,7 +965,17 @@ a { color: var(--accent-1); }
      desde los dos lados. */
   -webkit-overflow-scrolling: touch;
 }
-.modal-card-ancha { width: min(760px, calc(100vw - 32px)); }
+.modal-card-ancha { width: min(760px, calc(100vw - 32px)); }
+/* v3.27.5: modal más opaco y sin scroll de fondo.
+   La tarjeta heredaba .glass-card (fondo ~5 % en oscuro) y el desenfoque dejaba
+   ver la página de atrás. Ahora usa la superficie sólida de cada tema
+   (--bg-header-solido) casi opaca, y el velo de fondo es más marcado. */
+.modal-overlay { background: rgba(0, 0, 0, 0.72); overscroll-behavior: contain; }
+[data-mode="light"] .modal-overlay { background: rgba(30, 41, 59, 0.42); }
+.modal-overlay .modal-card {
+  background: color-mix(in srgb, var(--bg-header-solido) 97%, transparent);
+}
+body.modal-abierto { overflow: hidden; overscroll-behavior: contain; }
 
 /* ---- Botón de cerrar (X) propio del sistema de diseño, en TODOS los modales ---- */
 .modal-x-close {
@@ -2947,7 +2967,7 @@ img, svg { max-width: 100%; }
 .agenda-filtro-estados {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   flex-wrap: wrap;
   gap: 7px;
   margin-top: 8px;
@@ -2957,7 +2977,7 @@ img, svg { max-width: 100%; }
 .agenda-filtro-estado-menu { position:relative; }
 .agenda-filtro-estado-trigger { min-height:24px; padding-inline:12px; }
 .agenda-filtro-estado-trigger.active { border-color:var(--accent-1); color:var(--accent-1); background:color-mix(in srgb,var(--accent-1) 14%,transparent); }
-.agenda-filtro-estado-popover { position:absolute; right:0; bottom:calc(100% + 8px); z-index:60; display:flex; flex-direction:column; align-items:stretch; gap:5px; min-width:132px; padding:8px; border:1px solid var(--border-glass); border-radius:12px; background:var(--bg-card,var(--bg-panel)); box-shadow:var(--shadow-float,0 8px 24px #0005); }
+.agenda-filtro-estado-popover { position:absolute; right:0; top:calc(100% + 8px); z-index:60; display:flex; flex-direction:column; align-items:stretch; gap:5px; min-width:132px; padding:8px; border:1px solid var(--border-glass); border-radius:12px; background:var(--bg-card,var(--bg-panel)); box-shadow:var(--shadow-float,0 8px 24px #0005); }
 .agenda-filtro-estado-popover.oculto { display:none; }
 .agenda-filtro-estado-popover .agenda-filtro-estado-btn { justify-content:flex-start; min-height:28px; text-align:left; }
 @media (max-width:520px) {

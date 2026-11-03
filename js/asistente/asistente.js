@@ -681,33 +681,42 @@ async function transcribirBase64ConGemini(base64, mimeType) {
   }
 
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
-  let respuesta;
-  try {
-    respuesta = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [
+  const cuerpo = JSON.stringify({
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { inline_data: { mime_type: mimeType || "audio/webm", data: base64 } },
           {
-            role: "user",
-            parts: [
-              { inline_data: { mime_type: mimeType || "audio/webm", data: base64 } },
-              {
-                text: "Transcribe exactamente lo que se dice en este audio, en español. Devuelve únicamente el texto transcrito, sin comillas ni comentarios adicionales.",
-              },
-            ],
+            text: "Transcribe exactamente lo que se dice en este audio, en español. Devuelve únicamente el texto transcrito, sin comillas ni comentarios adicionales.",
           },
         ],
-      }),
-    });
-  } catch (error) {
-    error.tipoError = "red";
-    throw error;
-  }
-
-  const datos = await respuesta.json().catch(() => null);
-  if (!respuesta.ok) {
-    throw new Error((datos && datos.error && datos.error.message) || "Error de Gemini transcribiendo el audio.");
+      },
+    ],
+  });
+  // Reintentos ante fallas transitorias (408/429/5xx o red caída), igual que
+  // ejecutarGeneracionGemini: 700 ms, luego 1400 ms, máximo 2 reintentos.
+  const MAX_REINTENTOS_TRANSCRIPCION = 2;
+  const esperarMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  let respuesta;
+  let datos = null;
+  for (let intento = 0; ; intento++) {
+    try {
+      respuesta = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: cuerpo });
+    } catch (error) {
+      if (intento < MAX_REINTENTOS_TRANSCRIPCION) { await esperarMs(700 * (intento + 1)); continue; }
+      error.tipoError = "red";
+      throw error;
+    }
+    datos = await respuesta.json().catch(() => null);
+    if (respuesta.ok) break;
+    const codigo = (datos && datos.error && datos.error.code) || respuesta.status;
+    const estadoError = datos && datos.error && datos.error.status;
+    const esTransitorio = [408, 429, 500, 502, 503, 504].includes(codigo) || estadoError === "UNAVAILABLE" || estadoError === "RESOURCE_EXHAUSTED";
+    if (esTransitorio && intento < MAX_REINTENTOS_TRANSCRIPCION) { await esperarMs(700 * (intento + 1)); continue; }
+    const err = new Error((datos && datos.error && datos.error.message) || "Error de Gemini transcribiendo el audio.");
+    err.tipoError = tipoErrorGemini(codigo, estadoError, err.message);
+    throw err;
   }
   const candidato = datos && datos.candidates && datos.candidates[0];
   const parte = candidato && candidato.content && candidato.content.parts && candidato.content.parts[0];
@@ -2028,7 +2037,7 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
     }
 
     const err = new Error((datos && datos.error && datos.error.message) || "Error de Gemini");
-    err.tipoError = codigo === 401 || codigo === 403 || (codigo === 400 && /api.?key|key not valid|invalid argument/i.test(err.message)) ? "clave" : codigo === 429 ? "limite" : "desconocido";
+    err.tipoError = tipoErrorGemini(codigo, estadoError, err.message);
     throw err;
   }
 
@@ -2125,15 +2134,6 @@ async function extraerEventosDeTexto(texto, contextoFecha = null) {
 
 function validarTipoWapper(item) {
   const tipos = (estado.datos.configuracion?.agenda_tipos || []).filter((tipo) => tipo.activo !== false && !tipo.eliminado);
-  const textoNormalizado = normalizarTexto(texto);
-  const materias = obtenerMateriasVinculablesAgenda();
-  const nombresBase = materias.map((materia) => materia.nombre.slice(0, materia.nombre.lastIndexOf(" - ") > -1 ? materia.nombre.lastIndexOf(" - ") : materia.nombre.length));
-  const basesDuplicadas = nombresBase.filter((nombre, indice, lista) => lista.indexOf(nombre) !== indice);
-  const mencionaMateriaAmbiguaSinResolver = basesDuplicadas.some((nombre) => {
-    const normalizada = normalizarTexto(nombre);
-    if (!normalizada || !textoNormalizado.includes(normalizada)) return false;
-    return resultado.items.some((extraido) => !extraido.materia || !textoNormalizado.includes(normalizarTexto(extraido.materia)));
-  });
   const valido = tipos.find((tipo) => tipo.id === item.etiquetaId && tipo.base === item.tipo);
   if (valido) return { ...item, etiquetaId: valido.id, requiereRevision: item.confianza === "baja" };
   const respaldo = tipos.find((tipo) => tipo.id === "evento" && tipo.base === "evento") || tipos.find((tipo) => tipo.base === "evento");
@@ -2196,25 +2196,41 @@ async function generarRespuestaConversacionalWapper(textoUsuario) {
   return mensajeParaError({ tipoError: "desconocido" });
 }
 
+/**
+ * Clasifica un error HTTP de Gemini en un tipoError que entiende
+ * mensajeParaError. "saturado" = 503/UNAVAILABLE (Google con alta demanda),
+ * distinto de "limite" (429, cuota agotada).
+ */
+function tipoErrorGemini(codigo, estadoError, mensaje) {
+  if (codigo === 401 || codigo === 403 || (codigo === 400 && /api.?key|key not valid|invalid argument/i.test(mensaje || ""))) return "clave";
+  if (codigo === 429 || estadoError === "RESOURCE_EXHAUSTED") return "limite";
+  if (codigo === 503 || estadoError === "UNAVAILABLE") return "saturado";
+  return "desconocido";
+}
+
 function mensajeParaError(e) {
   if (obtenerIdiomaActual() === "en") {
+    if (e.tipoError === "saturado") return "Gemini is under heavy demand right now. Please try again in a few minutes.";
     if (e.tipoError === "clave") return "Your Gemini API key appears to be invalid or expired. Check it in Settings > AI Assistant.";
     if (e.tipoError === "limite") return "Gemini's usage limit has been reached for now. Wait a moment and try again.";
     if (e.tipoError === "red") return "Couldn't connect to Gemini. Check your connection and try again.";
     return "Something went wrong on my end. Please try again in a moment.";
   }
   if (obtenerIdiomaActual() === "it") {
+    if (e.tipoError === "saturado") return "Gemini è molto richiesto in questo momento. Riprova tra qualche minuto.";
     if (e.tipoError === "clave") return "La chiave API di Gemini sembra non valida o scaduta. Controllala in Impostazioni > Assistente IA.";
     if (e.tipoError === "limite") return "Il limite di utilizzo di Gemini è stato raggiunto. Attendi un momento e riprova.";
     if (e.tipoError === "red") return "Impossibile connettersi a Gemini. Controlla la connessione e riprova.";
     return "Si è verificato un errore. Riprova tra poco.";
   }
   if (obtenerIdiomaActual() === "fr") {
+    if (e.tipoError === "saturado") return "Gemini est très sollicité en ce moment. Réessayez dans quelques minutes.";
     if (e.tipoError === "clave") return "Votre clé API Gemini semble invalide ou expirée. Vérifiez-la dans Paramètres > Assistant IA.";
     if (e.tipoError === "limite") return "La limite d'utilisation de Gemini est atteinte pour le moment. Attendez un instant puis réessayez.";
     if (e.tipoError === "red") return "Impossible de se connecter à Gemini. Vérifiez votre connexion puis réessayez.";
     return "Une erreur s'est produite. Réessayez dans un instant.";
   }
+  if (e.tipoError === "saturado") return "Gemini tiene mucha demanda en este momento. Intenta de nuevo en unos minutos.";
   if (e.tipoError === "clave") return "Tu clave de Gemini parece inválida o vencida. Revisala en Ajustes > Asistente IA.";
   if (e.tipoError === "limite") return "Se alcanzó el límite de uso de Gemini por ahora. Esperá un momento y probá de nuevo.";
   if (e.tipoError === "red") return "No se pudo conectar con Gemini. Revisá tu conexión e intentá de nuevo.";
@@ -3874,16 +3890,15 @@ function construirEsqueletoAsistente(contenedor) {
   const encabezado = document.createElement("div");
   encabezado.className = "row-between";
   encabezado.style.flexShrink = "0";
-  const titulo = document.createElement("h2");
-  titulo.className = "texto-encabezado-seccion";
-  titulo.textContent = "✨ Asistente IA";
-  encabezado.appendChild(titulo);
+  // v3.27.6: sin título "✨ Asistente IA" — la tarjeta empieza directo en el
+  // chat y arriba solo queda la acción de nueva conversación, a la derecha.
+  encabezado.style.justifyContent = "flex-end";
   const btnNueva = document.createElement("button");
   btnNueva.title = "Nueva conversación";
   btnNueva.setAttribute("aria-label", "Nueva conversación");
-  btnNueva.textContent = "⟳";
+  btnNueva.textContent = `⟳ ${traducirTextoInterfaz("Nueva")}`;
   btnNueva.style.cssText =
-    "background:none; border:none; font-size:1.5rem; line-height:1; cursor:pointer; padding:2px 4px; color:var(--color-luz, #6d5efc);";
+    "background:none; border:none; font-size:.95rem; line-height:1; cursor:pointer; padding:4px 6px; display:inline-flex; align-items:center; gap:6px; color:var(--color-luz, #6d5efc);";
   btnNueva.onclick = () => {
     const habiaAlgo = conversacionActual.length > 0;
     iniciarConversacionNueva(contenedor);
@@ -4238,6 +4253,15 @@ async function procesarItemPendienteWapper(item) {
     const fechaObj = new Date(`${fecha}T12:00:00Z`);
     return !Number.isNaN(fechaObj.getTime()) && fechaObj.toISOString().slice(0, 10) === fecha && fecha >= item.fechaReferencia;
   };
+  const textoNormalizado = normalizarTexto(texto);
+  const materias = obtenerMateriasVinculablesAgenda();
+  const nombresBase = materias.map((materia) => materia.nombre.slice(0, materia.nombre.lastIndexOf(" - ") > -1 ? materia.nombre.lastIndexOf(" - ") : materia.nombre.length));
+  const basesDuplicadas = nombresBase.filter((nombre, indice, lista) => lista.indexOf(nombre) !== indice);
+  const mencionaMateriaAmbiguaSinResolver = basesDuplicadas.some((nombre) => {
+    const normalizada = normalizarTexto(nombre);
+    if (!normalizada || !textoNormalizado.includes(normalizada)) return false;
+    return resultado.items.some((extraido) => !extraido.materia || !textoNormalizado.includes(normalizarTexto(extraido.materia)));
+  });
   const seguros = !mencionaMateriaAmbiguaSinResolver && resultado.accion === "crear_eventos" && resultado.items.length > 0 && resultado.items.every((itemExtraido) => {
     const tipo = tipos.find((actual) => actual.id === itemExtraido.etiquetaId && actual.base === itemExtraido.tipo);
     const materia = !itemExtraido.materia || Boolean(resolverMateriaVinculada(itemExtraido.materia));
@@ -4324,6 +4348,7 @@ async function mostrarBienvenidaColaWapper() {
       ayuda.append(texto, motivo, original);
       const filaAyuda = document.createElement("div");
       filaAyuda.className = "row";
+      filaAyuda.style.flexWrap = "wrap";
       const revisar = document.createElement("button");
       revisar.className = "btn btn-secondary";
       revisar.textContent = traducirTextoInterfaz("Revisar en Wapper");
@@ -4369,6 +4394,7 @@ async function mostrarBienvenidaColaWapper() {
   const fila = document.createElement("div");
   fila.className = "row";
   fila.style.justifyContent = "flex-end";
+  fila.style.flexWrap = "wrap";
   const ir = document.createElement("button");
   ir.className = "btn btn-primary";
   ir.textContent = traducirTextoInterfaz("Ir a Wapper");
@@ -4401,7 +4427,10 @@ async function ejecutarColaWapper() {
         void ejecutarColaWapper();
       }, 61_000);
     }
-    await procesarColaWapper(cuentaColaWapper(), procesarItemPendienteWapper);
+    await procesarColaWapper(cuentaColaWapper(), async (item) => {
+      try { return await procesarItemPendienteWapper(item); }
+      catch (error) { throw new Error(mensajeParaError(error)); } // nunca guardar el texto crudo de Google
+    });
     await actualizarBadgeColaWapper();
     await mostrarBienvenidaColaWapper();
   } catch (error) { console.warn("[asistente] No se pudo procesar la cola offline:", error); }

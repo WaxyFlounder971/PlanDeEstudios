@@ -97,6 +97,107 @@ const vistasDemoPorId = new Map();
 let refrescoCompetenciasAlReconectarInstalado = false;
 let colaSincronizacionHorasCompetencias = Promise.resolve();
 
+/* ---------------------------------------------------------------------------
+   v3.27.3 — Envío de horas al marcador SIN pérdida silenciosa.
+   Antes, si el POST se omitía (sincronización pendiente, sin conexión o
+   error del Worker) solo quedaba un console.warn y el marcador se quedaba
+   desfasado hasta la próxima sesión o hasta abrir Competencias. Ahora:
+     - se guarda una bandera "horas pendientes" (también en localStorage,
+       para sobrevivir a cerrar la app);
+     - se reintenta solo con espera creciente (15 s → 5 min), al volver la
+       conexión y al volver a abrir/enfocar la app;
+     - la pestaña Competencias muestra un aviso con botón "Enviar ahora"
+       mientras haya algo pendiente.
+   --------------------------------------------------------------------------- */
+const CLAVE_HORAS_PENDIENTES = "horasCompetenciasPendientes";
+const ESPERAS_REINTENTO_HORAS_MS = [15000, 30000, 60000, 120000, 300000];
+let horasCompetenciasPendientes = (() => {
+  try { return localStorage.getItem(CLAVE_HORAS_PENDIENTES) === "1"; } catch (e) { return false; }
+})();
+let temporizadorReintentoHoras = null;
+let intentosReintentoHoras = 0;
+const escuchasEnvioHoras = new Set();
+
+function marcarHorasPendientes(pendiente) {
+  const cambio = pendiente !== horasCompetenciasPendientes;
+  horasCompetenciasPendientes = pendiente;
+  try {
+    if (pendiente) localStorage.setItem(CLAVE_HORAS_PENDIENTES, "1");
+    else localStorage.removeItem(CLAVE_HORAS_PENDIENTES);
+  } catch (e) {
+    // no crítico — sin localStorage la bandera vive solo en memoria.
+  }
+  clearTimeout(temporizadorReintentoHoras);
+  temporizadorReintentoHoras = null;
+  if (pendiente) {
+    const espera = ESPERAS_REINTENTO_HORAS_MS[Math.min(intentosReintentoHoras, ESPERAS_REINTENTO_HORAS_MS.length - 1)];
+    intentosReintentoHoras++;
+    temporizadorReintentoHoras = setTimeout(() => {
+      temporizadorReintentoHoras = null;
+      if (navigator.onLine === false) return; // se retoma con el evento "online"
+      sincronizarHorasCompetencias().catch(() => {});
+    }, espera);
+  } else {
+    intentosReintentoHoras = 0;
+  }
+  if (cambio) escuchasEnvioHoras.forEach((escucha) => escucha(pendiente));
+}
+
+/** Se llama una vez al arrancar la app (ver inicializarTiempoEstudio). */
+let _reintentoHorasInicializado = false;
+function inicializarReintentoHorasCompetencias() {
+  if (_reintentoHorasInicializado) return;
+  _reintentoHorasInicializado = true;
+  const reintentarYa = () => {
+    if (!horasCompetenciasPendientes || navigator.onLine === false) return;
+    intentosReintentoHoras = 0;
+    sincronizarHorasCompetencias().catch(() => {});
+  };
+  window.addEventListener("online", reintentarYa);
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reintentarYa(); });
+  // Bandera que quedó guardada de la sesión anterior: reintento tras unos
+  // segundos, para no calcular con datos viejos antes de la primera fusión.
+  if (horasCompetenciasPendientes) setTimeout(reintentarYa, 8000);
+}
+
+/** Aviso en la pestaña Competencias mientras haya horas sin enviar. */
+function construirAvisoHorasPendientes(contenedor) {
+  const aviso = document.createElement("div");
+  aviso.className = "glass-card stack";
+  aviso.style.cssText = "padding:10px 12px; gap:8px;";
+  const texto = document.createElement("p");
+  texto.className = "muted";
+  texto.style.cssText = "margin:0; font-size:0.85rem;";
+  texto.textContent = "Tus horas de esta semana todavía no llegaron al marcador (sin conexión o sincronización pendiente). Se reintenta solo.";
+  const fila = document.createElement("div");
+  fila.className = "row";
+  fila.style.flexWrap = "wrap";
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "btn btn-secondary";
+  boton.textContent = "Enviar ahora";
+  boton.addEventListener("click", async () => {
+    boton.disabled = true;
+    boton.textContent = "Enviando…";
+    intentosReintentoHoras = 0;
+    try { await sincronizarHorasCompetencias(); } catch (e) { /* queda pendiente y se reintenta */ }
+    boton.disabled = false;
+    boton.textContent = "Enviar ahora";
+    if (horasCompetenciasPendientes) mostrarToast("Todavía no se pudo enviar. Se reintenta solo.");
+    else mostrarToast("✓ Horas enviadas al marcador");
+  });
+  fila.appendChild(boton);
+  aviso.append(texto, fila);
+  const actualizar = (pendiente) => aviso.classList.toggle("oculto", !pendiente);
+  actualizar(horasCompetenciasPendientes);
+  const escucha = (pendiente) => {
+    if (!aviso.isConnected) { escuchasEnvioHoras.delete(escucha); return; } // la vista ya se repintó
+    actualizar(pendiente);
+  };
+  escuchasEnvioHoras.add(escucha);
+  contenedor.appendChild(aviso);
+}
+
 function guardarCacheMarcador(competenciaId, datos) {
   try {
     localStorage.setItem(CLAVE_CACHE_COMPETENCIA + competenciaId, JSON.stringify({
@@ -382,21 +483,29 @@ async function ejecutarSincronizacionHorasCompetencias() {
   // horas nuevas. El Worker igual las ignora (ver manejarActualizarHoras),
   // pero filtrarlas acá evita N requests inútiles en cada sesión guardada.
   const competencias = (estado.datos.competencias_unidas || []).filter((c) => c.estado !== "finalizada");
-  if (competencias.length === 0) return;
+  if (competencias.length === 0) { marcarHorasPendientes(false); return; }
 
-  await intentarSincronizar();
-  // Si nos incorporamos a una sincronización que todavía tenía otra subida
-  // pendiente, esperar ese segundo ciclo antes de calcular un total completo.
-  if (estado.pendienteSync) await intentarSincronizar();
+  try {
+    await intentarSincronizar();
+    // Si nos incorporamos a una sincronización que todavía tenía otra subida
+    // pendiente, esperar ese segundo ciclo antes de calcular un total completo.
+    if (estado.pendienteSync) await intentarSincronizar();
+  } catch (e) {
+    console.warn("[competencias] No se pudo sincronizar antes de enviar horas; queda pendiente:", e);
+    marcarHorasPendientes(true);
+    return;
+  }
   // Una lectura/subida fallida de Drive deja el estado local pendiente. No
   // enviar una suma potencialmente incompleta que reemplazaría la del Worker.
-  if (estado.pendienteSync || navigator.onLine === false) return;
+  // v3.27.3: ya no se omite en silencio — queda marcado y se reintenta solo.
+  if (estado.pendienteSync || navigator.onLine === false) { marcarHorasPendientes(true); return; }
 
   const { inicio, fin } = obtenerRangoSemana(0);
   const horas = calcularMinutosTotalesEnRango(inicio, fin) / 60;
   const identificador_usuario = estado.datos.perfil.correo;
 
   let huboDelegacionRecibida = false;
+  let huboFalloEnvio = false;
 
   await Promise.all(
     competencias.map(async (competencia) => {
@@ -410,7 +519,8 @@ async function ejecutarSincronizacionHorasCompetencias() {
           }
         );
         if (!respuesta.ok) {
-          console.warn(`[competencias] actualizar-horas respondió ${respuesta.status} para "${competencia.nombre}" — se autocorrige con la próxima sesión.`);
+          console.warn(`[competencias] actualizar-horas respondió ${respuesta.status} para "${competencia.nombre}" — se reintenta solo.`);
+          huboFalloEnvio = true;
           return;
         }
 
@@ -427,10 +537,13 @@ async function ejecutarSincronizacionHorasCompetencias() {
         }
 
       } catch (e) {
-        console.warn(`[competencias] Falló actualizar-horas para "${competencia.nombre}" — se autocorrige con la próxima sesión:`, e);
+        console.warn(`[competencias] Falló actualizar-horas para "${competencia.nombre}" — se reintenta solo:`, e);
+        huboFalloEnvio = true;
       }
     })
   );
+
+  marcarHorasPendientes(huboFalloEnvio);
 
   if (huboDelegacionRecibida) {
     marcarCambioPendiente();
@@ -1468,6 +1581,7 @@ function construirVistaCompetencias(cont, refrescar) {
   // Punto 3.3: los avisos de resultado nuevo van arriba de todo, y son el
   // ÚNICO camino a la pantalla de celebración con sonido. Nada suena solo.
   construirAvisosResultados(envoltorio, refrescar, abrirModalHistorial);
+  construirAvisoHorasPendientes(envoltorio);
 
   // 2026-09-23 — los botones de simulación (encolan un aviso falso de
   // victoria/derrota para ajustar el diseño de celebración sin esperar a un
@@ -1543,6 +1657,7 @@ function construirVistaCompetencias(cont, refrescar) {
 export {
   construirVistaCompetencias,
   sincronizarHorasCompetencias,
+  inicializarReintentoHorasCompetencias,
   revisarLinkInvitacionAlCargar,
   // Helpers compartidos con tiempo-estudio-competencias-gestion.js
   // (2026-09-17, ver la nota de cabecera de ese archivo sobre por qué se

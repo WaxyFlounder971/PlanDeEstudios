@@ -96,6 +96,8 @@ function abrirModalRegistroManual(items, onGuardar) {
       </div>
     </div>
 
+    <p class="muted" id="te-manual-ayuda-medianoche" style="margin:-6px 0 0; font-size:.8rem;">Si terminaste después de medianoche, poné una hora de fin menor que la de inicio: se cuenta al día siguiente.</p>
+
     <div class="row-between oculto" style="gap:10px;" id="te-manual-campos-tiempo">
       <div style="flex:1;">
         <span class="form-label">Horas</span>
@@ -154,6 +156,7 @@ function abrirModalRegistroManual(items, onGuardar) {
     switchModo.querySelectorAll(".pill-item").forEach((b) => b.classList.toggle("active", b.dataset.modo === modo));
     camposHora.classList.toggle("oculto", modo !== "hora");
     camposTiempo.classList.toggle("oculto", modo !== "tiempo");
+    caja.querySelector("#te-manual-ayuda-medianoche").classList.toggle("oculto", modo !== "hora");
     // El toggle "Agregar hora de inicio" solo existe en modo Tiempo — en
     // modo Hora, la hora de inicio ya se pide en su propio campo de arriba.
     toggleHoraInicioWrap.classList.toggle("oculto", modo !== "tiempo");
@@ -203,9 +206,18 @@ function abrirModalRegistroManual(items, onGuardar) {
         mostrarToast("La fecha u hora no es válida — revisala e intentá de nuevo");
         return;
       }
-      if (fin <= inicio) {
-        mostrarToast("La hora de fin tiene que ser después de la de inicio");
+      if (fin === inicio) {
+        mostrarToast("La hora de fin no puede ser igual a la de inicio");
         return;
+      }
+      // v3.27.2: una hora de fin menor que la de inicio ya no se rechaza —
+      // significa que la sesión cruzó medianoche (ej. 22:00 a 02:00), así
+      // que el fin cae en el día siguiente. Las estadísticas y la racha ya
+      // reparten esa sesión entre los dos días.
+      if (fin < inicio) {
+        const finSiguiente = new Date(fin);
+        finSiguiente.setDate(finSiguiente.getDate() + 1); // +1 día calendario (respeta cambios de horario)
+        fin = finSiguiente.getTime();
       }
       minutosTotales = Math.round((fin - inicio) / 60000);
     } else {
@@ -219,13 +231,29 @@ function abrirModalRegistroManual(items, onGuardar) {
         mostrarToast("La duración tiene que ser mayor a 0");
         return;
       }
-      const horaInicio = checkHoraInicioOpcional.checked ? caja.querySelector("#te-manual-hora-inicio-opcional").value : horaHoyStr;
-      inicio = construirTimestampLocalReg(fecha, horaInicio);
-      if (!Number.isFinite(inicio)) {
-        mostrarToast("La hora de inicio no es válida — revisala e intentá de nuevo");
-        return;
+      if (checkHoraInicioOpcional.checked) {
+        inicio = construirTimestampLocalReg(fecha, caja.querySelector("#te-manual-hora-inicio-opcional").value);
+        if (!Number.isFinite(inicio)) {
+          mostrarToast("La hora de inicio no es válida — revisala e intentá de nuevo");
+          return;
+        }
+        fin = inicio + minutosTotales * 60000; // puede cruzar medianoche: se reparte entre los dos días
+      } else if (fecha === fechaHoyStr) {
+        // v3.27.2: sin hora de inicio, antes se anclaba a la hora actual y la
+        // sesión podía terminar "en el futuro" o cruzar medianoche sin querer.
+        // Hoy: la sesión termina ahora y empieza `duración` antes.
+        fin = Date.now();
+        inicio = fin - minutosTotales * 60000;
+      } else {
+        // Otro día: se ancla a las 12:00 de ese día, para que la sesión
+        // caiga en la fecha elegida y no se corra al día siguiente.
+        inicio = construirTimestampLocalReg(fecha, "12:00");
+        if (!Number.isFinite(inicio)) {
+          mostrarToast("La fecha no es válida — revisala e intentá de nuevo");
+          return;
+        }
+        fin = inicio + minutosTotales * 60000;
       }
-      fin = inicio + minutosTotales * 60000;
     }
 
     const itemElegido = items.find((it) => it.mm.id === materiaMatriculadaId);

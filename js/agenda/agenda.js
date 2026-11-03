@@ -661,10 +661,30 @@ function obtenerTextoIndiceEventoAgenda(ev) {
 }
 let temporizadorBusquedaAgenda = 0;
 
+/**
+ * v3.27.4 — Visibilidad de los 3 paneles de Agenda (Lista / Calendario /
+ * Cronograma). Con la pista deslizante armada, los paneles NUNCA llevan
+ * `.oculto` (display:none): si uno desaparece, la pista (3 columnas de
+ * 33.33 %) se reacomoda y el `translate` deja la vista activa fuera de
+ * pantalla — por eso Calendario y Cronograma se veían en blanco. Cuál vista
+ * se ve lo decide el transform de la pista; al buscar se oculta el viewport
+ * completo (la barra de búsqueda y sus resultados viven fuera de él).
+ * Antes de que exista la pista (primer render) se conserva el ocultado
+ * clásico, que asegurarPistaVistasAgenda limpia al armarla.
+ */
+function sincronizarVisibilidadPanelesAgenda(vista, buscando) {
+  const ids = { lista: "agenda-lista-dias", calendario: "agenda-vista-calendario", materia: "agenda-vista-materia" };
+  if (pistaAgenda) {
+    Object.values(ids).forEach((id) => document.getElementById(id)?.classList.remove("oculto"));
+    pistaAgenda.viewport.classList.toggle("oculto", buscando);
+    return;
+  }
+  Object.entries(ids).forEach(([clave, id]) => document.getElementById(id)?.classList.toggle("oculto", buscando || clave !== vista));
+}
+
 function renderizarResultadosBusquedaAgenda() {
   const cont=document.getElementById("agenda-busqueda-resultados"),q=estado.agendaBusquedaConsulta||"";if(!cont)return;
-  const panes=["agenda-lista-dias","agenda-vista-calendario","agenda-vista-materia"].map((id)=>document.getElementById(id)).filter(Boolean);
-  const buscando=Boolean(q.trim());panes.forEach((p)=>p.classList.toggle("oculto",buscando||((p.id==="agenda-lista-dias"?"lista":p.id==="agenda-vista-calendario"?"calendario":"materia")!==estado.agendaVistaActiva)));cont.classList.toggle("oculto",!buscando);cont.replaceChildren();if(!buscando)return;
+  const buscando=Boolean(q.trim());sincronizarVisibilidadPanelesAgenda(estado.agendaVistaActiva||"lista",buscando);cont.classList.toggle("oculto",!buscando);cont.replaceChildren();if(!buscando)return;
   const lista=(estado.datos.agenda||[]).map((ev)=>({ev,puntaje:puntajeBusquedaAgenda(q,obtenerTextoIndiceEventoAgenda(ev))})).filter((x)=>x.puntaje>=.75).sort((a,b)=>b.puntaje-a.puntaje);
   const exactos=lista.filter((x)=>x.puntaje>=.9),posibles=lista.filter((x)=>x.puntaje<.9);
   const pintar=(titulo,items)=>{if(!items.length)return;const grupo=document.createElement("section");grupo.className="glass-panel stack agenda-busqueda-grupo";const h=document.createElement("h3");h.textContent=titulo;grupo.append(h);items.forEach(({ev})=>{const wrap=document.createElement("div");wrap.className="stack";const filaFecha=document.createElement("div");filaFecha.className="agenda-busqueda-fecha-fila";const fecha=document.createElement("span");fecha.className="muted agenda-busqueda-fecha";const fechaLocal=ev.fecha?new Date(`${ev.fecha}T12:00:00`):null;const textoFecha=fechaLocal&&!Number.isNaN(fechaLocal.getTime())?fechaLocal.toLocaleDateString(obtenerLocaleInterfaz(),{weekday:"long",day:"numeric",month:"short"}).replace(",",""):"";fecha.textContent=textoFecha?textoFecha.charAt(0).toLocaleUpperCase(obtenerLocaleInterfaz())+textoFecha.slice(1):"";const relativa=document.createElement("span");relativa.className="muted agenda-busqueda-fecha-relativa";relativa.textContent=formatearFechaRelativa(ev.fecha);filaFecha.append(fecha,relativa);wrap.append(filaFecha,construirItemEvento(ev));grupo.append(wrap);});cont.append(grupo);};
@@ -1732,10 +1752,8 @@ function renderizarAgenda() {
   asegurarBarraBusquedaAgenda();
   renderizarHeaderAgenda();
   const vista = estado.agendaVistaActiva;
-  document.getElementById("agenda-lista-dias")?.classList.toggle("oculto", vista !== "lista");
+  sincronizarVisibilidadPanelesAgenda(vista, Boolean((estado.agendaBusquedaConsulta || "").trim()));
   document.getElementById("agenda-filtro-estados-cont")?.classList.toggle("oculto", vista !== "lista");
-  document.getElementById("agenda-vista-calendario")?.classList.toggle("oculto", vista !== "calendario");
-  document.getElementById("agenda-vista-materia")?.classList.toggle("oculto", vista !== "materia");
   document.querySelectorAll("#pills-agenda-vista .pill-item").forEach((btn) => {
     btn.classList.toggle("active", btn.dataset.vista === vista);
   });
@@ -1836,12 +1854,13 @@ function inicializarGestosVistasAgenda() {
   seccion.addEventListener("touchstart", (ev) => {
     const t = ev.touches?.[0];
     if (ev.touches.length !== 1 || ev.target.closest("input,textarea,select,button,a,[contenteditable='true'],[data-no-swipe]")) { inicio = null; return; }
-    if (t) inicio = { x: t.clientX, y: t.clientY, moviendo: false, indice: vistas.indexOf(estado.agendaVistaActiva || "lista") };
+    if (t) inicio = { x: t.clientX, y: t.clientY, t0: performance.now(), moviendo: false, indice: vistas.indexOf(estado.agendaVistaActiva || "lista") };
   }, { passive: true });
   seccion.addEventListener("touchmove", (ev) => {
     if (!inicio || ev.touches.length !== 1) return;
     const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
     if (!inicio.moviendo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
+    if (!inicio.moviendo) seccion.classList.add("nav-arrastrando"); // v3.27.8: la vecina no debe estar colapsada mientras se arrastra
     inicio.moviendo = true;
     ev.preventDefault();
     const width = seccion.clientWidth || 1;
@@ -1854,15 +1873,18 @@ function inicializarGestosVistasAgenda() {
     if (!inicio) return;
     const t = ev.changedTouches?.[0];
     const deltaX = t ? t.clientX - inicio.x : 0;
+    const flick = inicio.moviendo && performance.now() - inicio.t0 < 280 && Math.abs(deltaX) > 24; // v3.27.8: deslizamiento rápido
     inicio = null;
+    seccion.classList.remove("nav-arrastrando");
     const actual = vistas.indexOf(estado.agendaVistaActiva || "lista");
-    const nuevo = Math.max(0, Math.min(2, actual + (Math.abs(deltaX) > Math.max(48, seccion.clientWidth * 0.16) ? (deltaX < 0 ? 1 : -1) : 0)));
+    const nuevo = Math.max(0, Math.min(2, actual + ((flick || Math.abs(deltaX) > Math.max(48, seccion.clientWidth * 0.16)) ? (deltaX < 0 ? 1 : -1) : 0)));
     document.querySelector("#pills-agenda-vista .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
     cambiarVistaAgendaConGesto(vistas[nuevo]);
     if (pistaAgenda) pistaAgenda.pista.style.transform = `translate3d(-${nuevo * 100 / 3}%,0,0)`;
   }, { passive: true });
   seccion.addEventListener("touchcancel", () => {
     inicio = null;
+    seccion.classList.remove("nav-arrastrando");
     if (pistaAgenda) pistaAgenda.pista.style.transform = `translate3d(-${Math.max(0, vistas.indexOf(estado.agendaVistaActiva || "lista")) * 100 / 3}%,0,0)`;
     document.querySelector("#pills-agenda-vista .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
   }, { passive: true });
