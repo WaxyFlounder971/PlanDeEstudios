@@ -771,15 +771,30 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
   const nombreEl = document.getElementById("horario-nombre-semestre");
   const semanaEl = document.getElementById("horario-semana-actual");
   const fechaEl = document.getElementById("horario-fecha-actual");
+  const diasEl = document.getElementById("horario-dias-semana");
+  if (diasEl) diasEl.replaceChildren();
   if (!semestre) {
     if (nombreEl) nombreEl.textContent = "Sin semestres";
     if (semanaEl) semanaEl.textContent = "-";
     if (fechaEl) fechaEl.textContent = "";
+    if (diasEl) diasEl.hidden = true;
     return;
   }
+  if (diasEl) diasEl.hidden = false;
   if (nombreEl) nombreEl.textContent = semestre.nombre || "";
   if (semanaEl) semanaEl.textContent = `Semana ${numeroSemana}`;
   if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" });
+  if (diasEl) {
+    obtenerDiasOrdenados().forEach((dia) => {
+      const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
+      const celda = document.createElement("div");
+      celda.className = "muted";
+      celda.style.cssText = "padding:4px 1px; border-radius:8px; font-size:.68rem; line-height:1.25;";
+      if (esHoy(fecha)) { celda.style.color = "var(--color-luz)"; celda.style.background = "var(--accent-1-10)"; }
+      celda.innerHTML = `<span style="display:block;">${dia.abrevDefault}</span><strong style="display:block; color:var(--text-primary);">${fecha ? fecha.getDate() : "–"}</strong>`;
+      diasEl.appendChild(celda);
+    });
+  }
 }
 
 /* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */

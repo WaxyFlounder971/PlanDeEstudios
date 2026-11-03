@@ -44,10 +44,14 @@ const TEXTO_PREVIEW_PALETA = {
 // Tema y calidad visual son preferencias del dispositivo: se aplican desde
 // localStorage y nunca se leen de configuración sincronizada.
 const CLAVE_TEMA_LOCAL = "tema_modo";
+const CLAVE_TEMA_ELEGIDO_LOCAL = "tema_modo_elegido_v1";
 const CLAVE_DISENO_LOCAL = "modo_diseno_local_v1";
 
 function obtenerModoTemaLocal() {
-  const guardado = localStorage.getItem(CLAVE_TEMA_LOCAL);
+  // Solo una elección hecha desde Ajustes cuenta como preferencia manual.
+  // `tema_modo` también se escribía durante el arranque y podía congelar el
+  // antiguo valor predeterminado aunque el dispositivo fuera claro.
+  const guardado = localStorage.getItem(CLAVE_TEMA_ELEGIDO_LOCAL);
   if (guardado === "light" || guardado === "dark" || guardado === "true-dark") return guardado;
   try {
     return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
@@ -59,6 +63,7 @@ function obtenerModoTemaLocal() {
 function guardarModoTemaLocal(modo) {
   const normalizado = ["light", "dark", "true-dark"].includes(modo) ? modo : "dark";
   localStorage.setItem(CLAVE_TEMA_LOCAL, normalizado);
+  localStorage.setItem(CLAVE_TEMA_ELEGIDO_LOCAL, normalizado);
   return normalizado;
 }
 
@@ -451,7 +456,7 @@ function actualizarThemeColorMeta() {
 }
 
 function aplicarPaleta(paleta, modo, coloresPersonalizados) {
-  modo = guardarModoTemaLocal(modo);
+  modo = ["light", "dark", "true-dark"].includes(modo) ? modo : obtenerModoTemaLocal();
   document.documentElement.setAttribute("data-palette", paleta);
   document.documentElement.setAttribute("data-mode", modo);
   localStorage.setItem("tema_paleta", paleta);

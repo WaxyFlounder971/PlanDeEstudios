@@ -18,6 +18,7 @@ import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalEventoAgenda, confirmarBorrarEventoAgenda, obtenerNombreMateriaEvento } from "../agenda/agenda-modal.js";
+import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
 import {
   formatearHoraAmPm,
   obtenerMateriasVinculablesAgenda,
@@ -3889,10 +3890,48 @@ function construirEsqueletoAsistente(contenedor) {
 
   const encabezado = document.createElement("div");
   encabezado.className = "row-between";
+  encabezado.style.alignItems = "center";
   encabezado.style.flexShrink = "0";
   // v3.27.6: sin título "✨ Asistente IA" — la tarjeta empieza directo en el
   // chat y arriba solo queda la acción de nueva conversación, a la derecha.
-  encabezado.style.justifyContent = "flex-end";
+  encabezado.style.justifyContent = "space-between";
+  const bloqueSemana = document.createElement("div");
+  bloqueSemana.className = "stack";
+  bloqueSemana.style.cssText = "align-items:flex-start; gap:3px; min-width:0;";
+  const semestreSemana = obtenerSemestreActivoAgenda();
+  const inicioSemana = obtenerFechaInicioSemanaAgenda(0);
+  const numeroSemana = semestreSemana ? calcularNumeroSemanaParaFecha(semestreSemana, inicioSemana) : null;
+  const botonSemestre = document.createElement("button");
+  botonSemestre.type = "button";
+  botonSemestre.className = "btn btn-primary";
+  botonSemestre.style.cssText = "padding:5px 10px; font-size:.78rem; max-width:min(55vw,280px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
+  botonSemestre.textContent = semestreSemana?.nombre || traducirTextoInterfaz("Sin semestre");
+  botonSemestre.title = traducirTextoInterfaz("Abrir Agenda");
+  botonSemestre.addEventListener("click", () => document.getElementById("nav-agenda")?.click());
+  const tituloSemana = document.createElement("span");
+  tituloSemana.className = "texto-encabezado-seccion";
+  tituloSemana.style.fontSize = "1rem";
+  tituloSemana.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana actual");
+  const rangoSemana = document.createElement("span");
+  rangoSemana.className = "muted";
+  rangoSemana.style.fontSize = ".75rem";
+  const finSemana = new Date(inicioSemana);
+  finSemana.setDate(finSemana.getDate() + 6);
+  rangoSemana.textContent = `${inicioSemana.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" })} – ${finSemana.toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" })}`;
+  const diasSemana = document.createElement("div");
+  diasSemana.style.cssText = "display:flex; gap:5px; margin-top:2px;";
+  Array.from({ length: 7 }, (_, indice) => indice).forEach((indice) => {
+    const fecha = new Date(inicioSemana);
+    fecha.setDate(fecha.getDate() + indice);
+    const dia = document.createElement("span");
+    dia.className = "muted";
+    dia.style.cssText = "font-size:.67rem; text-align:center; min-width:19px;";
+    const nombreDia = new Intl.DateTimeFormat(obtenerLocaleInterfaz(), { weekday: "short" }).format(fecha);
+    dia.textContent = `${nombreDia} ${fecha.getDate()}`;
+    diasSemana.appendChild(dia);
+  });
+  bloqueSemana.append(botonSemestre, tituloSemana, rangoSemana, diasSemana);
+  encabezado.appendChild(bloqueSemana);
   const btnNueva = document.createElement("button");
   btnNueva.title = "Nueva conversación";
   btnNueva.setAttribute("aria-label", "Nueva conversación");
