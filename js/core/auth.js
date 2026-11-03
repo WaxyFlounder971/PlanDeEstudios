@@ -104,7 +104,7 @@ const REDIRECT_URI_CODE_FLOW = "postmessage";
 // solo cuál usar y, si el popup falla, se continúa sin pedir nada al usuario.
 const REDIRECT_URI_REDIRECCION = `${location.origin}/`;
 // Solo las URIs registradas en Google Cloud Console (Clientes → URIs de redirección).
-const URIS_REDIRECCION_REGISTRADAS = new Set(["https://wapper.pages.dev/"]);
+const URIS_REDIRECCION_REGISTRADAS = new Set(["https://wapper.pages.dev/", "https://dev.wapper.pages.dev/"]);
 const CLAVE_STATE_REDIRECCION = "google_oauth_state_redireccion";
 const CLAVE_PREFERIR_REDIRECCION = "login_preferir_redireccion_v1";
 const VIGENCIA_STATE_MS = 15 * 60 * 1000;
