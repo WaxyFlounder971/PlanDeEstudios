@@ -34,6 +34,8 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearMateriaEstudioIndependiente, sellarTimestamp } from "../core/schema.js";
 import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
 import { obtenerSemestresActuales } from "../semestres/semestres.js";
+import { obtenerSemestreActivoAgenda, obtenerFechaInicioSemanaAgenda } from "../agenda/agenda-utils.js";
+import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
 import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
 import { abrirModalRegistroManual, construirListaSesiones } from "./tiempo-estudio-registro.js";
@@ -352,7 +354,9 @@ function construirTarjetaMateria(item) {
   btnConfig.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
   btnConfig.title = "Configurar";
   btnConfig.setAttribute("aria-label", "Configurar");
-  btnConfig.textContent = "⚙️";
+  btnConfig.textContent = "⋮";
+  btnConfig.style.fontSize = "1.7rem";
+  btnConfig.style.lineHeight = "1";
   btnConfig.addEventListener("click", (e) => {
     e.stopPropagation();
     abrirModalConfigTiempoEstudio(mm, nombreMateria, () => alGuardarConfiguracionMateria(mm), confirmarEliminarMateriaPersonalizada);
@@ -421,8 +425,8 @@ function construirTarjetaMateria(item) {
  */
 function construirEncabezado(cont, contextoSemestre = null) {
   const encabezado = document.createElement("div");
-  encabezado.className = "glass-card row-between te-encabezado";
-  encabezado.style.cssText = "align-items:center; gap:10px;";
+  encabezado.className = "glass-panel row-between te-encabezado";
+  encabezado.style.cssText = "align-items:center; gap:6px; padding:10px 14px;";
 
   // Racha de estudio (2026-09-19): chip 🔥 + número pegado a la derecha del
   // título. Van en su propio grupo por la misma razón que los botones de la
@@ -434,7 +438,9 @@ function construirEncabezado(cont, contextoSemestre = null) {
   const titulo = document.createElement("h2");
   titulo.className = "texto-encabezado-seccion";
   titulo.style.margin = "0";
-  titulo.textContent = traducirTextoInterfaz("Tiempo de estudio");
+  const semestreSemana = obtenerSemestreActivoAgenda();
+  const numeroSemana = semestreSemana ? calcularNumeroSemanaParaFecha(semestreSemana, obtenerFechaInicioSemanaAgenda(0)) : null;
+  titulo.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana actual");
   grupoTitulo.appendChild(titulo);
   grupoTitulo.appendChild(construirChipRacha());
   if (MODO_DEMO && !PREVIEW_DEMO) {
@@ -479,15 +485,17 @@ function construirEncabezado(cont, contextoSemestre = null) {
   const grupoBotones = document.createElement("div");
   grupoBotones.style.cssText = "display:flex; align-items:center; gap:8px;";
 
-  // El filtro Visibles/Todas vive en Ajustes —
-  // orden: engranaje primero, + después (pedido).
+  // El filtro Visibles/Todas vive en Ajustes — el menú conserva la misma
+  // acción de ajustes, con el icono de tres puntos solicitado.
   const btnAjustes = document.createElement("button");
   btnAjustes.type = "button";
   btnAjustes.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
   btnAjustes.style.alignSelf = "center";
   btnAjustes.title = "Ajustes de Tiempo";
   btnAjustes.setAttribute("aria-label", "Ajustes de Tiempo");
-  btnAjustes.textContent = "⚙️";
+  btnAjustes.textContent = "⋮";
+  btnAjustes.style.fontSize = "1.7rem";
+  btnAjustes.style.lineHeight = "1";
   btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
   grupoBotones.appendChild(btnAjustes);
 
@@ -651,8 +659,13 @@ function construirPillVistaSeccion(cont) {
 }
 
 const indicesVistaTE = { materias: 0, estadisticas: 1, competencias: 2 };
+const GAP_PANE_VISTA_TE = 12;
 let panelesVistaTE = null;
 let pistaVistaTE = null;
+function desplazamientoVistaTE(indice) {
+  const ancho = pistaVistaTE?.parentElement?.clientWidth || 0;
+  return -indice * (ancho + GAP_PANE_VISTA_TE);
+}
 function actualizarThumbVistaTE(thumb) {
   thumb?.classList.toggle("pill-switch-thumb--derecha", indicesVistaTE[vistaSeccionTE] === 1);
   thumb?.classList.toggle("pill-switch-thumb--tercera", indicesVistaTE[vistaSeccionTE] === 2);
@@ -661,7 +674,7 @@ function cambiarVistaTiempoEstudio(vista) {
   if (!(vista in indicesVistaTE) || vista === vistaSeccionTE) return;
   vistaSeccionTE = vista;
   const indice = indicesVistaTE[vista];
-  if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${-indice * (pistaVistaTE.parentElement?.clientWidth || 0)}px,0,0)`;
+  if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${desplazamientoVistaTE(indice)}px,0,0)`;
   const grupo = document.querySelector("#seccion-tiempo-estudio .pill-switch-binario");
   grupo?.querySelectorAll("[data-vista]").forEach((btn) => {
     const activo = btn.dataset.vista === vista;
@@ -673,25 +686,28 @@ function cambiarVistaTiempoEstudio(vista) {
 }
 
 function inicializarDeslizamientoVistasTE(viewport) {
-  if (viewport.dataset.gestoInicializado) return;
-  viewport.dataset.gestoInicializado = "1";
+  const seccion = document.getElementById("seccion-tiempo-estudio");
+  if (!seccion || seccion.dataset.gestoInicializado) return;
+  seccion.dataset.gestoInicializado = "1";
   let inicio = null;
-  viewport.addEventListener("touchstart", (ev) => {
-    if (ev.touches.length !== 1 || ev.target.closest("button,a,input,textarea,select,[contenteditable='true']")) { inicio = null; return; }
+  seccion.addEventListener("touchstart", (ev) => {
+    if (ev.touches.length !== 1 || ev.target.closest("input,textarea,select,[contenteditable='true'],[data-te-scroll-x],[data-no-swipe]")) { inicio = null; return; }
     const t = ev.touches[0];
     inicio = { x: t.clientX, y: t.clientY, t0: performance.now(), indice: indicesVistaTE[vistaSeccionTE], moviendo: false };
   }, { passive: true });
-  viewport.addEventListener("touchmove", (ev) => {
+  seccion.addEventListener("touchmove", (ev) => {
     if (!inicio || ev.touches.length !== 1) return;
     const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
     if (!inicio.moviendo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
+    if (!inicio.moviendo) viewport.classList.add("te-vistas-arrastrando");
     inicio.moviendo = true;
     ev.preventDefault();
     const ancho = viewport.clientWidth || 1;
-    const base = -inicio.indice * ancho;
-    const delta = Math.max(-ancho, Math.min(ancho, dx));
+    const paso = ancho + GAP_PANE_VISTA_TE;
+    const base = -inicio.indice * paso;
+    const delta = Math.max(-paso, Math.min(paso, dx));
     if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${base + delta}px,0,0)`;
-    const proyectado = Math.max(0, Math.min(2, inicio.indice - dx / ancho));
+    const proyectado = Math.max(0, Math.min(2, inicio.indice - dx / paso));
     const grupo = document.querySelector("#seccion-tiempo-estudio .pill-switch-binario");
     const thumb = grupo?.querySelector(".pill-switch-thumb");
     if (thumb) thumb.style.setProperty("--te-pill-progreso", String(proyectado));
@@ -705,13 +721,19 @@ function inicializarDeslizamientoVistasTE(viewport) {
     const navega = inicio.moviendo && (flick || Math.abs(dx) > Math.max(48, viewport.clientWidth * 0.16));
     const destino = Math.max(0, Math.min(2, inicio.indice + (navega ? (dx < 0 ? 1 : -1) : 0)));
     inicio = null;
+    viewport.classList.remove("te-vistas-arrastrando");
     const thumb = document.querySelector("#seccion-tiempo-estudio .pill-switch-thumb");
     if (thumb) thumb.style.removeProperty("--te-pill-progreso");
     cambiarVistaTiempoEstudio(Object.keys(indicesVistaTE).find((key) => indicesVistaTE[key] === destino));
-    if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${-destino * (pistaVistaTE.parentElement?.clientWidth || 0)}px,0,0)`;
+    if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${desplazamientoVistaTE(destino)}px,0,0)`;
   };
-  viewport.addEventListener("touchend", terminar, { passive: true });
-  viewport.addEventListener("touchcancel", terminar, { passive: true });
+  seccion.addEventListener("touchend", terminar, { passive: true });
+  seccion.addEventListener("touchcancel", () => {
+    inicio = null;
+    viewport.classList.remove("te-vistas-arrastrando");
+    document.querySelector("#seccion-tiempo-estudio .pill-switch-thumb")?.style.removeProperty("--te-pill-progreso");
+    if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${desplazamientoVistaTE(indicesVistaTE[vistaSeccionTE])}px,0,0)`;
+  }, { passive: true });
 }
 
 function construirSelectorSemestreTiempo(cont) {
@@ -1587,12 +1609,12 @@ function renderizarTiempoEstudio() {
     materiaDetalleActivaId = null;
   }
 
-  // Parte 3: encabezado + pill Materias/Estadísticas son comunes a las 2
-  // vistas de nivel superior — se arman acá UNA sola vez, y de ahí en más
-  // cada vista solo dibuja su contenido propio (ver nota en
-  // construirVistaPrincipal/construirVistaEstadisticas).
-  const contextoSemestre = construirSelectorSemestreTiempo(cont);
-  construirEncabezado(cont, contextoSemestre);
+  // El encabezado va antes de las pestañas en Materias/Estadísticas.
+  // Competencias conserva las pestañas pero no necesita ese encabezado.
+  if (vistaSeccionTE !== "competencias") {
+    const contextoSemestre = construirSelectorSemestreTiempo(cont);
+    construirEncabezado(cont, contextoSemestre);
+  }
   construirPillVistaSeccion(cont);
   if (!panelesVistaTE) {
     const viewport = document.createElement("div");
@@ -1602,6 +1624,8 @@ function renderizarTiempoEstudio() {
     const panes = ["materias", "estadisticas", "competencias"].map((key) => {
       const pane = document.createElement("section");
       pane.className = "te-vista-pane";
+      pane.style.flex = `0 0 calc((100% - ${GAP_PANE_VISTA_TE * 2}px) / 3)`;
+      pane.style.width = `calc((100% - ${GAP_PANE_VISTA_TE * 2}px) / 3)`;
       pane.dataset.vista = key;
       pane.setAttribute("aria-hidden", String(key !== vistaSeccionTE));
       pista.appendChild(pane);
@@ -1616,7 +1640,10 @@ function renderizarTiempoEstudio() {
   const viewport = panelesVistaTE.viewport;
   const pista = pistaVistaTE;
   panelesVistaTE.panes.forEach((pane, i) => pane.setAttribute("aria-hidden", String(i !== indice)));
-  pista.style.transform = `translate3d(${-indice * (viewport.clientWidth || cont.clientWidth || 0)}px,0,0)`;
+  const anchoViewport = viewport.clientWidth || cont.clientWidth || 0;
+  pista.style.width = `calc(300% + ${GAP_PANE_VISTA_TE * 2}px)`;
+  pista.style.gap = `${GAP_PANE_VISTA_TE}px`;
+  pista.style.transform = `translate3d(${-indice * (anchoViewport + GAP_PANE_VISTA_TE)}px,0,0)`;
   const paneActual = panelesVistaTE.panes[indice];
   paneActual.replaceChildren();
   if (vistaSeccionTE === "estadisticas") construirVistaEstadisticas(paneActual, renderizarTiempoEstudio);

@@ -18,6 +18,7 @@ import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { sincronizarEventoCalendario } from "../core/notificaciones-calendario.js";
 import { mostrarToast } from "../ui/componentes.js";
 import { abrirModalEventoAgenda, confirmarBorrarEventoAgenda, obtenerNombreMateriaEvento } from "../agenda/agenda-modal.js";
+import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
 import {
   formatearHoraAmPm,
   obtenerMateriasVinculablesAgenda,
@@ -3889,10 +3890,18 @@ function construirEsqueletoAsistente(contenedor) {
 
   const encabezado = document.createElement("div");
   encabezado.className = "row-between";
+  encabezado.style.alignItems = "center";
   encabezado.style.flexShrink = "0";
   // v3.27.6: sin título "✨ Asistente IA" — la tarjeta empieza directo en el
   // chat y arriba solo queda la acción de nueva conversación, a la derecha.
-  encabezado.style.justifyContent = "flex-end";
+  encabezado.style.justifyContent = "space-between";
+  const semestreSemana = obtenerSemestreActivoAgenda();
+  const numeroSemana = semestreSemana ? calcularNumeroSemanaParaFecha(semestreSemana, obtenerFechaInicioSemanaAgenda(0)) : null;
+  const tituloSemana = document.createElement("span");
+  tituloSemana.className = "texto-encabezado-seccion";
+  tituloSemana.style.fontSize = "1rem";
+  tituloSemana.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana actual");
+  encabezado.appendChild(tituloSemana);
   const btnNueva = document.createElement("button");
   btnNueva.title = "Nueva conversación";
   btnNueva.setAttribute("aria-label", "Nueva conversación");

@@ -4074,7 +4074,7 @@ function construirEncabezadoComunidad() {
   const btnMenu = document.createElement("button");
   btnMenu.type = "button";
   btnMenu.className = "agenda-btn-ajustes";
-  btnMenu.textContent = "⋯";
+  btnMenu.textContent = "⋮";
   btnMenu.title = "Exportar o importar";
   btnMenu.setAttribute("aria-label", "Exportar o importar");
   btnMenu.setAttribute("aria-haspopup", "true");

@@ -61,6 +61,7 @@ const ETIQUETA_TIPO = { evento: "Eventos", tarea: "Tareas", examen: "Exámenes" 
 const ORDEN_TIPO = ["examen", "tarea", "evento"];
 let idEtiquetaAgendaArrastrada = null;
 let controladorPopoverEstadoAgenda = null;
+let observadorAnchoFiltroAgenda = null;
 
 /**
  * Feature "filtro por estado" — pedido nuevo: 7 badges (eran 6; se sumó
@@ -282,6 +283,7 @@ function alternarFiltroEstadoAgenda(id) {
  */
 function construirBarraFiltroEstadosAgenda() {
   controladorPopoverEstadoAgenda?.abort();
+  observadorAnchoFiltroAgenda?.disconnect();
   controladorPopoverEstadoAgenda = new AbortController();
   const activos = obtenerEstadosFiltroActivos();
   const barra = document.createElement("div");
@@ -299,13 +301,13 @@ function construirBarraFiltroEstadosAgenda() {
       if (ib < 0) return -1;
       return ia - ib;
     });
-  const agregarSeparador = () => {
+  const agregarSeparador = (clase) => {
     const separador = document.createElement("span");
-    separador.className = "agenda-filtro-separador";
+    separador.className = `agenda-filtro-separador ${clase}`;
     separador.setAttribute("aria-hidden", "true");
     barra.appendChild(separador);
   };
-  const grupoClase = document.createElement("div"); grupoClase.className = "agenda-filtro-grupo";
+  const grupoClase = document.createElement("div"); grupoClase.className = "agenda-filtro-grupo agenda-filtro-clase";
   const grupoCategorias = document.createElement("div"); grupoCategorias.className = "agenda-filtro-grupo agenda-filtro-categorias";
   const crearChip = ({ id, etiqueta, color }, contenedor) => {
     const btn = document.createElement("button");
@@ -333,12 +335,12 @@ function construirBarraFiltroEstadosAgenda() {
   opcionesClase.forEach((op) => crearChip(op, grupoClase));
   opcionesCategoria.forEach((op) => crearChip(op, grupoCategorias));
   barra.append(grupoClase);
-  agregarSeparador();
+  agregarSeparador("agenda-filtro-separador-principal");
   barra.append(grupoCategorias);
-  agregarSeparador();
+  agregarSeparador("agenda-filtro-separador-secundario");
 
   const grupoEstado = document.createElement("div");
-  grupoEstado.className = "agenda-filtro-grupo agenda-filtro-estado-menu";
+  grupoEstado.className = "agenda-filtro-grupo agenda-filtro-estado-menu agenda-filtro-estado";
   const botonEstado = document.createElement("button");
   botonEstado.type = "button";
   botonEstado.className = "agenda-filtro-estado-btn agenda-filtro-estado-trigger" + (opcionesEstado.some((o) => activos.has(o.id)) ? " active" : "");
@@ -364,6 +366,21 @@ function construirBarraFiltroEstadosAgenda() {
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarMenu(); }, { signal: controladorPopoverEstadoAgenda.signal });
   grupoEstado.append(botonEstado, menuEstado);
   barra.appendChild(grupoEstado);
+  const medirMultilinea = () => {
+    if (!barra.isConnected) return;
+    barra.classList.remove("agenda-filtro-estados--multilinea");
+    // Comprueba si la fila completa cabe sin permitir que flex envuelva ni
+    // comprima las categorías. Así la segunda fila solo aparece cuando hace
+    // falta; si cabe, conserva el orden lineal Clase | categorías | Estado.
+    barra.classList.add("agenda-filtro-estados--midiendo");
+    const seParte = barra.scrollWidth > barra.clientWidth + 1;
+    barra.classList.remove("agenda-filtro-estados--midiendo");
+    barra.classList.toggle("agenda-filtro-estados--multilinea", seParte);
+  };
+  observadorAnchoFiltroAgenda = new ResizeObserver(medirMultilinea);
+  observadorAnchoFiltroAgenda.observe(barra);
+  barra.actualizarLayoutMultilinea = medirMultilinea;
+  requestAnimationFrame(medirMultilinea);
   return barra;
 }
 
@@ -699,7 +716,8 @@ function asegurarBarraBusquedaAgenda() {
     const input=document.createElement("input");input.type="search";input.id="agenda-busqueda-input";input.className="form-input";input.placeholder="Buscar en toda la Agenda…";input.setAttribute("aria-label","Buscar en toda la Agenda");input.value=estado.agendaBusquedaConsulta||"";
     input.addEventListener("input",()=>{estado.agendaBusquedaConsulta=input.value;window.clearTimeout(temporizadorBusquedaAgenda);temporizadorBusquedaAgenda=window.setTimeout(renderizarResultadosBusquedaAgenda,100);});
     barra.append(input);
-    const header=document.getElementById("agenda-header");header?.insertAdjacentElement("afterend",barra);
+    const referencia=document.getElementById("pills-agenda-vista")||document.getElementById("agenda-header");
+    referencia?.insertAdjacentElement("afterend",barra);
   }
   let resultados=document.getElementById("agenda-busqueda-resultados");
   if(!resultados){resultados=document.createElement("div");resultados.id="agenda-busqueda-resultados";resultados.className="agenda-busqueda-resultados oculto";barra.insertAdjacentElement("afterend",resultados);}
@@ -1650,7 +1668,9 @@ function renderizarAgendaInterno() {
   filtroCont.innerHTML = "";
   // Los filtros quedan siempre visibles en la vista principal de Agenda;
   // el editor de tipos sigue contraíble dentro de Ajustes de Agenda.
-  filtroCont.appendChild(construirBarraFiltroEstadosAgenda());
+  const barraFiltro = construirBarraFiltroEstadosAgenda();
+  filtroCont.appendChild(barraFiltro);
+  requestAnimationFrame(() => barraFiltro.actualizarLayoutMultilinea?.());
 
   if (modoTodo) {
     // Ronda de ajustes visuales #5 — punto D: el modo "Todo" es una lista
@@ -1846,48 +1866,54 @@ function asegurarPistaVistasAgenda() {
 }
 
 function inicializarGestosVistasAgenda() {
-  const seccion = document.querySelector("#seccion-agenda .nav-vistas-viewport");
-  if (!seccion || seccion.dataset.gestosAgenda === "1") return;
-  seccion.dataset.gestosAgenda = "1";
+  const raiz = document.getElementById("seccion-agenda");
+  const viewport = raiz?.querySelector(".nav-vistas-viewport");
+  if (!raiz || !viewport || raiz.dataset.gestosAgenda === "1") return;
+  raiz.dataset.gestosAgenda = "1";
   const vistas = ["lista", "calendario", "materia"];
   let inicio = null;
-  seccion.addEventListener("touchstart", (ev) => {
+  raiz.addEventListener("touchstart", (ev) => {
     const t = ev.touches?.[0];
-    if (ev.touches.length !== 1 || ev.target.closest("input,textarea,select,button,a,[contenteditable='true'],[data-no-swipe]")) { inicio = null; return; }
+    if (ev.touches.length !== 1 || ev.target.closest("input,textarea,select,[contenteditable='true'],[data-no-swipe]")) { inicio = null; return; }
     if (t) inicio = { x: t.clientX, y: t.clientY, t0: performance.now(), moviendo: false, indice: vistas.indexOf(estado.agendaVistaActiva || "lista") };
-  }, { passive: true });
-  seccion.addEventListener("touchmove", (ev) => {
+  }, { capture: true, passive: true });
+  raiz.addEventListener("touchmove", (ev) => {
     if (!inicio || ev.touches.length !== 1) return;
     const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
     if (!inicio.moviendo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
-    if (!inicio.moviendo) seccion.classList.add("nav-arrastrando"); // v3.27.8: la vecina no debe estar colapsada mientras se arrastra
+    if (!inicio.moviendo) viewport.classList.add("nav-arrastrando"); // la vista vecina se mantiene visible mientras se arrastra
     inicio.moviendo = true;
     ev.preventDefault();
-    const width = seccion.clientWidth || 1;
+    const width = viewport.clientWidth || 1;
     const pct = -inicio.indice * 100 / 3 + dx / width * 100 / 3;
-    seccion.querySelector(".nav-vistas-pista").style.transform = `translate3d(${pct}%,0,0)`;
+    viewport.querySelector(".nav-vistas-pista").style.transform = `translate3d(${pct}%,0,0)`;
     const thumb = document.querySelector("#pills-agenda-vista .pill-switch-thumb");
     if (thumb) thumb.style.setProperty("--nav-pill-progreso", String(Math.max(0, Math.min(2, inicio.indice - dx / width))));
-  }, { passive: false });
-  seccion.addEventListener("touchend", (ev) => {
+  }, { capture: true, passive: false });
+  raiz.addEventListener("touchend", (ev) => {
     if (!inicio) return;
+    const gesto = inicio;
     const t = ev.changedTouches?.[0];
-    const deltaX = t ? t.clientX - inicio.x : 0;
-    const flick = inicio.moviendo && performance.now() - inicio.t0 < 280 && Math.abs(deltaX) > 24; // v3.27.8: deslizamiento rápido
+    const deltaX = t ? t.clientX - gesto.x : 0;
+    const flick = gesto.moviendo && performance.now() - gesto.t0 < 280 && Math.abs(deltaX) > 24;
     inicio = null;
-    seccion.classList.remove("nav-arrastrando");
-    const actual = vistas.indexOf(estado.agendaVistaActiva || "lista");
-    const nuevo = Math.max(0, Math.min(2, actual + ((flick || Math.abs(deltaX) > Math.max(48, seccion.clientWidth * 0.16)) ? (deltaX < 0 ? 1 : -1) : 0)));
+    viewport.classList.remove("nav-arrastrando");
+    const actual = gesto.indice;
+    const navega = gesto.moviendo && (flick || Math.abs(deltaX) > Math.max(48, viewport.clientWidth * 0.16));
+    const nuevo = Math.max(
+      0,
+      Math.min(2, actual + (navega ? (deltaX < 0 ? 1 : -1) : 0))
+    );
     document.querySelector("#pills-agenda-vista .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
     cambiarVistaAgendaConGesto(vistas[nuevo]);
     if (pistaAgenda) pistaAgenda.pista.style.transform = `translate3d(-${nuevo * 100 / 3}%,0,0)`;
-  }, { passive: true });
-  seccion.addEventListener("touchcancel", () => {
+  }, { capture: true, passive: true });
+  raiz.addEventListener("touchcancel", () => {
     inicio = null;
-    seccion.classList.remove("nav-arrastrando");
+    viewport.classList.remove("nav-arrastrando");
     if (pistaAgenda) pistaAgenda.pista.style.transform = `translate3d(-${Math.max(0, vistas.indexOf(estado.agendaVistaActiva || "lista")) * 100 / 3}%,0,0)`;
     document.querySelector("#pills-agenda-vista .pill-switch-thumb")?.style.removeProperty("--nav-pill-progreso");
-  }, { passive: true });
+  }, { capture: true, passive: true });
 }
 
 function cambiarVistaAgendaConGesto(vista) {

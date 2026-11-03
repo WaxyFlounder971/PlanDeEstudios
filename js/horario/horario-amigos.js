@@ -537,15 +537,21 @@ function inicializarPanelAmigos() {
   if (btnIrEnlaces) {
     btnIrEnlaces.addEventListener("click", () => {
       cerrarPanelAmigos();
-      // Navegación cruzada Horario → Ajustes: mismo patrón que el resto de
-      // la app (window.mostrarSeccion + desplazarYResaltarElemento, ver
-      // componentes.js) - se abre la tarjeta si estaba colapsada y se hace
-      // scroll + destello para que sea imposible no verla.
       if (typeof window.mostrarSeccion === "function") window.mostrarSeccion("configuracion");
-      const seccion = document.getElementById("ajuste-seccion-horario-enlaces");
-      const cabecera = seccion?.querySelector(".ajuste-seccion-cabecera");
-      if (seccion && seccion.classList.contains("colapsada") && cabecera) cabecera.click();
-      requestAnimationFrame(() => desplazarYResaltarElemento("#ajuste-seccion-horario-enlaces"));
+      // Espera a que Configuración vuelva a ser visible antes de abrir el
+      // acordeón; después del reflow desplaza a su encabezado (no al centro
+      // del cuerpo expandido, que puede ser muy largo).
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const seccion = document.getElementById("ajuste-seccion-horario-enlaces");
+        const cabecera = seccion?.querySelector(".ajuste-seccion-cabecera");
+        if (seccion?.classList.contains("colapsada")) cabecera?.click();
+        // Respaldo si el delegado de Ajustes todavía no recibió el click.
+        if (seccion?.classList.contains("colapsada")) seccion.classList.remove("colapsada");
+        renderizarListaEnlacesCompartidos();
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          setTimeout(() => desplazarYResaltarElemento("#ajuste-seccion-horario-enlaces .ajuste-seccion-cabecera"), 80);
+        }));
+      }));
     });
   }
 

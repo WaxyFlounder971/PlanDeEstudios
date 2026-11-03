@@ -771,15 +771,30 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
   const nombreEl = document.getElementById("horario-nombre-semestre");
   const semanaEl = document.getElementById("horario-semana-actual");
   const fechaEl = document.getElementById("horario-fecha-actual");
+  const diasEl = document.getElementById("horario-dias-semana");
+  if (diasEl) diasEl.replaceChildren();
   if (!semestre) {
     if (nombreEl) nombreEl.textContent = "Sin semestres";
     if (semanaEl) semanaEl.textContent = "-";
     if (fechaEl) fechaEl.textContent = "";
+    if (diasEl) diasEl.hidden = true;
     return;
   }
+  if (diasEl) diasEl.hidden = false;
   if (nombreEl) nombreEl.textContent = semestre.nombre || "";
   if (semanaEl) semanaEl.textContent = `Semana ${numeroSemana}`;
   if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" });
+  if (diasEl) {
+    obtenerDiasOrdenados().forEach((dia) => {
+      const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
+      const celda = document.createElement("div");
+      celda.className = "muted";
+      celda.style.cssText = "padding:4px 1px; border-radius:8px; font-size:.68rem; line-height:1.25;";
+      if (esHoy(fecha)) { celda.style.color = "var(--color-luz)"; celda.style.background = "var(--accent-1-10)"; }
+      celda.innerHTML = `<span style="display:block;">${dia.abrevDefault}</span><strong style="display:block; color:var(--text-primary);">${fecha ? fecha.getDate() : "–"}</strong>`;
+      diasEl.appendChild(celda);
+    });
+  }
 }
 
 /* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */
@@ -1172,7 +1187,11 @@ function activarModoConjunto() {
   }
 
   document.getElementById("btn-horario-agregar")?.classList.add("oculto");
-  document.getElementById("btn-salir-modo-conjunto")?.classList.remove("oculto");
+  const btnSalir = document.getElementById("btn-salir-modo-conjunto");
+  if (btnSalir) {
+    btnSalir.textContent = "Salir";
+    btnSalir.classList.remove("oculto");
+  }
   renderizarHorarioInterno();
 
   // Best-effort: refresca los snapshots de amigos por si cambió algo desde
@@ -1402,7 +1421,7 @@ function desactivarVistaIndividualAmigo() {
   document.getElementById("btn-horario-agregar")?.classList.remove("oculto");
   const btnSalir = document.getElementById("btn-salir-modo-conjunto");
   if (btnSalir) {
-    btnSalir.textContent = "← Salir del modo conjunto";
+    btnSalir.textContent = "Salir";
     btnSalir.classList.add("oculto");
   }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
@@ -2285,10 +2304,48 @@ function irASemanaSiguiente() {
   renderizarHorarioInterno();
 }
 
+function inicializarGestoCambioSemanaHorario() {
+  const seccion = document.getElementById("seccion-horario");
+  if (!seccion || seccion.dataset.gestoSemanaInicializado === "1") return;
+  seccion.dataset.gestoSemanaInicializado = "1";
+  let inicio = null;
+  seccion.addEventListener("touchstart", (ev) => {
+    if (estado.horarioModoConjunto || estado.horarioVistaIndividualAmigoFileId
+      || ev.touches.length !== 1
+      || ev.target.closest("button,a,input,textarea,select,[contenteditable='true'],[data-no-swipe]")) {
+      inicio = null;
+      return;
+    }
+    const toque = ev.touches[0];
+    inicio = { x: toque.clientX, y: toque.clientY, tiempo: performance.now(), moviendo: false };
+  }, { capture: true, passive: true });
+  seccion.addEventListener("touchmove", (ev) => {
+    if (!inicio || ev.touches.length !== 1) return;
+    const toque = ev.touches[0];
+    const dx = toque.clientX - inicio.x;
+    const dy = toque.clientY - inicio.y;
+    if (!inicio.moviendo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
+    inicio.moviendo = true;
+    ev.preventDefault();
+  }, { capture: true, passive: false });
+  seccion.addEventListener("touchend", (ev) => {
+    if (!inicio) return;
+    const gesto = inicio;
+    inicio = null;
+    const toque = ev.changedTouches?.[0];
+    const dx = toque ? toque.clientX - gesto.x : 0;
+    const flick = gesto.moviendo && performance.now() - gesto.tiempo < 280 && Math.abs(dx) > 24;
+    const navega = gesto.moviendo && (flick || Math.abs(dx) > Math.max(48, seccion.clientWidth * 0.16));
+    if (navega) (dx < 0 ? irASemanaSiguiente : irASemanaAnterior)();
+  }, { capture: true, passive: true });
+  seccion.addEventListener("touchcancel", () => { inicio = null; }, { capture: true, passive: true });
+}
+
 function inicializarHorario() {
   if (horarioInicializado) return;
   horarioInicializado = true;
   inicializarEstadoHorarioSiHaceFalta();
+  inicializarGestoCambioSemanaHorario();
   const btnAnterior = document.getElementById("btn-horario-semestre-anterior");
   const btnSiguiente = document.getElementById("btn-horario-semestre-siguiente");
   const btnAgregar = document.getElementById("btn-horario-agregar");

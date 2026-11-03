@@ -258,13 +258,6 @@ function vaciarTrasIntro() {
   });
 }
 
-// Notificaciones push - flag de "ya se ofreció el diálogo en ESTE
-// dispositivo/navegador" (ver onLoginExitoso más abajo). Va en localStorage
-// y no en estado.datos.configuracion a propósito: el permiso del navegador
-// (Notification.permission) es por dispositivo, no por cuenta, así que si
-// esto sincronizara por Drive, alguien que ya vio el aviso en el celular
-// nunca lo vería en la PC aunque ahí nunca haya dado el permiso.
-const CLAVE_SYNC_CALENDARIO_OFRECIDA = "sincronizacion_calendario_ofrecida_v1";
 // El botón de salida de la demo añade este parámetro para que el siguiente
 // arranque muestre el login, aunque exista una sesión real guardada en caché.
 const FORZAR_LOGIN_DESDE_DEMO = new URLSearchParams(window.location.search).get("salir-demo") === "1";
@@ -968,24 +961,25 @@ async function onLoginExitoso(token, expiresIn) {
 
     // Sincronización con Google Calendar - onboarding (2026-08-25,
     // reemplaza a Web Push): se ofrece la primera vez que este
-    // dispositivo/navegador abre la app, ya no solo cuando el archivo de
-    // Drive es recién creado. A diferencia del viejo mecanismo, esto NO
-    // depende de que el navegador soporte notificaciones (era
+    // usuario abre la app por primera vez. La marca vive en configuración
+    // de la cuenta (Drive), para no repetir el diálogo en otros dispositivos.
+    // A diferencia del viejo mecanismo, esto NO depende de que el navegador
+    // soporte notificaciones (era
     // `soportaNotificacionesPush()`) ni de `Notification.permission` - la
     // sincronización con Calendar no usa la API de Notification del
     // navegador en absoluto, así que esos 2 checks ya no aplican y se
     // eliminan sin reemplazo (ofrecerActivarSincronizacionCalendario ya
     // revisa por su cuenta si el usuario otorgó el scope de Calendar antes
-    // de hacer nada, y no hace nada si no lo otorgó). La marca en
-    // localStorage asegura que, se acepte, se rechace o se cierre el
-    // diálogo sin elegir, este dispositivo no vuelva a verlo en logins
-    // siguientes. El switch de Ajustes Avanzados sigue disponible siempre
+    // de hacer nada, y no hace nada si no lo otorgó). La marca se guarda
+    // aunque se acepte, rechace o cierre el diálogo. El
+    // switch de Ajustes Avanzados sigue disponible siempre
     // para prender/apagar a mano (ver config-ajustes.js). Se dispara
     // después de mostrarApp() y sin `await`: es un diálogo de confirmación
     // no bloqueante, no debe demorar la entrada a la app.
-    const yaSeOfrecioEnEsteDispositivo = localStorage.getItem(CLAVE_SYNC_CALENDARIO_OFRECIDA) === "1";
-    if (!yaSeOfrecioEnEsteDispositivo) {
-      localStorage.setItem(CLAVE_SYNC_CALENDARIO_OFRECIDA, "1");
+    if (estado.datos.configuracion.sincronizacion_calendario_ofrecida !== true) {
+      estado.datos.configuracion.sincronizacion_calendario_ofrecida = true;
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
       ofrecerActivarSincronizacionCalendario();
     }
 
