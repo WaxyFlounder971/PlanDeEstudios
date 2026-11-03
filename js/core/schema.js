@@ -117,6 +117,7 @@ function crearDatosUsuarioNuevo() {
       // desde activarNotificacionesPush()/desactivarNotificacionesPush();
       // se aprovecha esta migración para declararlo explícito).
       sincronizar_calendario_google: false,
+      sincronizacion_calendario_ofrecida: false,
       // id del calendario "AppAcademica" creado una sola vez por usuario
       // vía calendars.insert (ver crearCalendarioSecundario en auth.js) —
       // se guarda acá para no volver a crearlo en cada sesión. null hasta
