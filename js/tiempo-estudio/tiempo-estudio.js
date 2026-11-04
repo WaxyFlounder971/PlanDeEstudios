@@ -433,7 +433,15 @@ function construirEncabezado(cont, botonSemestre = null) {
   const encabezado = document.createElement("div");
   encabezado.className = "app-encabezado";
 
-  if (botonSemestre && !enCompetencias) {
+  if (botonSemestre && enCompetencias) {
+    // 2026-11-04: Competencias también muestra el botón del semestre (mismo diseño y mismo alto que
+    // en Materias/Estadísticas), pero sin función: cloneNode descarta el listener que abre la ventana.
+    const inerte = botonSemestre.cloneNode(true);
+    inerte.classList.add("app-encabezado__semestre--inerte");
+    inerte.setAttribute("aria-disabled", "true");
+    inerte.tabIndex = -1;
+    encabezado.appendChild(inerte);
+  } else if (botonSemestre) {
     encabezado.appendChild(botonSemestre);
   } else {
     const hueco = document.createElement("span");
@@ -485,8 +493,11 @@ function construirEncabezado(cont, botonSemestre = null) {
 
     const btnCrear = document.createElement("button");
     btnCrear.type = "button";
-    btnCrear.className = "btn btn-primary app-encabezado__lado";
-    btnCrear.textContent = traducirTextoInterfaz("+ Crear");
+    // 2026-11-04: solo "+" (igual que en Materias y Estadísticas), con su propia función: crear competencia.
+    btnCrear.className = "btn btn-primary app-encabezado__mas";
+    btnCrear.title = traducirTextoInterfaz("Crear competencia");
+    btnCrear.setAttribute("aria-label", traducirTextoInterfaz("Crear competencia"));
+    btnCrear.textContent = "+";
     btnCrear.addEventListener("click", () => acciones.alCrear());
     derecha.appendChild(btnCrear);
   } else {
@@ -729,7 +740,7 @@ function pintarEncabezadoTE() {
   const host = panelesVistaTE?.encabezado;
   if (!host) return;
   host.replaceChildren();
-  construirEncabezado(host, vistaSeccionTE === "competencias" ? null : construirBotonSemestreTiempo());
+  construirEncabezado(host, construirBotonSemestreTiempo());
 }
 
 /** Durante un arrastre, las pestañas vecinas deben estar ya armadas (si no, se ve un hueco o un corte). */

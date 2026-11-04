@@ -1550,43 +1550,54 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     btn.classList.toggle("btn-secondary", !activo);
   });
   if (!MODO_DEMO) localStorage.setItem(CLAVE_SECCION_ACTIVA, nombre);
-  if (nombre === "plan-estudios") {
-    // Cada entrada al Plan parte con bloques abiertos y materias cerradas.
-    // Esta preferencia de presentación vive en memoria en cada dispositivo.
-    estado.bloquesColapsados = new Set();
-    estado.materiasExpandidas = new Map();
-    renderizarPlanEstudios();
-  }
-  // Finanzas lee la moneda preferida al renderizar. Redibujarla al entrar
-  // asegura que un cambio hecho en Ajustes se vea inmediatamente.
-  if (nombre === "finanzas") renderizarFinanzas();
-  // Horario depende de datos que se editan en otras pestañas (nombre/fechas
-  // de semestre, materias matriculadas) - se re-renderiza al entrar para
-  // que nunca se vea desactualizado.
-  if (nombre === "horario") window.renderizarHorario?.();
-  // Agenda: mismo motivo (materias matriculadas/bloques de Horario que se
-  // editan en otras secciones), más el hecho de que "hoy"/"esta semana"
-  // pueden haber cambiado si la pestaña quedó abierta de un día para otro.
-  if (nombre === "agenda") window.renderizarAgenda?.();
-  // Tiempo de Estudio: mismo motivo que Agenda/Horario arriba (meta y
-  // sesiones se pueden haber editado en otra pestaña/dispositivo) - se
-  // re-renderiza fresco cada vez que se entra a la sección.
-  if (nombre === "tiempo-estudio") window.renderizarTiempoEstudio?.();
-  // Resumen: agrega datos de Agenda/Horario/Semestres, así que le aplican
-  // los mismos motivos de arriba (datos editados en otras secciones, más
-  // "hoy" pudiendo haber cambiado) - se re-renderiza fresco cada vez que se
-  // entra, en vez de confiar en el render inicial de mostrarApp().
-  if (nombre === "resumen") window.renderizarResumen?.();
-  // Asistente IA (revisado 2026-08-22): renderizarAsistente() SIEMPRE
-  // reconstruye el DOM de cero al entrar (nunca deja restos de una visita
-  // anterior colgando), pero eso no significa "chat en blanco siempre" -
-  // si hay una conversación guardada en localStorage con menos de 1h desde
-  // el último mensaje, esa misma función ofrece "Continuar"/"Nueva
-  // conversación" antes de arrancar (ver leerHistorialLocalVigente +
-  // mostrarAvisoContinuar en js/asistente/asistente.js). Con más de 1h, o
-  // sin conversación guardada, arranca directo en blanco.
-  if (nombre === "asistente") window.renderizarAsistente?.();
-  if (nombre === "notas") renderizarNotas();
+  // INP: el clic solo cambia visibilidad y estado del botón; el render pesado
+  // de la sección se difiere hasta después del primer pintado para que la
+  // interacción responda de inmediato en equipos lentos.
+  const renderSeccion = () => {
+    if (seccionNavegacionActual !== nombre) return; // el usuario ya cambió de sección
+    if (nombre === "plan-estudios") {
+      // Cada entrada al Plan parte con bloques abiertos y materias cerradas.
+      // Esta preferencia de presentación vive en memoria en cada dispositivo.
+      estado.bloquesColapsados = new Set();
+      estado.materiasExpandidas = new Map();
+      renderizarPlanEstudios();
+    }
+    // Finanzas lee la moneda preferida al renderizar. Redibujarla al entrar
+    // asegura que un cambio hecho en Ajustes se vea inmediatamente.
+    if (nombre === "finanzas") renderizarFinanzas();
+    // Horario depende de datos que se editan en otras pestañas (nombre/fechas
+    // de semestre, materias matriculadas) - se re-renderiza al entrar para
+    // que nunca se vea desactualizado.
+    if (nombre === "horario") window.renderizarHorario?.();
+    // Agenda: mismo motivo (materias matriculadas/bloques de Horario que se
+    // editan en otras secciones), más el hecho de que "hoy"/"esta semana"
+    // pueden haber cambiado si la pestaña quedó abierta de un día para otro.
+    if (nombre === "agenda") window.renderizarAgenda?.();
+    // Tiempo de Estudio: mismo motivo que Agenda/Horario arriba (meta y
+    // sesiones se pueden haber editado en otra pestaña/dispositivo) - se
+    // re-renderiza fresco cada vez que se entra a la sección.
+    if (nombre === "tiempo-estudio") window.renderizarTiempoEstudio?.();
+    // Resumen: agrega datos de Agenda/Horario/Semestres, así que le aplican
+    // los mismos motivos de arriba (datos editados en otras secciones, más
+    // "hoy" pudiendo haber cambiado) - se re-renderiza fresco cada vez que se
+    // entra, en vez de confiar en el render inicial de mostrarApp().
+    if (nombre === "resumen") window.renderizarResumen?.();
+    // Asistente IA (revisado 2026-08-22): renderizarAsistente() SIEMPRE
+    // reconstruye el DOM de cero al entrar (nunca deja restos de una visita
+    // anterior colgando), pero eso no significa "chat en blanco siempre" -
+    // si hay una conversación guardada en localStorage con menos de 1h desde
+    // el último mensaje, esa misma función ofrece "Continuar"/"Nueva
+    // conversación" antes de arrancar (ver leerHistorialLocalVigente +
+    // mostrarAvisoContinuar en js/asistente/asistente.js). Con más de 1h, o
+    // sin conversación guardada, arranca directo en blanco.
+    if (nombre === "asistente") window.renderizarAsistente?.();
+    if (nombre === "notas") renderizarNotas();
+  };
+  cancelAnimationFrame(window.__renderSeccionRaf);
+  clearTimeout(window.__renderSeccionTimer);
+  window.__renderSeccionRaf = requestAnimationFrame(() => {
+    window.__renderSeccionTimer = setTimeout(renderSeccion, 0);
+  });
   if (dependencia && seccionSolicitada !== nombre) setTimeout(() => mostrarToastAccion(dependencia.mensaje, "Entendido", () => mostrarSeccion(nombre)), 220);
   if (cambioSeccion && (!MODO_DEMO || !PREVIEW_DEMO) && estado.datos?.configuracion?.onboarding_v1_completado !== false) requestAnimationFrame(() => mostrarTutorialPrimeraVez(nombre));
 }
@@ -1752,7 +1763,9 @@ function renderizarPerfil() {
   foto.classList.add("oculto");
   fallback.classList.remove("oculto");
 
-  if (perfil.foto_url) {
+  // Foto elegida por la persona (Configuración u onboarding) > foto de la cuenta de Google.
+  const fotoMostrada = perfil.foto_personalizada || perfil.foto_url;
+  if (fotoMostrada) {
     foto.onload = () => {
       foto.classList.remove("oculto");
       fallback.classList.add("oculto");
@@ -1761,9 +1774,10 @@ function renderizarPerfil() {
       foto.classList.add("oculto");
       fallback.classList.remove("oculto");
     };
-    foto.src = perfil.foto_url;
+    foto.src = fotoMostrada;
     foto.alt = nombreVisible || "Foto de perfil";
   }
+  window.renderizarUsuarioAjustes?.();
 
   wrap.onclick = () => {
     // El popover con confirmación solo tiene sentido cuando el sidebar está

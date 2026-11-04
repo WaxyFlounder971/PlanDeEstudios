@@ -8,6 +8,7 @@ import { traducirTextoInterfaz } from "./i18n.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { aplicarLogoApp, prepararImagenLogo } from "./marca.js";
 import { MODO_DEMO, PREVIEW_DEMO } from "./demo-mode.js";
+import { elegirYGuardarFotoPerfil } from "./foto-perfil.js";
 
 /* Emojis de «Todo conectado, paso a paso». Cámbialos aquí (o pon un <img>/texto corto) si haces logos personalizados. */
 const ICONOS_FLUJO = {
@@ -1473,6 +1474,9 @@ function ajustarFlujo(raiz, fila) {
   window.addEventListener("resize", () => { anchoPrevio = -1; medir(); }, { passive: true });
 }
 function fotoPerfilGoogle() {
+  // 2026-11-04: si la persona ya eligió una foto propia, esa tiene prioridad sobre la de Google.
+  const propia = estado.datos?.perfil?.foto_personalizada;
+  if (propia) return propia;
   const src = document.getElementById("perfil-foto")?.getAttribute("src") || "";
   if (src.trim()) return src;
   const p = estado.datos?.perfil || {};
@@ -1897,8 +1901,20 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     if(etapa==="nombre"){
       const nombreGoogle=(estado.datos.perfil?.nombre||estado.datos.perfil?.nombre_preferido||"").trim();
       const valorInicial=MODO_DEMO?"":(estado.datos.perfil?.nombre_preferido||estado.datos.perfil?.nombre||"");
-      titulo.before(construirAvatarBienvenida(valorInicial||nombreGoogle));
+      let avatarBienvenida=construirAvatarBienvenida(valorInicial||nombreGoogle);
+      titulo.before(avatarBienvenida);
       contenido.append(texto("p","onb-bienvenida-lema","Tu carrera, tu agenda y tu tiempo, en un solo lugar."));
+      // 2026-11-04: por defecto sale la foto de la cuenta de Google, pero se puede reemplazar por otra.
+      if(!MODO_DEMO){
+        const cambiarFoto=boton("Cambiar foto","btn-discreto onb-bienvenida-cambiar-foto",()=>{
+          elegirYGuardarFotoPerfil((ok)=>{
+            if(!ok)return;
+            const nuevo=construirAvatarBienvenida(input.value.trim()||valorInicial||nombreGoogle);
+            avatarBienvenida.replaceWith(nuevo);avatarBienvenida=nuevo;
+          });
+        });
+        contenido.append(cambiarFoto);
+      }
       const input=document.createElement("input");input.className="form-input onb-bienvenida-campo";input.maxLength=60;input.autocomplete="given-name";input.value=valorInicial;input.placeholder=traducirTextoInterfaz("Tu nombre");input.setAttribute("aria-label",traducirTextoInterfaz("¿Cómo quieres que te llamemos?"));
       const etiqueta=texto("label","onb-bienvenida-etiqueta","¿Cómo quieres que te llamemos?");etiqueta.append(input);
       const aviso=texto("p","onboarding-nota-error","Escribe cómo quieres que te llamemos para continuar.");aviso.hidden=true;aviso.setAttribute("role","alert");

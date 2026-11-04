@@ -9,7 +9,8 @@ import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } fr
 import { estado } from "../core/storage/storage.js";
 import { borrarDatosCuentaApp } from "../core/eliminar-cuenta-app.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
-import { aplicarFormatoTexto } from "../core/utils.js";
+import { aplicarFormatoTexto, obtenerIniciales } from "../core/utils.js";
+import { obtenerFotoPerfil, elegirYGuardarFotoPerfil, guardarFotoPersonalizada } from "../core/foto-perfil.js";
 import { aplicarLogoApp, inicializarSelectorLogo } from "../core/marca.js";
 import { coloresDePaletaActual, coloresIntroEfectivos, espejarColoresIntroLocal, espejarIntroAperturaLocal, introAperturaActivada, modoColoresIntro, verAnimacionIntro } from "../core/intro-apertura.js";
 import { obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
@@ -1251,6 +1252,56 @@ function inicializarAccesoDocumentosLegales() {
   });
 }
 
+/**
+ * Tarjeta de usuario (arriba de todo en Configuración, siempre abierta): foto, cómo cambiarla,
+ * nombre editable y correo. El campo de nombre conserva su id (`input-nombre-preferido`) y su
+ * lógica de guardado más abajo en renderizarAjustes.
+ */
+function renderizarUsuarioAjustes() {
+  const tarjeta = document.getElementById("ajuste-usuario");
+  if (!tarjeta || !estado.datos) return;
+  const perfil = estado.datos.perfil || {};
+  const foto = document.getElementById("ajuste-usuario-foto");
+  const inicial = document.getElementById("ajuste-usuario-inicial");
+  const nombreVisible = perfil.nombre_preferido || perfil.nombre || "";
+  inicial.textContent = obtenerIniciales(nombreVisible || perfil.correo || "?");
+  const src = obtenerFotoPerfil(perfil);
+  foto.classList.add("oculto");
+  inicial.classList.remove("oculto");
+  if (src) {
+    foto.onload = () => { foto.classList.remove("oculto"); inicial.classList.add("oculto"); };
+    foto.onerror = () => { foto.classList.add("oculto"); inicial.classList.remove("oculto"); };
+    if (foto.getAttribute("src") !== src) foto.src = src;
+    else if (foto.complete && foto.naturalWidth) foto.onload();
+    foto.alt = nombreVisible || "Foto de perfil";
+  }
+  document.getElementById("btn-ajuste-foto-quitar")?.classList.toggle("oculto", !perfil.foto_personalizada);
+  const correo = document.getElementById("ajuste-usuario-correo");
+  if (correo) correo.textContent = perfil.correo || "";
+  const inputNombre = document.getElementById("input-nombre-preferido");
+  if (inputNombre && document.activeElement !== inputNombre) inputNombre.value = perfil.nombre_preferido || "";
+}
+window.renderizarUsuarioAjustes = renderizarUsuarioAjustes;
+
+function inicializarUsuarioAjustes() {
+  const tarjeta = document.getElementById("ajuste-usuario");
+  if (!tarjeta) return;
+  if (!tarjeta.dataset.listo) {
+    tarjeta.dataset.listo = "1";
+    document.getElementById("btn-ajuste-foto")?.addEventListener("click", () => {
+      elegirYGuardarFotoPerfil((ok, error) => {
+        if (ok) mostrarToast(traducirTextoInterfaz("Foto actualizada"));
+        else mostrarToast(traducirTextoInterfaz(error?.message || "No se pudo cambiar la foto"));
+      });
+    });
+    document.getElementById("btn-ajuste-foto-quitar")?.addEventListener("click", () => {
+      guardarFotoPersonalizada(null);
+      mostrarToast(traducirTextoInterfaz("Volvió la foto de tu cuenta de Google"));
+    });
+  }
+  renderizarUsuarioAjustes();
+}
+
 function inicializarAccordionAjustes() {
   const contenedor = document.getElementById("seccion-configuracion");
   if (!contenedor || contenedor.dataset.accordionInit) return;
@@ -1431,6 +1482,7 @@ function renderizarAjustes() {
   inicializarSelectorLogo();
   aplicarLogoApp();
   inicializarAjusteIntroApertura();
+  inicializarUsuarioAjustes();
   const inputNombre = document.getElementById("input-nombre-preferido");
   if (inputNombre) {
     if (document.activeElement !== inputNombre) inputNombre.value = estado.datos.perfil?.nombre_preferido || "";

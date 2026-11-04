@@ -139,6 +139,7 @@ import { abrirModalRequisito } from "../plan/plan-detalle.js";
       box-shadow: var(--shadow-float, 0 8px 24px #0005);
     }
     .com-popover.oculto { display: none; }
+    .com-menu-cont--izq .com-popover { right: auto; left: 0; }
     .com-popover--menu { width: auto; min-width: 150px; gap: 6px; }
     .com-popover--menu .btn { justify-content: flex-start; text-align: left; white-space: nowrap; }
     .com-popover-grupo { display: flex; flex-direction: column; gap: 6px; }
@@ -4061,7 +4062,8 @@ function construirEncabezadoComunidad() {
   btnAgregar.title = enProfes ? "Agregar profesor" : "Agregar compañero";
   btnAgregar.setAttribute("aria-label", btnAgregar.title);
   btnAgregar.addEventListener("click", () => (enProfes ? abrirModalAltaProfesor() : abrirModalAltaCompanero()));
-  zonaIzq.appendChild(btnAgregar);
+  // 2026-11-04: posiciones intercambiadas — ⋮ a la izquierda y "+" a la derecha.
+  zonaDer.appendChild(btnAgregar);
   fila.appendChild(zonaIzq);
 
   const centro = document.createElement("div");
@@ -4124,7 +4126,8 @@ function construirEncabezadoComunidad() {
     document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrar(); }, { signal: senal });
   }
   menu.append(btnMenu, popover);
-  zonaDer.appendChild(menu);
+  menu.classList.add("com-menu-cont--izq"); // el panel se abre hacia la derecha (el botón ya está a la izquierda)
+  zonaIzq.appendChild(menu);
   fila.appendChild(zonaDer);
   encabezado.appendChild(fila);
 

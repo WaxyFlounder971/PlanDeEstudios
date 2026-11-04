@@ -281,13 +281,21 @@ function alternarFiltroEstadoAgenda(id) {
  * "Clase" lleva su propia clase (rosa, ver estilo inyectado en
  * inicializarAgenda) porque no comparte color con ningún tipo existente.
  */
+/**
+ * PRUEBA (2026-11-04): "Estado" se extiende a su derecha, en la misma fila, con una animación
+ * ligera, y los demás filtros NO se mueven (ni se recentran) salvo que ya no quepa. Para volver al
+ * menú desplegable de antes basta poner esta constante en `false`.
+ */
+const FILTRO_ESTADO_EXTENDIDO = true;
+let filtroEstadoExtendidoAbierto = false;
+
 function construirBarraFiltroEstadosAgenda() {
   controladorPopoverEstadoAgenda?.abort();
   observadorAnchoFiltroAgenda?.disconnect();
   controladorPopoverEstadoAgenda = new AbortController();
   const activos = obtenerEstadosFiltroActivos();
   const barra = document.createElement("div");
-  barra.className = "agenda-filtro-estados";
+  barra.className = "agenda-filtro-estados" + (FILTRO_ESTADO_EXTENDIDO ? " agenda-filtro-estados--ext" : "");
   const opciones = obtenerOpcionesFiltroAgenda();
   const opcionesClase = opciones.filter((o) => o.id === "clase");
   const opcionesEstado = opciones.filter((o) => ["completado", "perdida", "pendiente"].includes(o.id));
@@ -352,16 +360,47 @@ function construirBarraFiltroEstadosAgenda() {
   menuEstado.setAttribute("role", "group");
   menuEstado.setAttribute("aria-label", traducirTextoInterfaz("Filtrar por estado"));
   opcionesEstado.forEach((op) => crearChip(op, menuEstado));
+  // Modo extendido: el panel nunca usa `oculto`; se abre/cierra con `abierto` (transición CSS).
+  // Si a su derecha no hay sitio, pasa a `--en-flujo` y la barra se reacomoda como antes.
+  const ajustarEnFlujo = () => {
+    menuEstado.classList.remove("agenda-filtro-estado-popover--en-flujo");
+    const limite = barra.getBoundingClientRect().right;
+    if (menuEstado.getBoundingClientRect().right > limite + 1) menuEstado.classList.add("agenda-filtro-estado-popover--en-flujo");
+  };
   const cerrarMenu = () => {
-    menuEstado.classList.add("oculto");
+    if (FILTRO_ESTADO_EXTENDIDO) {
+      filtroEstadoExtendidoAbierto = false;
+      menuEstado.classList.remove("abierto");
+    } else {
+      menuEstado.classList.add("oculto");
+    }
     botonEstado.setAttribute("aria-expanded", "false");
   };
+  if (FILTRO_ESTADO_EXTENDIDO) {
+    menuEstado.classList.remove("oculto");
+    if (filtroEstadoExtendidoAbierto) {
+      // El filtro vuelve a pintarse tras cada toque: se conserva abierto, sin repetir la animación.
+      menuEstado.classList.add("abierto", "agenda-filtro-estado-popover--sin-anim");
+      botonEstado.setAttribute("aria-expanded", "true");
+      requestAnimationFrame(ajustarEnFlujo);
+    }
+  }
   botonEstado.addEventListener("click", () => {
+    if (FILTRO_ESTADO_EXTENDIDO) {
+      const abrir = !menuEstado.classList.contains("abierto");
+      filtroEstadoExtendidoAbierto = abrir;
+      menuEstado.classList.remove("agenda-filtro-estado-popover--sin-anim");
+      if (abrir) ajustarEnFlujo();
+      menuEstado.classList.toggle("abierto", abrir);
+      botonEstado.setAttribute("aria-expanded", String(abrir));
+      return;
+    }
     const abrir = menuEstado.classList.contains("oculto");
     menuEstado.classList.toggle("oculto", !abrir);
     botonEstado.setAttribute("aria-expanded", String(abrir));
   });
-  menuEstado.querySelectorAll(".agenda-filtro-estado-btn").forEach((btn) => btn.addEventListener("click", cerrarMenu, { once: true }));
+  // En modo extendido los chips de estado no cierran el panel: así se pueden combinar sin reabrirlo.
+  if (!FILTRO_ESTADO_EXTENDIDO) menuEstado.querySelectorAll(".agenda-filtro-estado-btn").forEach((btn) => btn.addEventListener("click", cerrarMenu, { once: true }));
   document.addEventListener("pointerdown", (ev) => { if (!grupoEstado.contains(ev.target)) cerrarMenu(); }, { signal: controladorPopoverEstadoAgenda.signal });
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarMenu(); }, { signal: controladorPopoverEstadoAgenda.signal });
   grupoEstado.append(botonEstado, menuEstado);

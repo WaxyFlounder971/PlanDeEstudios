@@ -137,7 +137,7 @@ let colaSincronizacionHorasCompetencias = Promise.resolve();
        mientras haya algo pendiente.
    --------------------------------------------------------------------------- */
 const CLAVE_HORAS_PENDIENTES = "horasCompetenciasPendientes";
-const ESPERAS_REINTENTO_HORAS_MS = [15000, 30000, 60000, 120000, 300000];
+const ESPERAS_REINTENTO_HORAS_MS = [3000, 10000, 30000, 60000, 120000, 300000];
 let horasCompetenciasPendientes = (() => {
   try { return localStorage.getItem(CLAVE_HORAS_PENDIENTES) === "1"; } catch (e) { return false; }
 })();
@@ -175,33 +175,43 @@ let _reintentoHorasInicializado = false;
 function inicializarReintentoHorasCompetencias() {
   if (_reintentoHorasInicializado) return;
   _reintentoHorasInicializado = true;
-  const reintentarYa = () => {
-    if (!horasCompetenciasPendientes || navigator.onLine === false) return;
+  // 2026-11-04: red de seguridad. Además de reintentar cuando algo quedó pendiente, se reenvía el total
+  // de la semana (el Worker lo guarda tal cual, así que repetirlo es inocuo) al arrancar y al volver a
+  // la app, como mucho una vez por minuto. Así el marcador converge aunque un envío se haya perdido.
+  let ultimoEnvioHorasMs = 0;
+  const reintentarYa = (forzar = false) => {
+    if (navigator.onLine === false) return;
+    const hayCompetencias = ((estado.datos && estado.datos.competencias_unidas) || []).some((c) => c.estado !== "finalizada");
+    const toca = horasCompetenciasPendientes || (forzar === true && hayCompetencias && Date.now() - ultimoEnvioHorasMs > 60000);
+    if (!toca) return;
+    ultimoEnvioHorasMs = Date.now();
     intentosReintentoHoras = 0;
     sincronizarHorasCompetencias().catch(() => {});
   };
-  window.addEventListener("online", reintentarYa);
-  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reintentarYa(); });
+  window.addEventListener("online", () => reintentarYa(true));
+  document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") reintentarYa(true); });
   // Bandera que quedó guardada de la sesión anterior: reintento tras unos
   // segundos, para no calcular con datos viejos antes de la primera fusión.
-  if (horasCompetenciasPendientes) setTimeout(reintentarYa, 8000);
+  setTimeout(() => reintentarYa(true), 8000);
 }
 
-/** Aviso en la pestaña Competencias mientras haya horas sin enviar. */
+/**
+ * Aviso de horas sin enviar. 2026-11-04: ya NO es una tarjeta dentro de la página (aparecía y movía
+ * todo el contenido). Ahora es una píldora flotante pegada abajo, fuera del flujo, así que no desplaza
+ * nada. Se conserva el botón "Enviar ahora" como retroalimentación: el envío es automático
+ * (reintentos, conexión, foco de la app), y esto solo permite al usuario confirmar que sus horas llegaron.
+ */
 function construirAvisoHorasPendientes(contenedor) {
   const aviso = document.createElement("div");
-  aviso.className = "glass-card stack";
-  aviso.style.cssText = "padding:10px 12px; gap:8px;";
-  const texto = document.createElement("p");
-  texto.className = "muted";
-  texto.style.cssText = "margin:0; font-size:0.85rem;";
-  texto.textContent = "Tus horas de esta semana todavía no llegaron al marcador (sin conexión o sincronización pendiente). Se reintenta solo.";
-  const fila = document.createElement("div");
-  fila.className = "row";
-  fila.style.flexWrap = "wrap";
+  aviso.className = "te-horas-pendientes";
+  aviso.setAttribute("role", "status");
+  aviso.setAttribute("aria-live", "polite");
+  const texto = document.createElement("span");
+  texto.className = "te-horas-pendientes__texto";
+  texto.textContent = "Horas por enviar";
   const boton = document.createElement("button");
   boton.type = "button";
-  boton.className = "btn btn-secondary";
+  boton.className = "te-horas-pendientes__btn";
   boton.textContent = "Enviar ahora";
   boton.addEventListener("click", async () => {
     boton.disabled = true;
@@ -213,16 +223,31 @@ function construirAvisoHorasPendientes(contenedor) {
     if (horasCompetenciasPendientes) mostrarToast("Todavía no se pudo enviar. Se reintenta solo.");
     else mostrarToast("✓ Horas enviadas al marcador");
   });
-  fila.appendChild(boton);
-  aviso.append(texto, fila);
-  const actualizar = (pendiente) => aviso.classList.toggle("oculto", !pendiente);
-  actualizar(horasCompetenciasPendientes);
+  aviso.append(texto, boton);
+  document.body.appendChild(aviso);
+
+  // Solo se muestra mientras la pestaña Competencias esté a la vista.
+  const visible = () => contenedor.isConnected && contenedor.getClientRects().length > 0;
+  const actualizar = (pendiente) => aviso.classList.toggle("te-horas-pendientes--visible", Boolean(pendiente) && visible());
+  let observador = null;
+  const limpiar = () => {
+    observador?.disconnect();
+    escuchasEnvioHoras.delete(escucha);
+    aviso.remove();
+  };
   const escucha = (pendiente) => {
-    if (!aviso.isConnected) { escuchasEnvioHoras.delete(escucha); return; } // la vista ya se repintó
+    if (!contenedor.isConnected) { limpiar(); return; } // la vista ya se repintó
     actualizar(pendiente);
   };
   escuchasEnvioHoras.add(escucha);
-  contenedor.appendChild(aviso);
+  if (typeof IntersectionObserver === "function") {
+    observador = new IntersectionObserver(() => {
+      if (!contenedor.isConnected) { limpiar(); return; }
+      actualizar(horasCompetenciasPendientes);
+    });
+    observador.observe(contenedor);
+  }
+  actualizar(horasCompetenciasPendientes);
 }
 
 function guardarCacheMarcador(competenciaId, datos) {

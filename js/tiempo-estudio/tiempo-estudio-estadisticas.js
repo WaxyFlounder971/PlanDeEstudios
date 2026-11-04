@@ -1955,6 +1955,8 @@ function buscarMatriculaViva(materiaMatriculadaId) {
  */
 function construirVistaEstadisticas(cont, refrescar) {
   reiniciarSeccionesMontadas();
+  // 2026-11-04: pequeño espacio entre las tarjetas de Estadísticas (antes quedaban pegadas).
+  cont.classList.add("te-estadisticas-lista");
   const secciones = [
     // Parte C (2026-09-19): total agregado arriba de todo — lo primero que
     // se ve al abrir Estadísticas. No lleva `refrescar`: no tiene pills ni
