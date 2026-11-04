@@ -539,7 +539,7 @@ function construirEncabezado(cont, botonSemestre = null) {
     btnRegistroManual.className = "btn btn-primary app-encabezado__mas";
     btnRegistroManual.title = traducirTextoInterfaz("Registrar sesión pasada");
     btnRegistroManual.setAttribute("aria-label", traducirTextoInterfaz("Registrar sesión pasada"));
-    btnRegistroManual.textContent = "＋";
+    btnRegistroManual.textContent = "+";
     btnRegistroManual.addEventListener("click", () => {
       abrirModalRegistroManual(obtenerMateriasParaTiempoEstudio(), () => renderizarTiempoEstudio());
     });
