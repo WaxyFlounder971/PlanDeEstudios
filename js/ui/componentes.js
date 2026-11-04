@@ -5,7 +5,8 @@
    ========================================================================= */
 
 import { togglePerfilPopover } from "../main.js";
-import { MODALIDADES_HORARIO, crearModalidadHorario } from "../core/schema.js";
+import { MODALIDADES_HORARIO, crearModalidadHorario, obtenerEstadoEfectivoSemestre } from "../core/schema.js";
+import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 
 // Compatibilidad: la validación de siglas/nombre invertidos vive en su propio
 // módulo (ui/aviso-universidad.js) para no mezclarse con este archivo. Esta
@@ -307,6 +308,75 @@ function inicializarBotonesCerrarModal() {
     });
     card.prepend(btn);
   });
+}
+
+/* ===================== Ventana de elección de semestre (Agenda · Horario · Tiempo) =====================
+   2026-11-03 — Las tres secciones usan la MISMA ventana (tarjetas `.agenda-semestre-tarjeta` dentro
+   de `.glass-card.modal-card`, con su "X"); cada una decide cómo funciona (Agenda: varios a la vez y
+   la ventana queda abierta; Horario y Tiempo: uno solo y se cierra al elegir). */
+
+/** "feb 2026 · Actual" — subtítulo estándar de una tarjeta de semestre. */
+function subtituloSemestreSelector(semestre) {
+  const inicio = new Date(semestre.fecha_inicio);
+  const fechaTexto = isNaN(inicio.getTime()) ? "" : inicio.toLocaleDateString(obtenerLocaleInterfaz(), { month: "short", year: "numeric" });
+  const esActual = obtenerEstadoEfectivoSemestre(semestre) === "actual";
+  return [fechaTexto, esActual ? traducirTextoInterfaz("Actual") : ""].filter(Boolean).join(" · ");
+}
+
+/** Tarjeta seleccionable de semestre (mismo markup que la de Agenda). */
+function construirTarjetaSemestreSelector({ nombre, subtitulo = "", seleccionado = false, alTocar }) {
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "agenda-semestre-tarjeta" + (seleccionado ? " active" : "");
+  btn.setAttribute("aria-pressed", String(seleccionado));
+  const check = document.createElement("span");
+  check.className = "agenda-semestre-tarjeta-check";
+  check.textContent = "✓";
+  const textos = document.createElement("span");
+  textos.className = "stack";
+  textos.style.cssText = "gap:2px; text-align:left; min-width:0;";
+  const titulo = document.createElement("span");
+  titulo.style.cssText = "font-weight:700; overflow-wrap:break-word;";
+  titulo.textContent = nombre;
+  textos.appendChild(titulo);
+  if (subtitulo) {
+    const sub = document.createElement("span");
+    sub.className = "muted";
+    sub.style.fontSize = "0.72rem";
+    sub.textContent = subtitulo;
+    textos.appendChild(sub);
+  }
+  btn.append(check, textos);
+  if (typeof alTocar === "function") btn.addEventListener("click", alTocar);
+  return btn;
+}
+
+/**
+ * Llena `contenedor` con el encabezado (título + descripción) y las tarjetas de la ventana de
+ * semestres. `items`: [{ nombre, subtitulo, seleccionado, alTocar }].
+ */
+function poblarVentanaSemestres(contenedor, { titulo, descripcion, items, vacio = "No hay semestres creados todavía." }) {
+  contenedor.replaceChildren();
+  const h = document.createElement("h2");
+  h.style.margin = "0";
+  h.textContent = titulo;
+  const p = document.createElement("p");
+  p.className = "muted";
+  p.style.cssText = "font-size:0.82rem; margin:-6px 0 4px;";
+  p.textContent = descripcion;
+  const lista = document.createElement("div");
+  lista.className = "stack";
+  lista.style.gap = "8px";
+  if (!items.length) {
+    const v = document.createElement("p");
+    v.className = "muted";
+    v.style.cssText = "text-align:center; padding:6px 0;";
+    v.textContent = vacio;
+    lista.appendChild(v);
+  } else {
+    items.forEach((it) => lista.appendChild(construirTarjetaSemestreSelector(it)));
+  }
+  contenedor.append(h, p, lista);
 }
 
 /** Toast breve reutilizable (ej. "✓ Prompt copiado en el portapapeles", v5 #1.3). */
@@ -914,6 +984,9 @@ export {
   cerrarDrawerEnlacesMovil,
   cerrarSidebarMovil,
   construirPillSwitchBinario,
+  construirTarjetaSemestreSelector,
+  poblarVentanaSemestres,
+  subtituloSemestreSelector,
   construirSelectorChipsMultiple,
   construirSelectorModalidad,
   desplazarYResaltarElemento,

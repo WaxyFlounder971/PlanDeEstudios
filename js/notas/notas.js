@@ -638,16 +638,25 @@ function renderizarNotas() {
   procesarCicloVidaNotas(); procesarCompartidos();
   root.replaceChildren(); root.classList.add("stack", "notas-seccion");
 
-  const cab = el("header", "notas-cabecera");
-  const acciones = el("div", "row notas-cab-acciones");
+  // 2026-11-03: encabezado unificado de la app (`.app-encabezado`): crear nota a la izquierda,
+  // "Notas rápidas" centrado y ⋮ a la derecha.
+  const cab = el("header", "app-encabezado notas-encabezado");
+  const filaCab = el("div", "app-encabezado__fila");
+  const izqCab = el("div", "app-encabezado__izq notas-cab-acciones");
+  const centroCab = el("div", "app-encabezado__centro");
+  const derCab = el("div", "app-encabezado__der notas-cab-acciones");
   const add = el("button", "btn btn-primary nt-btn-circulo"); add.innerHTML = '<svg class="nt-ico nt-add-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
   add.title = tr("Nueva nota"); add.setAttribute("aria-label", add.title); add.onclick = () => abrirEditorNota(null, renderizarNotas);
   const settings = el("button", "btn btn-secondary nt-btn-circulo");
   settings.innerHTML = ICONO_PUNTOS;
   settings.title = tr("Ajustes de Notas"); settings.setAttribute("aria-label", settings.title);
   settings.onclick = () => mostrarAjustesNotas(renderizarNotas, () => mostrarPapelera(root, renderizarNotas));
-  acciones.append(add, settings);
-  cab.append(el("h1", "", tr("Notas rápidas")), acciones);
+  izqCab.append(add);
+  derCab.append(settings);
+  const tituloCab = el("h2", "texto-encabezado-seccion app-encabezado__titulo", tr("Notas rápidas"));
+  centroCab.append(tituloCab);
+  filaCab.append(izqCab, centroCab, derCab);
+  cab.append(filaCab);
   root.append(cab);
 
   const search = el("input", "form-input notas-busqueda visible");

@@ -1398,6 +1398,19 @@
     "Semestre": "Semester",
     "Semestres": "Semesters",
     "Semestres en Agenda": "Semesters in Agenda",
+    "Agregar mensaje semanal": "Add weekly message",
+    "Lo ven todos en la competencia durante esta semana.": "Everyone in the competition will see it this week.",
+    "Escribí tu mensaje…": "Write your message…",
+    "Mensaje semanal": "Weekly message",
+    "Mensaje borrado": "Message deleted",
+    "Mensaje guardado": "Message saved",
+    "Fue mi profe": "Was my professor",
+    "No fue mi profe": "Wasn't my professor",
+    "Mensajes del podio": "Podium messages",
+    "Semestres en Horario": "Semesters for Schedule",
+    "Elegí el semestre del que querés ver el horario.": "Choose the semester whose schedule you want to see.",
+    "Semestres en Tiempo": "Semesters in Study Time",
+    "Elegí un semestre, o todos juntos, para ver sus materias y estadísticas.": "Choose one semester or all semesters to view subjects and statistics.",
     "Semestre actual": "Current semester",
     "Semestres actuales": "Current semesters",
     "Semestre pasado": "Past semester",
@@ -2646,6 +2659,8 @@
     "Borrar ahora sí": "Delete now",
     "Detén primero la sesión activa de esta materia para poder eliminarla.": "Stop this subject's active study session first to delete it.",
     "Materia personalizada y sus registros eliminados": "Custom subject and its records deleted",
-    "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste.": "All subjects are hidden. Use “Show more subjects” to view them and change their setting."
+    "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste.": "All subjects are hidden. Use “Show more subjects” to view them and change their setting.",
+    "Agregar racha": "Add streak",
+    "Borrar racha": "Delete streak"
   }
 }

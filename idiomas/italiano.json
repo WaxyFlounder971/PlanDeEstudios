@@ -1389,6 +1389,19 @@
     "Semestre": "Semestre",
     "Semestres": "Semestri",
     "Semestres en Agenda": "Semestri in Agenda",
+    "Agregar mensaje semanal": "Aggiungi un messaggio settimanale",
+    "Lo ven todos en la competencia durante esta semana.": "Tutti nella competizione lo vedranno questa settimana.",
+    "Escribí tu mensaje…": "Scrivi il tuo messaggio…",
+    "Mensaje semanal": "Messaggio settimanale",
+    "Mensaje borrado": "Messaggio eliminato",
+    "Mensaje guardado": "Messaggio salvato",
+    "Fue mi profe": "È stato il mio professore",
+    "No fue mi profe": "Non è stato il mio professore",
+    "Mensajes del podio": "Messaggi del podio",
+    "Semestres en Horario": "Semestri dell'orario",
+    "Elegí el semestre del que querés ver el horario.": "Scegli il semestre di cui vuoi vedere l'orario.",
+    "Semestres en Tiempo": "Semestri del tempo di studio",
+    "Elegí un semestre, o todos juntos, para ver sus materias y estadísticas.": "Scegli un semestre oppure tutti i semestri per vedere materie e statistiche.",
     "Semestre actual": "Semestre attuale",
     "Semestres actuales": "Semestri attuali",
     "Semestre pasado": "Semestre passato",
@@ -2646,6 +2659,8 @@
     "Borrar ahora sí": "Elimina ora",
     "Detén primero la sesión activa de esta materia para poder eliminarla.": "Interrompi prima la sessione attiva di questa materia per poterla eliminare.",
     "Materia personalizada y sus registros eliminados": "Materia personalizzata e i suoi registri eliminati",
-    "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste.": "Tutte le materie sono nascoste. Usa «Mostra più materie» per vederle e modificarne l'impostazione."
+    "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste.": "Tutte le materie sono nascoste. Usa «Mostra più materie» per vederle e modificarne l'impostazione.",
+    "Agregar racha": "Aggiungi serie",
+    "Borrar racha": "Elimina serie"
   }
 }

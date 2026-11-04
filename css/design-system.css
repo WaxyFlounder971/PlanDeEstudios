@@ -222,15 +222,16 @@ a { color: var(--accent-1); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   flex-shrink: 0;
   border: none;
   border-radius: var(--radius-pill);
   background: none;
   box-shadow: none;
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  /* 2026-11-04: el glifo ya no es el engranaje sino los 2 puntos verticales (⋮), mismo tamaño en toda la app */
+  font-size: 1.7rem;
   line-height: 1;
   cursor: pointer;
   transition: background var(--transition-fast), transform var(--transition-fast);
@@ -538,9 +539,17 @@ a { color: var(--accent-1); }
   width: 100%;
   min-width: 0;
 }
+/* 2026-11-04: el panel que no se ve deja de ocupar alto una vez terminada la animación de la pista
+   (380 ms > 360 ms), así el alto de la sección es el de la vista activa y no el del panel más largo.
+   Mientras se arrastra, las vecinas quedan completas (sin hueco ni corte). Igual que .nav-vista-pane. */
+.te-vista-pane { max-height: 100000px; }
 .te-vista-pane[aria-hidden="true"] {
   pointer-events: none;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0s linear 380ms;
 }
+.te-vistas-viewport.te-vistas-arrastrando .te-vista-pane { max-height: 100000px; overflow: visible; transition: none; }
 .pill-switch-binario .pill-switch-thumb[style*="--te-pill-progreso"] {
   transform: translateX(calc(var(--te-pill-progreso) * 100%));
   transition: none;
@@ -967,7 +976,8 @@ a { color: var(--accent-1); }
      desde los dos lados. */
   -webkit-overflow-scrolling: touch;
 }
-.modal-card-ancha { width: min(760px, calc(100vw - 32px)); }
+.modal-card-ancha { width: min(760px, calc(100vw - 32px)); }
+
 /* v3.27.5: modal más opaco y sin scroll de fondo.
    La tarjeta heredaba .glass-card (fondo ~5 % en oscuro) y el desenfoque dejaba
    ver la página de atrás. Ahora usa la superficie sólida de cada tema
@@ -6343,3 +6353,158 @@ html,body,#app-shell,.glass-card,.glass-panel,#app-sidebar,.mobile-topbar { tran
 summary.desglose-cabecera { cursor: pointer; }
 .desglose-total { padding-top: 8px; font-size: 1.05rem; }
 
+/* =========================================================================
+   ENCABEZADO UNIFICADO DE SECCIÓN (2026-11-03)
+   Un solo lenguaje para el encabezado de Resumen, Asistente, Agenda, Horario,
+   Tiempo, Comunidad y Notas: mismo panel (fondo, borde, radio, padding y alto
+   mínimo), título CENTRADO con .texto-encabezado-seccion, acciones a los
+   costados (izquierda / derecha) y, donde hay semestre, el mismo botón
+   .app-encabezado__semestre arriba. Finanzas queda fuera a propósito (se
+   rediseña aparte).
+   ========================================================================= */
+.app-encabezado {
+  position: relative;
+  z-index: 10;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 64px;
+  padding: 10px 14px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+/* variante en una sola fila (Resumen: barra · título · "Faltan N días") */
+.app-encabezado--fila { flex-direction: row; align-items: center; gap: 16px; justify-content: space-between; }
+/* fila de tres zonas: izquierda · centro · derecha (el centro siempre queda centrado en el panel) */
+.app-encabezado__fila {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.app-encabezado__izq, .app-encabezado__der { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.app-encabezado__izq { justify-self: start; }
+.app-encabezado__der { justify-self: end; justify-content: flex-end; }
+.app-encabezado__centro { justify-self: center; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; min-width: 0; max-width: 100%; }
+.app-encabezado__titulo { margin: 0; text-align: center; line-height: 1.2; overflow-wrap: anywhere; }
+.app-encabezado__sub { margin: 0; font-size: 0.78rem; color: var(--text-muted); text-align: center; }
+/* botón del semestre: idéntico en Agenda, Horario y Tiempo (sin flecha, mismo texto y color) */
+.app-encabezado__semestre {
+  align-self: center;
+  max-width: 100%;
+  padding: 2px 10px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+/* reserva el mismo alto cuando una pestaña no lleva selector de semestre (Tiempo › Competencias) */
+.app-encabezado__semestre--hueco { visibility: hidden; pointer-events: none; }
+.app-encabezado .btn-icono-redondo, .app-encabezado .com-btn-agregar-redondo { flex: none; }
+@media (max-width: 600px) {
+  .app-encabezado { padding: 10px 12px; }
+  .app-encabezado__fila { gap: 4px; }
+}
+
+/* botones redondos de acción (Agenda "+", Notas "+"/⋮, Comunidad "+") con el mismo tamaño dentro del encabezado */
+.app-encabezado .notas-cab-acciones .nt-btn-circulo { width: 38px; height: 38px; min-width: 38px; min-height: 38px; }
+
+/* =========================================================================
+   2026-11-04 — Encabezados: piezas compartidas (referencia = Agenda)
+   ========================================================================= */
+/* Misma altura en la fila del título y en la del rango/fecha para TODAS las secciones, con o sin flechas ‹ › o "Hoy". */
+.app-encabezado__titulofila { align-items: center; justify-content: center; gap: 6px; min-height: calc(1.3rem + 12px); }
+.app-encabezado__rango { align-items: baseline; justify-content: center; gap: 8px; min-height: 1.3rem; font-size: 0.78rem; }
+/* botón "+" redondo del encabezado (el de Agenda) */
+.app-encabezado__mas {
+  width: 38px; height: 38px; padding: 0; font-size: 1.35rem; line-height: 1; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+/* Barra de scroll: se reserva SIEMPRE su espacio lateral, haya o no scroll, para que al pasar de una
+   sección con scroll a otra sin scroll nada se reacomode con un saltito. */
+html { overflow-y: scroll; scrollbar-gutter: stable; }
+.app-encabezado__lado { height: 38px; padding: 0 14px; font-size: 0.85rem; white-space: nowrap; }
+.app-encabezado__semestre { box-sizing: border-box; height: 26px; line-height: 1.2; display: inline-flex; align-items: center; justify-content: center; }
+
+/* =========================================================================
+   2026-11-04 (parche 3) — Encabezados: separación pequeña y botones centrados
+   ========================================================================= */
+/* Un solo valor para el espacio chico: el mismo entre semestre y semana que entre semana y fecha.
+   Si quieres más o menos aire, se cambia aquí y se aplica igual en Agenda, Horario y Tiempo. */
+:root { --enc-gap: 2px; --enc-alto-semestre: 26px; }
+#agenda-header,
+#horario-header,
+#seccion-tiempo-estudio .app-encabezado { gap: var(--enc-gap); }
+#agenda-header .app-encabezado__centro,
+#horario-header .app-encabezado__centro,
+#seccion-tiempo-estudio .app-encabezado__centro { gap: var(--enc-gap); }
+/* Los botones laterales (+, ⋮, racha, Unirse/Crear...) se centran respecto a la altura TOTAL del encabezado
+   (semestre + semana + fecha), sin moverse en horizontal: se suben la mitad de lo que ocupa el semestre. */
+#agenda-header .app-encabezado__fila,
+#horario-header .app-encabezado__fila,
+#seccion-tiempo-estudio .app-encabezado__fila { align-items: center; }
+#agenda-header .app-encabezado__izq,
+#agenda-header .app-encabezado__der,
+#horario-header .app-encabezado__izq,
+#horario-header .app-encabezado__der,
+#seccion-tiempo-estudio .app-encabezado__izq,
+#seccion-tiempo-estudio .app-encabezado__der {
+  position: relative;
+  align-self: center;
+  top: calc(-0.5 * (var(--enc-alto-semestre) + var(--enc-gap)));
+}
+
+/* =========================================================================
+   2026-11-04 (parche 4) — Horario compacto, racha y botones de símbolo
+   ========================================================================= */
+/* Botón de solo símbolo (Descargar ⬇, pantalla completa ⛶): mismo tamaño que el "+" (38×38) y mismo
+   aspecto "fantasma" que el ⋮ de Agenda. */
+.app-encabezado__icono {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  box-sizing: border-box; width: 38px; height: 38px; padding: 0;
+  border: none; border-radius: 50%; background: none; box-shadow: none;
+  color: var(--text-secondary); font-size: 1.2rem; line-height: 1; cursor: pointer;
+  transition: background var(--transition-fast), transform var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.app-encabezado__icono:hover { background: rgba(255, 255, 255, 0.08); }
+[data-mode="light"] .app-encabezado__icono:hover { background: rgba(0, 0, 0, 0.06); }
+.app-encabezado__icono:active { transform: scale(0.94); }
+.app-encabezado__icono:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
+/* Botón con texto del lado (Amigos): en pantallas angostas pasa a ícono de 38×38 para que la fila
+   (descargar · + · semana · amigos · pantalla completa) quepa sin partirse en dos líneas. */
+.app-encabezado__lado { display: inline-flex; align-items: center; justify-content: center; gap: 6px; box-sizing: border-box; }
+.app-encabezado__lado-icono { display: none; font-size: 1.1rem; line-height: 1; }
+@media (max-width: 480px) {
+  #horario-header .app-encabezado__lado { width: 38px; padding: 0; }
+  #horario-header .app-encabezado__lado-texto { display: none; }
+  #horario-header .app-encabezado__lado-icono { display: inline; }
+}
+
+/* Horario: nada de saltos de línea en los costados (mantiene la altura igual que Agenda). */
+#horario-header .app-encabezado__izq,
+#horario-header .app-encabezado__der { flex-wrap: nowrap; }
+/* "Salir" / "← Cerrar horario" (modo conjunto / horario de un amigo): mismo alto que los demás botones,
+   y el texto baja a dos líneas en vez de cortarse. Con él visible se oculta Descargar para dar espacio. */
+.app-encabezado__salir {
+  box-sizing: border-box; height: 38px; max-width: 132px; padding: 0 10px;
+  font-size: 0.78rem; line-height: 1.1; white-space: normal; text-align: center;
+}
+#horario-header .app-encabezado__izq:has(.app-encabezado__salir:not(.oculto)) #btn-horario-descargar { display: none; }
+/* fila de días (L2 K3 M4…): un poco de aire respecto a la fila de arriba, ya que el gap del encabezado es de 2px */
+#horario-header #horario-dias-semana { margin-top: 4px; }
+
+/* Chip de racha (🔥 + número): mismo alto que el "+" (38px), contenido centrado y sin recortes. */
+.app-encabezado .te-racha-chip {
+  box-sizing: border-box; height: 38px; padding: 0 13px 0 10px; gap: 6px;
+  align-items: center; justify-content: center;
+}
+.app-encabezado .te-racha-chip .te-llama--chip { height: 24px; flex: none; align-self: center; }
+.app-encabezado .te-racha-chip .te-racha-num { align-items: center; line-height: 1; height: 100%; }

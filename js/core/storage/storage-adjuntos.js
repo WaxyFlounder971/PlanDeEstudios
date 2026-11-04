@@ -160,7 +160,7 @@ function adjuntarArchivo(archivo, entidadTipo, entidadId, nombrePersonalizado, e
  * referencia queda lista y sincronizable de una sola vez, igual que
  * cualquier otra entidad simple de este JSON (ver crearEnlaceRapido).
  */
-function agregarEnlaceAdjunto({ nombre, url, entidadTipo, entidadId, emoji }) {
+function agregarEnlaceAdjunto({ nombre, url, entidadTipo, entidadId, emoji, diferirPersistencia = false }) {
   if (!url || !/^https?:\/\//i.test(url.trim())) {
     throw new Error("El enlace debe ser una URL válida (empezar con http:// o https://).");
   }
@@ -172,7 +172,7 @@ function agregarEnlaceAdjunto({ nombre, url, entidadTipo, entidadId, emoji }) {
 
   if (!Array.isArray(estado.datos.adjuntos)) estado.datos.adjuntos = [];
   estado.datos.adjuntos.push(nuevo);
-  marcarCambioPendiente();
+  if (!diferirPersistencia) marcarCambioPendiente();
 
   return nuevo;
 }

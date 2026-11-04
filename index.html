@@ -757,15 +757,17 @@
              agenda.js), y los botones de los costados quedan centrados
              verticalmente contra esa altura, no apilados aparte como
              antes. -->
-        <section class="glass-panel stack" id="agenda-header" style="padding:10px 14px; gap:6px; position:relative; z-index:10;">
-          <button type="button" id="agenda-nombre-semestre" class="btn-discreto" style="align-self:center; padding:2px 10px; font-size:0.85rem; font-weight:700; text-align:center;"></button>
+        <section class="app-encabezado" id="agenda-header">
+          <button type="button" id="agenda-nombre-semestre" class="btn-discreto app-encabezado__semestre"></button>
 
-          <div class="row-between" style="gap:8px;">
-            <div class="row" style="gap:6px; flex-shrink:0;"><button type="button" class="btn btn-primary" id="btn-agenda-agregar" title="Agregar" style="width:38px; height:38px; padding:0; font-size:1.35rem; line-height:1; border-radius:50%; display:flex; align-items:center; justify-content:center;">+</button></div>
+          <!-- 2026-11-04: ESTA es la estructura de referencia de todos los encabezados de la app
+               (botón de semestre · fila izquierda / centro / derecha). Ver .app-encabezado en design-system.css. -->
+          <div class="app-encabezado__fila">
+            <div class="app-encabezado__izq"><button type="button" class="btn btn-primary app-encabezado__mas" id="btn-agenda-agregar" title="Agregar">+</button></div>
 
-            <div id="agenda-subheader-dinamico" class="stack" style="align-items:center; text-align:center; gap:2px; flex:1; min-width:0;"></div>
+            <div id="agenda-subheader-dinamico" class="app-encabezado__centro"></div>
 
-            <button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda">⚙️</button>
+            <div class="app-encabezado__der"><button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda" aria-label="Ajustes de Agenda">⋮</button></div>
           </div>
         </section>
 
@@ -792,27 +794,28 @@
            Header con navegación entre semestres + semana actual, grid
            semanal, y modal de creación/edición de bloque. -->
       <div id="seccion-horario" class="stack oculto">
-        <section class="glass-panel stack" id="horario-header" style="padding:12px 14px;">
-          <div class="row-between">
-            <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;">‹</button>
-              <div class="stack" style="align-items:center; text-align:center; gap:3px; min-width:0;">
-                <button type="button" class="btn-discreto" id="horario-nombre-semestre" style="padding:2px 10px; font-size:0.85rem; font-weight:700; max-width:100%; text-align:center;"></button>
-              <span id="horario-semana-actual" class="texto-encabezado-seccion"></span>
-              <span class="muted" id="horario-fecha-actual" style="font-size:0.72rem;"></span>
+        <section class="app-encabezado" id="horario-header">
+          <!-- 2026-11-04: misma estructura y medidas que el encabezado de Agenda (semestre arriba; debajo
+               izquierda · "‹ Semana N ›" + fecha · derecha). Izquierda: Descargar y "+". Derecha: Amigos y
+               pantalla completa (solo símbolo, mismo tamaño que el "+"). Solo queda debajo la fila L2 K3 M4... -->
+          <button type="button" class="btn-discreto app-encabezado__semestre" id="horario-nombre-semestre"></button>
+          <div class="app-encabezado__fila">
+            <div class="app-encabezado__izq">
+              <button type="button" class="app-encabezado__icono" id="btn-horario-descargar" title="Descargar horario como imagen" aria-label="Descargar horario como imagen">⬇</button>
+              <button type="button" class="btn btn-primary app-encabezado__mas" id="btn-horario-agregar" title="Agregar" aria-label="Agregar">+</button>
+              <button type="button" class="btn btn-secondary app-encabezado__salir oculto" id="btn-salir-modo-conjunto">Salir</button>
             </div>
-            <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;">›</button>
-          </div>
-          <div style="display:grid; grid-template-columns:1fr auto 1fr; align-items:center; padding:0 6px;">
-            <div style="justify-self:start;">
-              <button type="button" class="btn btn-primary" id="btn-horario-agregar" style="padding:8px 14px; font-size:0.85rem;">+ Agregar</button>
-              <button type="button" class="btn btn-secondary oculto" id="btn-salir-modo-conjunto" style="padding:8px 14px; font-size:0.85rem;">Salir</button>
+            <div class="app-encabezado__centro">
+              <div class="row app-encabezado__titulofila">
+                <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;">‹</button>
+                <span id="horario-semana-actual" class="texto-encabezado-seccion"></span>
+                <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;">›</button>
+              </div>
+              <div class="row app-encabezado__rango"><span class="muted" id="horario-fecha-actual" style="font-size:0.78rem;"></span></div>
             </div>
-            <div style="justify-self:center; display:flex; align-items:center; gap:10px;">
-              <button type="button" class="btn-icono-fantasma" id="btn-horario-descargar" title="Descargar horario como imagen" style="font-size:1.2rem;">⬇</button>
-              <button type="button" class="btn-icono-fantasma" id="btn-horario-pantalla-completa" style="font-size:1.3rem;">⛶</button>
-            </div>
-            <div style="justify-self:end; display:flex; align-items:center; gap:8px;">
-              <button type="button" class="btn btn-secondary" id="btn-horario-amigos" style="padding:8px 14px; font-size:0.85rem;">Amigos</button>
+            <div class="app-encabezado__der">
+              <button type="button" class="btn btn-secondary app-encabezado__lado" id="btn-horario-amigos" title="Amigos" aria-label="Amigos"><span class="app-encabezado__lado-icono" aria-hidden="true">👥</span><span class="app-encabezado__lado-texto">Amigos</span></button>
+              <button type="button" class="app-encabezado__icono" id="btn-horario-pantalla-completa" title="Pantalla completa" aria-label="Pantalla completa">⛶</button>
             </div>
           </div>
           <div id="horario-dias-semana" style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; text-align:center;"></div>
@@ -836,6 +839,14 @@
       <div id="modal-selector-semestre" class="modal-overlay oculto">
         <div class="glass-card modal-card stack">
           <div id="selector-semestre-contenido" class="stack"></div>
+        </div>
+      </div>
+
+      <!-- MODAL: semestres de Tiempo (misma ventana que Agenda y Horario; se llena desde
+           js/tiempo-estudio/tiempo-estudio.js → abrirVentanaSemestresTiempo) -->
+      <div id="modal-tiempo-semestres" class="modal-overlay oculto">
+        <div class="glass-card modal-card stack">
+          <div id="tiempo-semestres-contenido" class="stack"></div>
         </div>
       </div>
 

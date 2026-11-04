@@ -95,8 +95,10 @@ async function procesarColaWapper(cuenta, procesar) {
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
   const todos = await listarMensajesWapper(cuenta);
   const vencidos = todos.filter((item) => item.estado === "procesando" && Date.now() - (item.inicioProceso || 0) > 5 * 60 * 1000);
-  for (const item of vencidos) await actualizarMensajeWapper(item.id, { estado: "pendiente" });
-  const pendientes = todos.filter((item) => item.estado === "pendiente" || vencidos.some((vencido) => vencido.id === item.id));
+  // Si la pestaña murió durante el último intento, no dejar el contador en 3:
+  // eso impediría que la cola volviera a procesar el mensaje recuperado.
+  for (const item of vencidos) await actualizarMensajeWapper(item.id, { estado: "pendiente", intentos: 0, inicioProceso: null });
+  const pendientes = todos.filter((item) => (item.estado === "pendiente" && (!item.reintentarEn || item.reintentarEn <= Date.now())) || vencidos.some((vencido) => vencido.id === item.id));
   for (const item of pendientes) {
     let intentos = item.intentos || 0;
     while (intentos < 3) {
@@ -111,16 +113,28 @@ async function procesarColaWapper(cuenta, procesar) {
           textoOriginal: resultado.textoOriginal || item.textoOriginal || null,
           contenido: resultado.estado === "guardado" || resultado.textoOriginal ? null : item.contenido,
           visto: false,
-          procesado: Date.now(), inicioProceso: null,
+          procesado: Date.now(), inicioProceso: null, reintentosRed: 0, reintentarEn: null,
         });
         break;
       } catch (error) {
         const agotado = intentos >= 3;
+        const sinConexion = error?.tipoError === "red" || navigator.onLine === false;
+        const requiereIntervencion = ["clave", "limite", "saturado"].includes(error?.tipoError);
+        if (sinConexion) {
+          const reintentosRed = navigator.onLine === false ? 0 : (item.reintentosRed || 0) + 1;
+          const demora = navigator.onLine === false ? 0 : Math.min(5 * 60_000, 15_000 * (2 ** Math.min(reintentosRed - 1, 4)));
+          await actualizarMensajeWapper(item.id, {
+            estado: "pendiente", intentos: 0, reintentosRed,
+            reintentarEn: demora ? Date.now() + demora : null,
+            motivo: error?.message || "No se pudo conectar. Se volverá a intentar.", inicioProceso: null,
+          });
+          break;
+        }
         await actualizarMensajeWapper(item.id, {
-          estado: agotado ? "error" : "pendiente",
+          estado: agotado || requiereIntervencion ? "error" : "pendiente",
           motivo: error?.message || "No se pudo procesar el mensaje.", inicioProceso: null,
         });
-        if (agotado || navigator.onLine === false) break;
+        if (agotado || requiereIntervencion) break;
         await new Promise((resolve) => setTimeout(resolve, 1000 * (2 ** (intentos - 1))));
       }
     }

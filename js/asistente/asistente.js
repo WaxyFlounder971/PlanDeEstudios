@@ -67,6 +67,8 @@ import { iniciarProcesoAnalitico } from "../core/analitica.js";
  * paso es subir a gemini-3.5-flash antes de tocar el prompt.
  */
 const MODELO_GEMINI = "gemini-3.1-flash-lite";
+// Respaldo ligero con endpoint estable independiente para saturación 503.
+const MODELO_GEMINI_RESPALDO = "gemini-3.5-flash-lite";
 
 /**
  * Historial de conversación (2026-08-22): vive SOLO en localStorage de
@@ -1561,7 +1563,7 @@ menciona está en esta lista para esa materia puntual):\n${filas.join("\n")}`;
  * horario — Gemini no tiene ni debe tener ese dato, así que nunca se le
  * pide inventarlo.
  */
-function construirSystemInstruction(contextoFecha = null) {
+function construirSystemInstruction(contextoFecha = null, textoUsuario = "") {
   const { iso, diaSemana } = contextoFecha?.fechaReferencia
     ? { iso: contextoFecha.fechaReferencia, diaSemana: NOMBRES_DIA_SEMANA[new Date(`${contextoFecha.fechaReferencia}T00:00:00Z`).getUTCDay()] }
     : obtenerContextoFechaHoy();
@@ -1569,7 +1571,13 @@ function construirSystemInstruction(contextoFecha = null) {
   const listaMaterias = construirListaMateriasConApodos(materiasVinculables);
   const avisoApodosDuplicados = construirAvisoApodosDuplicados(materiasVinculables);
   const avisoInicialesDuplicadas = construirAvisoInicialesDuplicadas(materiasVinculables);
-  const contextoDiasModalidad = construirContextoDiasModalidadMaterias(materiasVinculables);
+  const textoNormalizado = normalizarTexto(textoUsuario);
+  const requiereSemanasAcademicas = /\b(?:semana|week)\s+\d+\b|\b(?:semestre|semester)\b/.test(textoNormalizado);
+  const requiereProximaClase = /proxim[oa]s? clase|next class|antes de.{0,30}clase|before.{0,30}class|cuando.{0,30}clase/.test(textoNormalizado);
+  const requiereModalidad = /modalidad|modality|presencial|in person|virtual|online|asincron|async|sin clase|cancelar.{0,20}clase|tengo que ir|tengo clase|do i have class/.test(textoNormalizado);
+  const contextoSemanas = requiereSemanasAcademicas ? construirContextoSemanasSemestres() : "";
+  const contextoProximasClases = requiereProximaClase ? construirContextoProximasClases() : "";
+  const contextoDiasModalidad = requiereModalidad ? construirContextoDiasModalidadMaterias(materiasVinculables) : "";
   const etiquetasAgenda = (estado.datos.configuracion?.agenda_tipos || []).filter((t) => t.activo !== false && !t.eliminado);
   const contextoEtiquetasAgenda = etiquetasAgenda.length
     ? `\n\nTipos de Agenda vigentes, usa exactamente el id como etiquetaId: ${etiquetasAgenda.map((t) => t.id + "=" + t.nombre + " (base " + t.base + (t.ayuda_wapper ? ", ayuda: " + t.ayuda_wapper : "") + ")").join("; ")}. Entregar, enviar o presentar un trabajo es tarea o proyecto. Parcial, examen o ensayo es examen. Quiz o prueba corta es quiz. Reunión o cita con hora es evento. Feriado es feriado. Prefiere tipos personalizados cuyo nombre o ayuda coincida claramente. Si dudas, marca confianza baja. Nunca inventes ids.`
@@ -1586,7 +1594,7 @@ una semana, o la modalidad de una clase próxima).
 cualquier fecha relativa ("mañana", "el jueves", "en 2 semanas", "el
 próximo lunes", etc.). Si el usuario describe algo que se repite (ej. "los
 martes durante 3 semanas seguidas"), devuelve UN ítem por cada ocurrencia
-real, cada uno con su propia fecha.${construirContextoSemanasSemestres()}${construirContextoProximasClases()}
+real, cada uno con su propia fecha.${contextoSemanas}${contextoProximasClases}
 
 Materias matriculadas reales del usuario ahora mismo (nombre oficial —
 entre paréntesis, el/los apodo(s) que el usuario le puso en Horario (si
@@ -1954,7 +1962,7 @@ const ESQUEMA_RESPUESTA_GEMINI = {
  * Bandeja Pendiente) para poder agregar extraerEventosDeTexto (abajo) sin
  * duplicar todo el manejo de errores/parseo de respuesta.
  */
-async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
+async function ejecutarGeneracionGemini(contents, contextoFecha = null, textoUsuario = "") {
   const claveApi = estado.datos.configuracion.gemini_api_key;
   if (!claveApi) {
     const err = new Error("No hay clave de Gemini guardada.");
@@ -1979,39 +1987,52 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
     throw err;
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${MODELO_GEMINI}:generateContent?key=${encodeURIComponent(claveApi)}`;
-
   // Bug real reportado (2026-08-31): "modalidad de la próxima clase de
   // inglés"/"¿tengo que ir presencial?" cayeron en "Algo salió mal de mi
   // lado" — la consola mostraba 503 de generativelanguage.googleapis.com
   // (servidor de Gemini saturado momentáneamente, no un error de la app).
-  // Un 503/UNAVAILABLE es por definición transitorio, así que antes de
-  // rendirse con tipoError "desconocido" se reintenta un par de veces con
-  // una pausa corta — un error real (clave inválida, límite, etc.) nunca
-  // entra acá porque esos códigos no cuentan como transitorios.
-  const MAX_REINTENTOS_GEMINI_TRANSITORIO = 2;
+  // Ante 5xx se cambia enseguida al respaldo: repetir el mismo endpoint tres
+  // veces añadía varios segundos y los registros muestran que ambos modelos
+  // estaban saturados. Solo 408/429 reciben un único reintento breve.
+  const MAX_REINTENTOS_GEMINI_TRANSITORIO = 1;
   const esperar = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+  let modeloActivo = MODELO_GEMINI;
+  let usandoRespaldo = false;
+  const esperaSugeridaGemini = (respuesta, datos, intento) => {
+    const retryAfter = Number(respuesta.headers?.get("Retry-After"));
+    const retryDelay = datos?.error?.details?.find?.((detalle) => detalle?.retryDelay)?.retryDelay;
+    const segundosGemini = retryDelay ? Number.parseFloat(retryDelay) : NaN;
+    const sugerida = Number.isFinite(retryAfter) && retryAfter > 0
+      ? retryAfter * 1000
+      : Number.isFinite(segundosGemini) && segundosGemini > 0
+      ? segundosGemini * 1000
+      : 600 * (2 ** intento);
+    // Mantener las esperas interactivas cortas aunque el servidor sugiera más.
+    return Math.min(2000, Math.max(300, sugerida));
+  };
 
   let respuesta;
   let datos;
   for (let intento = 0; ; intento++) {
     try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${modeloActivo}:generateContent?key=${encodeURIComponent(claveApi)}`;
       respuesta = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: construirSystemInstruction(contextoFecha) }] },
+          system_instruction: { parts: [{ text: construirSystemInstruction(contextoFecha, textoUsuario) }] },
           contents,
           generationConfig: {
             responseMimeType: "application/json",
             responseSchema: ESQUEMA_RESPUESTA_GEMINI,
             temperature: 0.2,
+            thinkingConfig: { thinkingLevel: "minimal" },
           },
         }),
       });
     } catch (e) {
       if (intento < MAX_REINTENTOS_GEMINI_TRANSITORIO) {
-        await esperar(700 * (intento + 1));
+        await esperar(500 * (2 ** intento));
         continue;
       }
       const err = new Error("No se pudo conectar con Gemini.");
@@ -2031,9 +2052,17 @@ async function ejecutarGeneracionGemini(contents, contextoFecha = null) {
 
     const codigo = datos && datos.error && datos.error.code;
     const estadoError = datos && datos.error && datos.error.status;
-    const esTransitorio = [408, 429, 500, 502, 503, 504].includes(codigo) || estadoError === "UNAVAILABLE" || estadoError === "RESOURCE_EXHAUSTED";
-    if (esTransitorio && intento < MAX_REINTENTOS_GEMINI_TRANSITORIO) {
-      await esperar(700 * (intento + 1)); // 700ms, luego 1400ms
+    const esErrorServidor = [500, 502, 503, 504].includes(codigo) || estadoError === "UNAVAILABLE";
+    if (esErrorServidor && !usandoRespaldo) {
+      modeloActivo = MODELO_GEMINI_RESPALDO;
+      usandoRespaldo = true;
+      intento = -1;
+      continue;
+    }
+
+    const esReintentable = [408, 429].includes(codigo) || estadoError === "RESOURCE_EXHAUSTED";
+    if (esReintentable && intento < MAX_REINTENTOS_GEMINI_TRANSITORIO) {
+      await esperar(esperaSugeridaGemini(respuesta, datos, intento));
       continue;
     }
 
@@ -2103,17 +2132,20 @@ function parsearJsonGeminiTolerante(texto) {
 }
 
 /**
- * Llamada "en vivo" del chat — arma `contents` con TODO el historial visible
- * en pantalla (conversacionActual) más el mensaje nuevo. Sigue siendo el
+ * Llamada "en vivo" del chat — arma `contents` con el historial reciente
+ * visible en pantalla más el mensaje nuevo. Sigue siendo el
  * único punto de entrada para manejarEnvioMensaje (el chat interactivo).
  */
 async function llamarGemini(mensajeNuevo) {
-  const contents = conversacionActual.map((turno) => ({
+  // Reenvía solo el contexto reciente: mantiene referencias al chat y evita
+  // enviar conversaciones largas completas en cada solicitud.
+  const historialReciente = conversacionActual.slice(-8);
+  const contents = historialReciente.map((turno) => ({
     role: turno.rol === "usuario" ? "user" : "model",
     parts: [{ text: turno.rol === "usuario" ? turno.texto : turno.crudo }],
   }));
   contents.push({ role: "user", parts: [{ text: mensajeNuevo }] });
-  return ejecutarGeneracionGemini(contents);
+  return ejecutarGeneracionGemini(contents, null, mensajeNuevo);
 }
 
 /**
@@ -2130,7 +2162,7 @@ async function llamarGemini(mensajeNuevo) {
  * esto evita. Misma clave, mismo modelo, mismo esquema de respuesta.
  */
 async function extraerEventosDeTexto(texto, contextoFecha = null) {
-  return ejecutarGeneracionGemini([{ role: "user", parts: [{ text: texto }] }], contextoFecha);
+  return ejecutarGeneracionGemini([{ role: "user", parts: [{ text: texto }] }], contextoFecha, texto);
 }
 
 function validarTipoWapper(item) {
@@ -2174,7 +2206,7 @@ async function generarRespuestaConversacionalWapper(textoUsuario) {
       body: JSON.stringify({
         system_instruction: { parts: [{ text: construirPromptPersonalidadWapper() }] },
         contents: [{ role: "user", parts: [{ text: textoUsuario }] }],
-        generationConfig: { temperature: 0.6 },
+        generationConfig: { temperature: 0.6, thinkingConfig: { thinkingLevel: "minimal" } },
       }),
       });
     } catch (e) {
@@ -3004,16 +3036,40 @@ function guardarItemExtraidoComoEvento(item, googleTaskId = null, opciones = {})
   const enlaces = Array.isArray(item.enlaces) ? item.enlaces : [];
   const urls = [...new Set(enlaces.map((e) => typeof e === "string" ? e.trim() : "").filter((e) => /^https?:\/\//i.test(e)))];
   urls.forEach((url, i) => {
-    try { agregarEnlaceAdjunto({ nombre: `Enlace ${i + 1}`, url, entidadTipo: "evento", entidadId: evento.id }); }
+    try { agregarEnlaceAdjunto({ nombre: `Enlace ${i + 1}`, url, entidadTipo: "evento", entidadId: evento.id, diferirPersistencia: opciones.diferirPersistencia === true }); }
     catch (error) { console.warn("Wapper omitió un enlace no válido:", error); }
   });
 
-  marcarCambioPendiente();
+  if (!opciones.diferirPersistencia) marcarCambioPendiente();
   void sincronizarEventoCalendario(evento);
-  window.renderizarAgenda?.();
-  window.renderizarResumen?.();
+  if (!opciones.diferirPersistencia) {
+    window.renderizarAgenda?.();
+    window.renderizarResumen?.();
+  }
 
   return evento.id;
+}
+
+function guardarLoteEventosWapper(items, { idWapper = null, preservarSinHora = false } = {}) {
+  const ids = [];
+  try {
+    items.forEach((item, indice) => {
+      ids.push(guardarItemExtraidoComoEvento(item, null, {
+        idEvento: idWapper ? `ag_wapper_${idWapper}_${indice}` : undefined,
+        preservarSinHora,
+        diferirPersistencia: true,
+      }));
+    });
+  } finally {
+    // Guardar la caché completa una sola vez por mensaje, no una vez por
+    // evento: acelera los mensajes con varias fechas y evita subidas repetidas.
+    if (ids.length) {
+      marcarCambioPendiente();
+      window.renderizarAgenda?.();
+      window.renderizarResumen?.();
+    }
+  }
+  return ids;
 }
 
 /* ===================== UI: burbujas y tarjetas ===================== */
@@ -3107,12 +3163,11 @@ function crearTarjetaEventoGuardado(eventoId) {
   const badgeTipo = document.createElement("span");
   badgeTipo.className = "badge";
   badgeTipo.textContent = tipoVisible;
+  badgeTipo.style.cssText = "flex:0 1 auto; max-width:min(46vw, 240px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;";
   if (/^#[0-9a-f]{6}$/i.test(evento.tipo_etiqueta_color || etiquetaEvento?.color || "")) {
     badgeTipo.style.borderColor = evento.tipo_etiqueta_color || etiquetaEvento.color;
     badgeTipo.style.color = evento.tipo_etiqueta_color || etiquetaEvento.color;
   }
-  card.appendChild(badgeTipo);
-
   const detalle = document.createElement("div");
   detalle.className = "muted";
   detalle.style.fontSize = "0.85rem";
@@ -3155,7 +3210,11 @@ function crearTarjetaEventoGuardado(eventoId) {
   };
   filaBotones.appendChild(btnEliminar);
 
-  card.appendChild(filaBotones);
+  const filaAcciones = document.createElement("div");
+  filaAcciones.className = "row";
+  filaAcciones.style.cssText = "gap:8px; justify-content:space-between; align-items:center; margin-top:2px;";
+  filaAcciones.append(badgeTipo, filaBotones);
+  card.appendChild(filaAcciones);
   return card;
 }
 
@@ -3353,7 +3412,7 @@ async function mostrarResultadoEventosEnChat(resultado, turno, textoUsuario) {
       const urlsSueltas = [...new Set(String(textoUsuario || "").match(/https?:\/\/[^\s<>()]+/gi) || [])];
       const items = resultado.items.map((item) => ({ ...item }));
       if (items.length === 1 && urlsSueltas.length && !items[0].enlaces?.length) items[0].enlaces = urlsSueltas;
-      return items.map((item) => guardarItemExtraidoComoEvento(item));
+      return guardarLoteEventosWapper(items, { idWapper: turno.idMensajeWapper || null });
     })();
   turno.eventosGuardados = eventosGuardados;
 
@@ -3773,6 +3832,8 @@ async function manejarEnvioMensaje() {
 
   enviandoMensaje = true;
   actualizarEstadoEnvio();
+  let mensajePersistido = null;
+  let temporizadorHeartbeatBorrador = null;
 
   try {
     const nombreAsistenteDirecto = extraerNombreAsistenteDirecto(texto);
@@ -3818,6 +3879,21 @@ async function manejarEnvioMensaje() {
     agregarBurbujaAlDom(indicador);
 
     try {
+      try {
+        mensajePersistido = await encolarMensajeWapper({ tipo: "texto", contenido: texto, estado: "enviando" });
+        temporizadorHeartbeatBorrador = setInterval(() => {
+          void actualizarMensajeWapper(mensajePersistido.id, {}).catch((error) => console.warn("[asistente] No se pudo renovar el borrador en curso:", error));
+        }, 60_000);
+      } catch (errorRespaldo) {
+        console.warn("[asistente] No se pudo respaldar temporalmente el mensaje:", errorRespaldo);
+        indicador.remove();
+        conversacionActual.pop();
+        burbujaUsuario.remove();
+        input.value = texto;
+        ajustarAlturaInputAsistente(input);
+        mostrarToast(traducirTextoInterfaz("No pude guardar una copia segura del mensaje. Lo dejé en el campo para que no se pierda; revisa la cola de Wapper e inténtalo de nuevo."));
+        return;
+      }
       const resultado = await llamarGemini(texto);
       indicador.remove();
       // El turno se pushea ANTES de renderizar (no después, como antes de
@@ -3827,7 +3903,7 @@ async function manejarEnvioMensaje() {
       // modalidad necesita un turno real ya en conversacionActual para
       // poder actualizarlo al tocar Aplicar/Cancelar y volver a guardar el
       // historial en ese momento.
-      const turno = { rol: "modelo", texto: resultado.crudo, crudo: resultado.crudo };
+      const turno = { rol: "modelo", texto: resultado.crudo, crudo: resultado.crudo, idMensajeWapper: mensajePersistido?.id || null };
       conversacionActual.push(turno);
       // Se pasa `texto` (el mensaje original del usuario) para que, si
       // resultado.items viene vacío sin aclaración, la rama conversacional
@@ -3835,12 +3911,46 @@ async function manejarEnvioMensaje() {
       // generarRespuestaConversacionalWapper).
       await mostrarResultadoEnChat(resultado, turno, texto);
       guardarHistorialLocal();
+      if (mensajePersistido) await descartarMensajeWapper(mensajePersistido.id);
+      mensajePersistido = null;
       flujoAnalitico.completar("respuesta_recibida");
     } catch (e) {
       indicador.remove();
-      if (e?.tipoError === "red" || (typeof navigator !== "undefined" && navigator.onLine === false)) {
+      const sinConexion = e?.tipoError === "red" || (typeof navigator !== "undefined" && navigator.onLine === false);
+      if (mensajePersistido) {
         try {
-          await encolarMensajeWapper({ tipo: "texto", contenido: texto });
+          if (sinConexion) {
+            const reintentosRed = navigator.onLine === false ? 0 : (mensajePersistido.reintentosRed || 0) + 1;
+            const reintentarEn = navigator.onLine === false ? null : Date.now() + Math.min(5 * 60_000, 15_000 * (2 ** Math.min(reintentosRed - 1, 4)));
+            await actualizarMensajeWapper(mensajePersistido.id, { estado: "pendiente", intentos: 0, reintentosRed, reintentarEn, motivo: mensajeParaError({ tipoError: "red" }) });
+          } else {
+            await actualizarMensajeWapper(mensajePersistido.id, { estado: "error", motivo: mensajeParaError(e), textoOriginal: texto });
+          }
+          if (sinConexion) {
+            flujoAnalitico.paso("en_cola");
+            conversacionActual.pop();
+            void actualizarBadgeColaWapper();
+            const estadoCola = document.createElement("small");
+            estadoCola.className = "muted";
+            estadoCola.textContent = traducirTextoInterfaz("En espera de conexión");
+            burbujaUsuario.appendChild(estadoCola);
+            mostrarToast(traducirTextoInterfaz("Ahorita no tienes conexión, guardé tu mensaje. Lo organizaré cuando vuelvas a tener internet."));
+            void ejecutarColaWapper();
+            mensajePersistido = null;
+            return;
+          }
+          void actualizarBadgeColaWapper();
+          void renderizarColaWapperEnChat();
+        } catch (errorCola) {
+          console.warn("[asistente] No se pudo actualizar el respaldo del mensaje:", errorCola);
+          e = errorCola;
+        }
+      } else if (sinConexion) {
+        try {
+          const itemCola = await encolarMensajeWapper({ tipo: "texto", contenido: texto });
+          if (navigator.onLine !== false) {
+            await actualizarMensajeWapper(itemCola.id, { reintentosRed: 1, reintentarEn: Date.now() + 15_000 });
+          }
           flujoAnalitico.paso("en_cola");
           conversacionActual.pop();
           void actualizarBadgeColaWapper();
@@ -3849,9 +3959,14 @@ async function manejarEnvioMensaje() {
           estadoCola.textContent = traducirTextoInterfaz("En espera de conexión");
           burbujaUsuario.appendChild(estadoCola);
           mostrarToast(traducirTextoInterfaz("Ahorita no tienes conexión, guardé tu mensaje. Lo organizaré cuando vuelvas a tener internet."));
+          void ejecutarColaWapper();
           return;
         } catch (errorCola) {
           e = errorCola;
+          // Si IndexedDB no pudo aceptar el mensaje, devolverlo al campo para
+          // que no dependa de que la pestaña siga abierta.
+          input.value = texto;
+          ajustarAlturaInputAsistente(input);
         }
       }
       // Un error de Gemini NO se guarda como intercambio real (ver
@@ -3864,6 +3979,7 @@ async function manejarEnvioMensaje() {
       flujoAnalitico.error("cancelado");
     }
   } finally {
+    if (temporizadorHeartbeatBorrador) clearInterval(temporizadorHeartbeatBorrador);
     enviandoMensaje = false;
     actualizarEstadoEnvio();
     requestAnimationFrame(() => {
@@ -3888,33 +4004,41 @@ function construirEsqueletoAsistente(contenedor) {
   // de la tarjeta entera).
   tarjeta.style.cssText = "gap:10px; display:flex; flex-direction:column; overflow:hidden;";
 
-  const encabezado = document.createElement("div");
-  encabezado.className = "row-between";
-  encabezado.style.alignItems = "center";
-  encabezado.style.flexShrink = "0";
-  // v3.27.6: sin título "✨ Asistente IA" — la tarjeta empieza directo en el
-  // chat y arriba solo queda la acción de nueva conversación, a la derecha.
-  encabezado.style.justifyContent = "space-between";
+  // 2026-11-03 — Encabezado UNIFICADO de la app (`.app-encabezado`): panel propio ARRIBA de la tarjeta
+  // del chat (antes era una fila chica, alineada a la izquierda, adentro de la tarjeta), con el título
+  // grande y centrado como en Resumen/Agenda y la acción "Nueva" a la derecha. La altura de la tarjeta
+  // se mide desde su propio borde superior (sincronizarEstadoAsistente), así que no hace falta ajustar nada.
+  const encabezado = document.createElement("section");
+  encabezado.id = "asistente-encabezado";
+  encabezado.className = "app-encabezado";
+  const filaEncabezado = document.createElement("div");
+  filaEncabezado.className = "app-encabezado__fila";
+  const izquierdaEnc = document.createElement("div");
+  izquierdaEnc.className = "app-encabezado__izq";
+  const centroEnc = document.createElement("div");
+  centroEnc.className = "app-encabezado__centro";
+  const derechaEnc = document.createElement("div");
+  derechaEnc.className = "app-encabezado__der";
   const semestreSemana = obtenerSemestreActivoAgenda();
   const numeroSemana = semestreSemana ? calcularNumeroSemanaParaFecha(semestreSemana, obtenerFechaInicioSemanaAgenda(0)) : null;
-  const tituloSemana = document.createElement("span");
-  tituloSemana.className = "texto-encabezado-seccion";
-  tituloSemana.style.fontSize = "1rem";
+  const tituloSemana = document.createElement("h2");
+  tituloSemana.className = "texto-encabezado-seccion app-encabezado__titulo";
   tituloSemana.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana actual");
-  encabezado.appendChild(tituloSemana);
+  centroEnc.appendChild(tituloSemana);
   const btnNueva = document.createElement("button");
+  btnNueva.type = "button";
+  btnNueva.className = "btn btn-secondary";
   btnNueva.title = "Nueva conversación";
   btnNueva.setAttribute("aria-label", "Nueva conversación");
   btnNueva.textContent = `⟳ ${traducirTextoInterfaz("Nueva")}`;
-  btnNueva.style.cssText =
-    "background:none; border:none; font-size:.95rem; line-height:1; cursor:pointer; padding:4px 6px; display:inline-flex; align-items:center; gap:6px; color:var(--color-luz, #6d5efc);";
   btnNueva.onclick = () => {
     const habiaAlgo = conversacionActual.length > 0;
     iniciarConversacionNueva(contenedor);
     if (habiaAlgo) mostrarToast("Conversación reiniciada");
   };
-  encabezado.appendChild(btnNueva);
-  tarjeta.appendChild(encabezado);
+  derechaEnc.appendChild(btnNueva);
+  filaEncabezado.append(izquierdaEnc, centroEnc, derechaEnc);
+  encabezado.appendChild(filaEncabezado);
 
   const scroll = document.createElement("div");
   scroll.id = "asistente-chat-scroll";
@@ -3958,6 +4082,7 @@ function construirEsqueletoAsistente(contenedor) {
   filaInput.appendChild(btnEnviar);
   tarjeta.appendChild(filaInput);
 
+  contenedor.appendChild(encabezado);
   contenedor.appendChild(tarjeta);
   ajustarAlturaInputAsistente(input);
   instalarObservadorVisibilidadAsistente(tarjeta);
@@ -4238,6 +4363,8 @@ function mostrarAvisoContinuar(contenedor, historial) {
  */
 let procesandoColaWapperLocal = false;
 let temporizadorRecuperacionWapper = null;
+let temporizadorRecuperacionEnviosWapper = null;
+let temporizadorReintentoColaWapper = null;
 
 async function actualizarBadgeColaWapper() {
   const badge = document.getElementById("badge-cola-wapper");
@@ -4280,7 +4407,7 @@ async function procesarItemPendienteWapper(item) {
   if (!seguros) {
     return { estado: "requiere_ayuda", textoOriginal: texto, motivo: resultado.aclaracion || traducirTextoInterfaz("Necesito que revises el tipo, la materia o la fecha antes de guardar.") };
   }
-  return { estado: "guardado", resultados: resultado.items.map((itemExtraido, indice) => guardarItemExtraidoComoEvento(itemExtraido, null, { idEvento: `ag_wapper_${item.id}_${indice}`, preservarSinHora: true })) };
+  return { estado: "guardado", resultados: guardarLoteEventosWapper(resultado.items, { idWapper: item.id, preservarSinHora: true }) };
 }
 
 async function mostrarBienvenidaColaWapper() {
@@ -4420,12 +4547,45 @@ async function mostrarBienvenidaColaWapper() {
 }
 
 async function ejecutarColaWapper() {
+  const cuenta = cuentaColaWapper();
+  if (!cuenta || MODO_DEMO) return;
+  // IndexedDB se comparte entre pestañas: un bloqueo del navegador evita que
+  // dos pestañas procesen el mismo mensaje al reconectar simultáneamente.
+  if (navigator.locks?.request) {
+    try {
+      await navigator.locks.request(`wapper-cola:${cuenta}`, { ifAvailable: true }, async (bloqueo) => {
+        if (bloqueo) await ejecutarColaWapperInterno();
+      });
+      return;
+    } catch (error) { console.warn("[asistente] No se pudo tomar el bloqueo de la cola:", error); }
+  }
+  await ejecutarColaWapperInterno();
+}
+
+async function ejecutarColaWapperInterno() {
   if (procesandoColaWapperLocal || !cuentaColaWapper() || MODO_DEMO) return;
+  if (temporizadorReintentoColaWapper) {
+    clearTimeout(temporizadorReintentoColaWapper);
+    temporizadorReintentoColaWapper = null;
+  }
   if (typeof navigator !== "undefined" && navigator.onLine === false) { await actualizarBadgeColaWapper(); return; }
   if (!estado.datos.configuracion?.gemini_api_key) { await actualizarBadgeColaWapper(); return; }
   procesandoColaWapperLocal = true;
   try {
     const existentes = await listarMensajesWapper(cuentaColaWapper());
+    // Un cierre/recarga durante la llamada a Gemini no debe perder el texto:
+    // los borradores en vuelo vuelven a la cola, que los guarda con ids estables.
+    for (const borrador of existentes.filter((item) => item.estado === "enviando" && Date.now() - (item.actualizado || item.creado) > 5 * 60_000)) {
+      await actualizarMensajeWapper(borrador.id, { estado: "pendiente", intentos: 0, motivo: traducirTextoInterfaz("El envío se interrumpió. Lo volveré a procesar.") });
+    }
+    const enviosActivos = existentes.filter((item) => item.estado === "enviando" && Date.now() - (item.actualizado || item.creado) <= 5 * 60_000);
+    if (enviosActivos.length && !temporizadorRecuperacionEnviosWapper) {
+      const vence = Math.min(...enviosActivos.map((item) => (item.actualizado || item.creado) + 5 * 60_000));
+      temporizadorRecuperacionEnviosWapper = setTimeout(() => {
+        temporizadorRecuperacionEnviosWapper = null;
+        void ejecutarColaWapper();
+      }, Math.max(1000, vence - Date.now()));
+    }
     const grabacionesActivas = existentes.filter((item) => item.estado === "grabando");
     for (const grabacion of grabacionesActivas.filter((item) => Date.now() - (item.actualizado || item.creado) > 60_000)) {
       await actualizarMensajeWapper(grabacion.id, { estado: "requiere_ayuda", motivo: traducirTextoInterfaz("La grabación se interrumpió. Puedes revisar el audio que se alcanzó a guardar.") });
@@ -4438,12 +4598,40 @@ async function ejecutarColaWapper() {
     }
     await procesarColaWapper(cuentaColaWapper(), async (item) => {
       try { return await procesarItemPendienteWapper(item); }
-      catch (error) { throw new Error(mensajeParaError(error)); } // nunca guardar el texto crudo de Google
+      catch (error) {
+        const seguro = new Error(mensajeParaError(error));
+        seguro.tipoError = error?.tipoError;
+        throw seguro;
+      } // nunca guardar el texto crudo de Google; conservar la clasificación
     });
     await actualizarBadgeColaWapper();
     await mostrarBienvenidaColaWapper();
+    await renderizarColaWapperEnChat();
+    const pendientesConReintento = (await listarMensajesWapper(cuentaColaWapper()))
+      .filter((item) => item.estado === "pendiente" && item.reintentarEn);
+    if (pendientesConReintento.length && navigator.onLine !== false) {
+      const proximo = Math.min(...pendientesConReintento.map((item) => item.reintentarEn));
+      temporizadorReintentoColaWapper = setTimeout(() => {
+        temporizadorReintentoColaWapper = null;
+        void ejecutarColaWapper();
+      }, Math.max(1000, proximo - Date.now()));
+    }
   } catch (error) { console.warn("[asistente] No se pudo procesar la cola offline:", error); }
   finally { procesandoColaWapperLocal = false; }
+}
+
+async function reactivarColaWapperAlVolver() {
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  if (temporizadorReintentoColaWapper) {
+    clearTimeout(temporizadorReintentoColaWapper);
+    temporizadorReintentoColaWapper = null;
+  }
+  try {
+    const cuenta = cuentaColaWapper();
+    const pendientes = (await listarMensajesWapper(cuenta)).filter((item) => item.estado === "pendiente" && item.reintentarEn);
+    for (const item of pendientes) await actualizarMensajeWapper(item.id, { reintentarEn: null, reintentosRed: 0 });
+  } catch (error) { console.warn("[asistente] No se pudieron reactivar los mensajes pendientes:", error); }
+  void ejecutarColaWapper();
 }
 
 async function renderizarColaWapperEnChat() {
@@ -4451,10 +4639,17 @@ async function renderizarColaWapperEnChat() {
   const cuenta = cuentaColaWapper();
   if (!scroll || !cuenta) return;
   const items = (await listarMensajesWapper(cuenta)).filter((item) => ["pendiente", "requiere_ayuda", "error"].includes(item.estado));
+  const activos = new Set(items.map((item) => item.id));
+  scroll.querySelectorAll("[data-wapper-cola-id]").forEach((nodo) => {
+    if (!activos.has(nodo.dataset.wapperColaId)) nodo.remove();
+  });
+  const yaRenderizados = new Set(Array.from(scroll.querySelectorAll("[data-wapper-cola-id]"), (nodo) => nodo.dataset.wapperColaId));
   for (const item of items) {
+    if (yaRenderizados.has(item.id)) continue;
     const tarjeta = document.createElement("article");
     tarjeta.className = "glass-card stack";
     tarjeta.style.cssText = "align-self:stretch;padding:10px;gap:7px;";
+    tarjeta.dataset.wapperColaId = item.id;
     const encabezado = document.createElement("strong");
     encabezado.textContent = item.estado === "pendiente"
       ? traducirTextoInterfaz("En espera de conexión")
@@ -4511,8 +4706,8 @@ async function renderizarColaWapperEnChat() {
   scroll.scrollTop = scroll.scrollHeight;
 }
 
-window.addEventListener("online", () => { void ejecutarColaWapper(); });
-document.addEventListener("visibilitychange", () => { if (!document.hidden) void ejecutarColaWapper(); });
+window.addEventListener("online", () => { void reactivarColaWapperAlVolver(); });
+document.addEventListener("visibilitychange", () => { if (!document.hidden) void reactivarColaWapperAlVolver(); });
 window.procesarColaWapper = ejecutarColaWapper;
 
 function renderizarAsistente() {

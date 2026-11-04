@@ -184,8 +184,8 @@ function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
   const diasRestantes = Math.max(0, Math.ceil((fechaFin - hoy) / 86400000));
 
   const tarjeta = document.createElement("section");
-  tarjeta.className = "glass-card resumen-semana-tarjeta";
-  tarjeta.style.cssText = "display:flex; align-items:center; gap:16px; padding:14px 18px;";
+  // 2026-11-03: referencia del encabezado unificado de la app (`.app-encabezado`, en una sola fila).
+  tarjeta.className = "app-encabezado app-encabezado--fila resumen-semana-tarjeta";
 
   // Izquierda: barra de progreso del semestre. El ancho de partida (99px)
   // es solo un placeholder hasta que ajustarTarjetaSemana() la iguale al

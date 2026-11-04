@@ -1389,6 +1389,19 @@
     "Semestre": "Semestre",
     "Semestres": "Semestres",
     "Semestres en Agenda": "Semestres à l'Agenda",
+    "Agregar mensaje semanal": "Ajouter un message hebdomadaire",
+    "Lo ven todos en la competencia durante esta semana.": "Tout le monde dans la compétition le verra cette semaine.",
+    "Escribí tu mensaje…": "Écrivez votre message…",
+    "Mensaje semanal": "Message hebdomadaire",
+    "Mensaje borrado": "Message supprimé",
+    "Mensaje guardado": "Message enregistré",
+    "Fue mi profe": "C'était mon professeur",
+    "No fue mi profe": "Ce n'était pas mon professeur",
+    "Mensajes del podio": "Messages du podium",
+    "Semestres en Horario": "Semestres de l'emploi du temps",
+    "Elegí el semestre del que querés ver el horario.": "Choisissez le semestre dont vous voulez voir l'emploi du temps.",
+    "Semestres en Tiempo": "Semestres du temps d’étude",
+    "Elegí un semestre, o todos juntos, para ver sus materias y estadísticas.": "Choisissez un semestre ou tous les semestres pour voir les matières et les statistiques.",
     "Semestre actual": "Semestre actuel",
     "Semestres actuales": "Semestres actuels",
     "Semestre pasado": "Semestre passé",
@@ -2646,6 +2659,8 @@
     "Borrar ahora sí": "Supprimer maintenant",
     "Detén primero la sesión activa de esta materia para poder eliminarla.": "Arrêtez d'abord la session active de cette matière pour pouvoir la supprimer.",
     "Materia personalizada y sus registros eliminados": "Matière personnalisée et ses enregistrements supprimés",
-    "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste.": "Toutes les matières sont masquées. Utilisez « Afficher plus de matières » pour les voir et modifier leur réglage."
+    "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste.": "Toutes les matières sont masquées. Utilisez « Afficher plus de matières » pour les voir et modifier leur réglage.",
+    "Agregar racha": "Ajouter une série",
+    "Borrar racha": "Supprimer la série"
   }
 }

@@ -1285,7 +1285,7 @@ function construirSubheaderSemanal(dias, semestreActivo, { navegable = true, off
   const frag = document.createDocumentFragment();
 
   const filaSemana = document.createElement("div");
-  filaSemana.className = "row";
+  filaSemana.className = "row app-encabezado__titulofila";
   filaSemana.style.cssText = "align-items:center; justify-content:center; gap:6px;";
 
   const numeroSemana = semestreActivo
@@ -1329,7 +1329,7 @@ function construirSubheaderSemanal(dias, semestreActivo, { navegable = true, off
   // que le corresponden dentro del header de 3 líneas — ver #agenda-header
   // en index.html.
   const filaRango = document.createElement("div");
-  filaRango.className = "row";
+  filaRango.className = "row app-encabezado__rango";
   filaRango.style.cssText = "align-items:baseline; justify-content:center; gap:8px;";
 
   const rango = document.createElement("span");
