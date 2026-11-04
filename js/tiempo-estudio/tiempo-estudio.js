@@ -34,7 +34,7 @@ import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearMateriaEstudioIndependiente, sellarTimestamp } from "../core/schema.js";
 import { abrirConfirmacion, mostrarToast, poblarVentanaSemestres, subtituloSemestreSelector } from "../ui/componentes.js";
 import { obtenerSemestresActuales } from "../semestres/semestres.js";
-import { obtenerSemestreActivoAgenda, obtenerFechaInicioSemanaAgenda } from "../agenda/agenda-utils.js";
+import { obtenerSemestreActivoAgenda, obtenerFechaInicioSemanaAgenda, formatearRangoSemanaAgenda } from "../agenda/agenda-utils.js";
 import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
 import { mostrarSeccion } from "../main.js";
 import { abrirModalConfigTiempoEstudio, abrirModalPomodoroPredeterminado } from "./tiempo-estudio-config.js";
@@ -452,25 +452,40 @@ function construirEncabezado(cont, botonSemestre = null) {
   const derecha = document.createElement("div");
   derecha.className = "app-encabezado__der";
 
-  const titulo = document.createElement("h2");
-  titulo.className = "texto-encabezado-seccion app-encabezado__titulo";
+  // Centro = el MISMO bloque que el de Agenda: "Semana N" (texto-encabezado-seccion) y debajo el
+  // rango de fechas de la semana. Idéntico en las tres pestañas; solo cambian los botones de los costados.
+  const filaTitulo = document.createElement("div");
+  filaTitulo.className = "row app-encabezado__titulofila";
+  const titulo = document.createElement("span");
+  titulo.className = "texto-encabezado-seccion";
   const semestreSemana = obtenerSemestreActivoAgenda();
-  const numeroSemana = semestreSemana ? calcularNumeroSemanaParaFecha(semestreSemana, obtenerFechaInicioSemanaAgenda(0)) : null;
-  titulo.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana actual");
-  centro.appendChild(titulo);
+  const inicioSemana = obtenerFechaInicioSemanaAgenda(0);
+  const numeroSemana = semestreSemana ? calcularNumeroSemanaParaFecha(semestreSemana, inicioSemana) : null;
+  titulo.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana");
+  filaTitulo.appendChild(titulo);
+  const filaRango = document.createElement("div");
+  filaRango.className = "row app-encabezado__rango";
+  const rango = document.createElement("span");
+  rango.className = "muted";
+  rango.style.fontSize = "0.78rem";
+  const finSemana = new Date(inicioSemana);
+  finSemana.setDate(finSemana.getDate() + 6);
+  rango.textContent = formatearRangoSemanaAgenda([{ fecha: inicioSemana }, { fecha: finSemana }]);
+  filaRango.appendChild(rango);
+  centro.append(filaTitulo, filaRango);
 
   if (enCompetencias) {
     const acciones = obtenerAccionesEncabezadoCompetencias(renderizarTiempoEstudio);
     const btnUnirse = document.createElement("button");
     btnUnirse.type = "button";
-    btnUnirse.className = "btn btn-secondary";
+    btnUnirse.className = "btn btn-secondary app-encabezado__lado";
     btnUnirse.textContent = traducirTextoInterfaz("Unirse");
     btnUnirse.addEventListener("click", () => acciones.alUnirse());
     izquierda.appendChild(btnUnirse);
 
     const btnCrear = document.createElement("button");
     btnCrear.type = "button";
-    btnCrear.className = "btn btn-primary";
+    btnCrear.className = "btn btn-primary app-encabezado__lado";
     btnCrear.textContent = traducirTextoInterfaz("+ Crear");
     btnCrear.addEventListener("click", () => acciones.alCrear());
     derecha.appendChild(btnCrear);
@@ -510,12 +525,10 @@ function construirEncabezado(cont, botonSemestre = null) {
     // acción de ajustes, con el icono de tres puntos solicitado.
     const btnAjustes = document.createElement("button");
     btnAjustes.type = "button";
-    btnAjustes.className = "te-btn-icono te-btn-icono-fantasma te-btn-icono-grande";
+    btnAjustes.className = "agenda-btn-ajustes";
     btnAjustes.title = traducirTextoInterfaz("Ajustes de Tiempo");
     btnAjustes.setAttribute("aria-label", traducirTextoInterfaz("Ajustes de Tiempo"));
     btnAjustes.textContent = "⋮";
-    btnAjustes.style.fontSize = "1.7rem";
-    btnAjustes.style.lineHeight = "1";
     btnAjustes.addEventListener("click", () => abrirModalAjustesTiempoEstudio());
     derecha.appendChild(btnAjustes);
 
@@ -523,7 +536,7 @@ function construirEncabezado(cont, botonSemestre = null) {
     // puntual porque el propio formulario ya elige la materia.
     const btnRegistroManual = document.createElement("button");
     btnRegistroManual.type = "button";
-    btnRegistroManual.className = "te-btn-icono te-btn-icono-iniciar te-btn-icono-grande";
+    btnRegistroManual.className = "btn btn-primary app-encabezado__mas";
     btnRegistroManual.title = traducirTextoInterfaz("Registrar sesión pasada");
     btnRegistroManual.setAttribute("aria-label", traducirTextoInterfaz("Registrar sesión pasada"));
     btnRegistroManual.textContent = "＋";
@@ -648,7 +661,7 @@ function alGuardarConfiguracionMateria(mm) {
  * renderizarTiempoEstudio). "Materias" es la vista de tarjetas que ya
  * existía; "Estadísticas" es la vista nueva de tiempo-estudio-estadisticas.js.
  */
-function construirPillVistaSeccion(cont) {
+function crearPillVistaSeccion() {
   const opciones = [
     ["materias", "Materias"],
     ["estadisticas", "Estadísticas"],
@@ -663,15 +676,29 @@ function construirPillVistaSeccion(cont) {
   opciones.forEach(([valor, texto]) => {
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `pill-item${vistaSeccionTE === valor ? " active" : ""}`;
+    btn.className = "pill-item";
     btn.dataset.vista = valor;
-    btn.setAttribute("aria-pressed", String(vistaSeccionTE === valor));
     btn.textContent = texto;
     btn.addEventListener("click", () => cambiarVistaTiempoEstudio(valor));
     grupo.appendChild(btn);
   });
-  actualizarThumbVistaTE(thumb);
-  cont.appendChild(grupo);
+  sincronizarPillVistaSeccion(grupo);
+  return grupo;
+}
+
+/**
+ * 2026-11-04 — La píldora se crea UNA sola vez y se reutiliza: antes se reconstruía en cada render,
+ * así el indicador (thumb) nacía ya en su lugar y nunca llegaba a animarse ("no se conecta con la
+ * transición suave"). Ahora solo se actualizan sus clases y el thumb se desliza de verdad.
+ */
+function sincronizarPillVistaSeccion(grupo) {
+  if (!grupo) return;
+  grupo.querySelectorAll("[data-vista]").forEach((btn) => {
+    const activo = btn.dataset.vista === vistaSeccionTE;
+    btn.classList.toggle("active", activo);
+    btn.setAttribute("aria-pressed", String(activo));
+  });
+  actualizarThumbVistaTE(grupo.querySelector(".pill-switch-thumb"));
 }
 
 const indicesVistaTE = { materias: 0, estadisticas: 1, competencias: 2 };
@@ -686,22 +713,57 @@ function actualizarThumbVistaTE(thumb) {
   thumb?.classList.toggle("pill-switch-thumb--derecha", indicesVistaTE[vistaSeccionTE] === 1);
   thumb?.classList.toggle("pill-switch-thumb--tercera", indicesVistaTE[vistaSeccionTE] === 2);
 }
+/** Arma el contenido de la pestaña `vista` dentro de su panel. */
+function llenarPaneVistaTE(vista) {
+  if (!panelesVistaTE) return;
+  const pane = panelesVistaTE.panes[indicesVistaTE[vista]];
+  if (!pane) return;
+  pane.replaceChildren();
+  if (vista === "estadisticas") construirVistaEstadisticas(pane, renderizarTiempoEstudio);
+  else if (vista === "competencias") construirVistaCompetencias(pane, renderizarTiempoEstudio);
+  else construirVistaPrincipal(pane);
+}
+
+/** Repinta SOLO el encabezado (cambian los botones de los costados según la pestaña). */
+function pintarEncabezadoTE() {
+  const host = panelesVistaTE?.encabezado;
+  if (!host) return;
+  host.replaceChildren();
+  construirEncabezado(host, vistaSeccionTE === "competencias" ? null : construirBotonSemestreTiempo());
+}
+
+/** Durante un arrastre, las pestañas vecinas deben estar ya armadas (si no, se ve un hueco o un corte). */
+function prepararVecinasVistaTE(indiceActual) {
+  if (!panelesVistaTE) return;
+  const vistas = Object.keys(indicesVistaTE);
+  [indiceActual - 1, indiceActual + 1].forEach((i) => {
+    const pane = panelesVistaTE.panes[i];
+    if (pane && pane.childElementCount === 0) llenarPaneVistaTE(vistas[i]);
+  });
+}
+
 function cambiarVistaTiempoEstudio(vista) {
   if (!(vista in indicesVistaTE) || vista === vistaSeccionTE) return;
   vistaSeccionTE = vista;
+  if (!panelesVistaTE || !pistaVistaTE) {
+    renderizarTiempoEstudio();
+    return;
+  }
   const indice = indicesVistaTE[vista];
-  if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${desplazamientoVistaTE(indice)}px,0,0)`;
-  const grupo = document.querySelector("#seccion-tiempo-estudio .pill-switch-binario");
-  grupo?.querySelectorAll("[data-vista]").forEach((btn) => {
-    const activo = btn.dataset.vista === vista;
-    btn.classList.toggle("active", activo);
-    btn.setAttribute("aria-pressed", String(activo));
-  });
-  actualizarThumbVistaTE(grupo?.querySelector(".pill-switch-thumb"));
-  renderizarTiempoEstudio();
+  // 1) El destino se arma ANTES de moverse hacia él, para que la animación llegue a contenido real.
+  llenarPaneVistaTE(vista);
+  panelesVistaTE.panes.forEach((pane, i) => pane.setAttribute("aria-hidden", String(i !== indice)));
+  // 2) La pista y la píldora (misma instancia, por eso su thumb se desliza suave) se animan juntas.
+  pistaVistaTE.style.transform = `translate3d(${desplazamientoVistaTE(indice)}px,0,0)`;
+  sincronizarPillVistaSeccion(panelesVistaTE.pill);
+  // 3) Solo cambian los botones de los costados del encabezado.
+  pintarEncabezadoTE();
 }
 
-function inicializarDeslizamientoVistasTE(viewport) {
+// 2026-11-04: los manejadores se enganchan UNA vez a la sección, pero el viewport se vuelve a crear
+// al entrar y salir del detalle de una materia; por eso se lee siempre el viewport VIGENTE (antes
+// quedaba enganchado al viejo, ya fuera del DOM, y el arrastre calculaba anchos en 0 y se cortaba).
+function inicializarDeslizamientoVistasTE() {
   const seccion = document.getElementById("seccion-tiempo-estudio");
   if (!seccion || seccion.dataset.gestoInicializado) return;
   seccion.dataset.gestoInicializado = "1";
@@ -712,10 +774,14 @@ function inicializarDeslizamientoVistasTE(viewport) {
     inicio = { x: t.clientX, y: t.clientY, t0: performance.now(), indice: indicesVistaTE[vistaSeccionTE], moviendo: false };
   }, { passive: true });
   seccion.addEventListener("touchmove", (ev) => {
-    if (!inicio || ev.touches.length !== 1) return;
+    const viewport = panelesVistaTE?.viewport;
+    if (!inicio || !viewport || ev.touches.length !== 1) return;
     const t = ev.touches[0], dx = t.clientX - inicio.x, dy = t.clientY - inicio.y;
     if (!inicio.moviendo && (Math.abs(dx) < 8 || Math.abs(dx) <= Math.abs(dy) * 1.2)) return;
-    if (!inicio.moviendo) viewport.classList.add("te-vistas-arrastrando");
+    if (!inicio.moviendo) {
+      viewport.classList.add("te-vistas-arrastrando");
+      prepararVecinasVistaTE(inicio.indice);
+    }
     inicio.moviendo = true;
     ev.preventDefault();
     const ancho = viewport.clientWidth || 1;
@@ -730,6 +796,8 @@ function inicializarDeslizamientoVistasTE(viewport) {
   }, { passive: false });
   const terminar = (ev) => {
     if (!inicio) return;
+    const viewport = panelesVistaTE?.viewport;
+    if (!viewport) { inicio = null; return; }
     const t = ev.changedTouches?.[0];
     const dx = t ? t.clientX - inicio.x : 0;
     // v3.27.8: además de la distancia, un deslizamiento rápido (flick) también cambia de vista.
@@ -746,7 +814,7 @@ function inicializarDeslizamientoVistasTE(viewport) {
   seccion.addEventListener("touchend", terminar, { passive: true });
   seccion.addEventListener("touchcancel", () => {
     inicio = null;
-    viewport.classList.remove("te-vistas-arrastrando");
+    panelesVistaTE?.viewport.classList.remove("te-vistas-arrastrando");
     document.querySelector("#seccion-tiempo-estudio .pill-switch-thumb")?.style.removeProperty("--te-pill-progreso");
     if (pistaVistaTE) pistaVistaTE.style.transform = `translate3d(${desplazamientoVistaTE(indicesVistaTE[vistaSeccionTE])}px,0,0)`;
   }, { passive: true });
@@ -1648,13 +1716,8 @@ function renderizarTiempoEstudio() {
     cont.innerHTML = "";
     panelesVistaTE = null;
     pistaVistaTE = null;
-  } else {
-    // FIX v3.27.2: el filtro estaba invertido (conservaba todo MENOS el
-    // viewport), así que el encabezado y la pill de la pasada anterior se
-    // quedaban y se duplicaban en cada re-render. Se conserva solo el
-    // viewport; el encabezado y la pill se vuelven a construir abajo.
-    cont.replaceChildren(panelesVistaTE.viewport);
   }
+  // (2026-11-04: ya no se reordena el DOM en cada render; ver la estructura persistente más abajo.)
 
   if (desuscribirTimerDetalle) {
     desuscribirTimerDetalle();
@@ -1672,11 +1735,12 @@ function renderizarTiempoEstudio() {
     materiaDetalleActivaId = null;
   }
 
-  // El encabezado general va antes de las pestañas en las TRES vistas (misma forma y tamaño);
-  // en Competencias lleva Unirse/Crear en vez de racha/⋮/＋ y no muestra el selector de semestre.
-  construirEncabezado(cont, vistaSeccionTE === "competencias" ? null : construirBotonSemestreTiempo());
-  construirPillVistaSeccion(cont);
+  // Estructura persistente [encabezado][píldora][viewport]: solo se repinta el CONTENIDO del
+  // encabezado; la píldora y el viewport NO se vuelven a crear ni se mueven del DOM (si no, se
+  // perdería la animación del thumb y de la pista).
   if (!panelesVistaTE) {
+    const encabezado = document.createElement("div");
+    const pill = crearPillVistaSeccion();
     const viewport = document.createElement("div");
     viewport.className = "te-vistas-viewport";
     const pista = document.createElement("div");
@@ -1692,10 +1756,13 @@ function renderizarTiempoEstudio() {
       return pane;
     });
     viewport.appendChild(pista);
-    panelesVistaTE = { viewport, panes };
+    panelesVistaTE = { encabezado, pill, viewport, panes };
     pistaVistaTE = pista;
-    inicializarDeslizamientoVistasTE(viewport);
+    cont.append(encabezado, pill, viewport);
+    inicializarDeslizamientoVistasTE();
   }
+  pintarEncabezadoTE();
+  sincronizarPillVistaSeccion(panelesVistaTE.pill);
   const indice = indicesVistaTE[vistaSeccionTE];
   const viewport = panelesVistaTE.viewport;
   const pista = pistaVistaTE;
@@ -1704,12 +1771,7 @@ function renderizarTiempoEstudio() {
   pista.style.width = `calc(300% + ${GAP_PANE_VISTA_TE * 2}px)`;
   pista.style.gap = `${GAP_PANE_VISTA_TE}px`;
   pista.style.transform = `translate3d(${-indice * (anchoViewport + GAP_PANE_VISTA_TE)}px,0,0)`;
-  const paneActual = panelesVistaTE.panes[indice];
-  paneActual.replaceChildren();
-  if (vistaSeccionTE === "estadisticas") construirVistaEstadisticas(paneActual, renderizarTiempoEstudio);
-  else if (vistaSeccionTE === "competencias") construirVistaCompetencias(paneActual, renderizarTiempoEstudio);
-  else construirVistaPrincipal(paneActual);
-  cont.appendChild(viewport);
+  llenarPaneVistaTE(vistaSeccionTE);
 }
 
 /**

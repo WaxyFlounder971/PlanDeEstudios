@@ -250,39 +250,61 @@ function fechaSemana(ms) {
 
 /* ===================== Mensajes del podio ===================== */
 
-/* 2026-11-03 — Mensajes de ánimo por posición (globo de texto en el top 3,
-   línea centrada a la altura del nombre del 4.º en adelante). Son frases FIJAS
-   elegidas por posición (no texto libre de nadie), así que el largo está
-   controlado: además se recorta a LIMITE_MENSAJE_CARACTERES por seguridad
-   (p. ej. traducciones largas) y el CSS deja que el texto salte de línea en vez
-   de cortarlo con "…". */
-const LIMITE_MENSAJE_CARACTERES = 34;
-const MENSAJES_TOP = [
-  ["¡Vamos ganando! 🏆", "We're winning! 🏆"],
-  ["¡Casi los alcanzo! 💪", "Almost catching up! 💪"],
-  ["¡Subiendo al podio! 😎", "Climbing to the podium! 😎"],
-];
-const MENSAJES_RESTO = [
-  ["¡Ahí voy, a por el podio! 🔥", "On my way to the podium! 🔥"],
-  ["¡No me rindo! 💪", "I won't give up! 💪"],
-  ["¡Todavía hay tiempo! ⏳", "There's still time! ⏳"],
-  ["¡Voy remontando! 🚀", "Coming back! 🚀"],
-  ["¡A seguir sumando! ✨", "Keep adding up! ✨"],
-  ["¡Esta semana se puede! 🍀", "This week is possible! 🍀"],
-];
-const COLORES_MENSAJE_TOP = ["#8f83ff", "#3ddc84", "#2ec4e6"]; // = globos del podio: 1.º violeta, 2.º verde, 3.º celeste
-// Colores del texto de las filas 4+ (se repiten en ciclo): lila, azul, verde, naranja, rosa.
-const COLORES_MENSAJE_FILA = ["#b3a6ff", "#66b8ff", "#5be3b0", "#ffb86b", "#ff8ab3"];
+/* 2026-11-04 — Los mensajes NO son predefinidos: aparecen SI Y SOLO SI la persona escribió uno
+   (botón del globo con "+", junto al trofeo de cada competencia). Es un mensaje SEMANAL: queda
+   atado a la semana en que se escribió (lunes de esa semana, "AAAA-MM-DD") y desaparece solo
+   cuando empieza otra. Se muestra como globo sobre el top 3 y como línea centrada a la altura
+   del nombre del 4.º en adelante, con el color de paleta de cada persona (el mismo del aro de la
+   foto: `--cp-uc`). Largo máximo acotado + el CSS hace saltar de línea, así nada se rompe ni se oculta. */
+const LIMITE_MENSAJE_CARACTERES = 50;
+// Colores de respaldo (cuando la persona no tiene color de paleta propio): los mismos del podio.
+const COLORES_MENSAJE_TOP = ["#ffc94d", "#c9d1dd", "#d9985f"]; // oro, plata, bronce
+const COLOR_MENSAJE_FILA = "#b3a6ff";
 
 function limitarMensaje(texto) {
-  const letras = Array.from(String(texto || ""));
+  const letras = Array.from(String(texto || "").replace(/\s+/g, " ").trim());
   return letras.length > LIMITE_MENSAJE_CARACTERES ? letras.slice(0, LIMITE_MENSAJE_CARACTERES - 1).join("").trimEnd() + "…" : letras.join("");
 }
 
-/** Mensaje de la posición `rank` (1-based), ya traducido y recortado. */
-function mensajeDePosicion(rank) {
-  const par = rank <= 3 ? MENSAJES_TOP[rank - 1] : MENSAJES_RESTO[(rank - 4) % MENSAJES_RESTO.length];
-  return limitarMensaje(traducirTextoInterfaz(par[0], par[1]));
+/** Lunes de la semana actual en "AAAA-MM-DD" (hora local). Igual para todos, sin depender de ajustes. */
+function semanaISOActual() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Texto del mensaje de `p` si lo tiene Y es de esta semana; si no, "" (no se pinta nada). */
+function mensajeVisibleDe(p) {
+  if (!p || !p.mensaje || p.mensaje_semana !== semanaISOActual()) return "";
+  return limitarMensaje(p.mensaje);
+}
+
+const CLAVE_MI_MENSAJE_PREFIJO = "te_comp_mi_mensaje_";
+
+/** Mi mensaje de ESTA competencia en este dispositivo: { texto, semana, enviado } o null. */
+function leerMiMensaje(competenciaId) {
+  try {
+    const r = JSON.parse(localStorage.getItem(CLAVE_MI_MENSAJE_PREFIJO + competenciaId) || "null");
+    return r && typeof r === "object" ? r : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function guardarMiMensaje(competenciaId, registro) {
+  try {
+    localStorage.setItem(CLAVE_MI_MENSAJE_PREFIJO + competenciaId, JSON.stringify(registro));
+  } catch (e) {
+    // no crítico: el mensaje igual viaja al servidor
+  }
+}
+
+/** Mi propio participante con mi mensaje local por encima del que vino del servidor (si es de esta semana). */
+function conMensajePropio(p, competenciaId) {
+  const local = leerMiMensaje(competenciaId);
+  if (local && local.semana === semanaISOActual()) return { ...p, mensaje: local.texto, mensaje_semana: local.semana };
+  return p;
 }
 
 const CLAVE_MENSAJES_PREFIJO = "te_comp_mensajes_";
@@ -311,6 +333,7 @@ function guardarMensajesVisibles(competenciaId, visibles) {
 const ICONO = {
   link: '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
   trophy: '<svg viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
+  bubblePlus: '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L3 21l1.9-5.6A8.4 8.4 0 1 1 21 11.5z"/><path d="M12 8v7M8.5 11.5h7"/></svg>',
   gear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82 1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
   chev: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
   right: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
@@ -382,10 +405,11 @@ function filaHTML(p, i, ordenados, d, yoId, conMensajes, incluirTop) {
   const cls = ["cp-row", lider ? "cp-lead" : "", yo ? "cp-me-halo" : "", !p.horas ? "cp-zero" : "", tonos ? "cp-tinted" : ""].filter(Boolean).join(" ");
   const rk = `<span class="cp-rk ${rank <= 3 ? "cp-r" + rank : ""}">${rank}</span>`;
   // Mensaje centrado a la altura del nombre (solo puestos 4+ en la vista podio: el top 3 usa globos).
-  // En la vista de lista (sin globos) también los 3 primeros llevan su mensaje, con el color de su puesto.
-  const colorMsg = rank <= 3 ? COLORES_MENSAJE_TOP[rank - 1] : COLORES_MENSAJE_FILA[(rank - 4) % COLORES_MENSAJE_FILA.length];
-  const msgFila = conMensajes && (rank >= 4 || incluirTop)
-    ? `<span class="cp-msg-fila" style="--cp-mc:${colorMsg}">${esc(mensajeDePosicion(rank))}</span>`
+  // Solo si la persona escribió un mensaje esta semana. En la vista de lista (sin globos) también los
+  // 3 primeros lo llevan en línea; en la vista podio solo del 4.º en adelante (el top 3 usa globos).
+  const textoMsg = conMensajes && (rank >= 4 || incluirTop) ? mensajeVisibleDe(p) : "";
+  const msgFila = textoMsg
+    ? `<span class="cp-msg-fila" style="--cp-mc-def:${rank <= 3 ? COLORES_MENSAJE_TOP[rank - 1] : COLOR_MENSAJE_FILA}">${esc(textoMsg)}</span>`
     : "";
   return `<div class="${cls}" style="${varsDeColor(tonos)}--cp-d:${seg(d)};--cp-bd:${seg(d + 0.25)};--cp-dc:${seg(d + 0.6)}">
     ${rk}
@@ -423,7 +447,8 @@ function podioHTML(ordenados, modo, T, yoId, conMensajes) {
         : "";
     // Globo de texto (solo en la tarjeta, no en el historial): va DENTRO de la columna, en el flujo,
     // encima de la corona/avatar — así nunca tapa ni es tapado por la columna vecina ni por el título.
-    const globo = card && conMensajes ? `<div class="cp-bub cp-bub-${i + 1}" style="--cp-bd2:${seg(dn + 0.1)}"><span>${esc(mensajeDePosicion(i + 1))}</span></div>` : "";
+    const textoMsg = card && conMensajes ? mensajeVisibleDe(p) : "";
+    const globo = textoMsg ? `<div class="cp-bub cp-bub-${i + 1}" style="--cp-bd2:${seg(dn + 0.1)}"><span>${esc(textoMsg)}</span></div>` : "";
     return `<div class="cp-pc ${cls}${yo ? " cp-me-halo" : ""}${tonos ? " cp-tinted" : ""}" style="${vars}">
       ${brillo}
       ${globo}
@@ -434,7 +459,7 @@ function podioHTML(ordenados, modo, T, yoId, conMensajes) {
     </div>`;
   };
   const k = card ? `--cp-k1:${seg(t.jump[0] + 0.58)};--cp-k2:${seg(t.jump[0] + 0.93)}` : "";
-  return `<div class="cp-podium ${card ? "cp-card" : ""}${card && conMensajes ? " cp-con-msg" : ""}" style="${k}">${slot(1, "cp-p2")}${slot(0, "cp-p1")}${slot(2, "cp-p3")}</div>`;
+  return `<div class="cp-podium ${card ? "cp-card" : ""}${card && conMensajes && ordenados.slice(0, 3).some((q) => mensajeVisibleDe(q)) ? " cp-con-msg" : ""}" style="${k}">${slot(1, "cp-p2")}${slot(0, "cp-p1")}${slot(2, "cp-p3")}</div>`;
 }
 
 /* ===================== Tarjeta de competencia ===================== */
@@ -466,7 +491,7 @@ function cuerpoTarjetaHTML(participantes, vista, yoId, conMensajes) {
  *   estadoCuerpo: "cargando" | "error" | "ok",
  *   vista: "podio" | "filas", animar: boolean, yoId
  * }
- * cb = { alHistorial(), alGestionar(), alCambiarVista(vista) }
+ * cb = { alHistorial(), alMensaje(), alGestionar(), alCambiarVista(vista) }
  */
 function pintarTarjeta(tarjeta, o, cb) {
   asegurarEstilosCompetenciasVisual();
@@ -492,6 +517,7 @@ function pintarTarjeta(tarjeta, o, cb) {
       </div>
       <div class="cp-c-icons">
         <button type="button" class="cp-ico cp-gold" data-cp="historial" aria-label="Historial" title="Historial">${ICONO.trophy}</button>
+        <button type="button" class="cp-ico cp-msgbtn${o.tieneMensaje ? " cp-on" : ""}" data-cp="mensaje" aria-label="${esc(traducirTextoInterfaz("Mensaje semanal"))}" title="${esc(traducirTextoInterfaz("Mensaje semanal"))}">${ICONO.bubblePlus}</button>
         <button type="button" class="cp-ico" data-cp="gestionar" aria-label="Gestionar" title="Gestionar">${ICONO.gear}</button>
       </div>
       <div class="cp-vt" role="group" aria-label="Vista de la competencia">
@@ -504,6 +530,7 @@ function pintarTarjeta(tarjeta, o, cb) {
   activarFallbackAvatares(tarjeta);
   ajustarContrasteCpScope(tarjeta);
   tarjeta.querySelector('[data-cp="historial"]').addEventListener("click", () => cb.alHistorial && cb.alHistorial());
+  tarjeta.querySelector('[data-cp="mensaje"]').addEventListener("click", () => cb.alMensaje && cb.alMensaje());
   tarjeta.querySelector('[data-cp="gestionar"]').addEventListener("click", () => cb.alGestionar && cb.alGestionar());
   tarjeta.querySelectorAll(".cp-vt button").forEach((b) =>
     b.addEventListener("click", () => {
@@ -762,6 +789,12 @@ export {
   guardarVistaPreferida,
   leerMensajesVisibles,
   guardarMensajesVisibles,
+  LIMITE_MENSAJE_CARACTERES,
+  semanaISOActual,
+  mensajeVisibleDe,
+  leerMiMensaje,
+  guardarMiMensaje,
+  conMensajePropio,
   avatarHTML,
   activarFallbackAvatares,
   asegurarEstilosCompetenciasVisual,

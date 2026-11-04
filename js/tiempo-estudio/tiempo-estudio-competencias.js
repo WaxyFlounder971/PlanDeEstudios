@@ -70,7 +70,7 @@ import { calcularMinutosTotalesEnRango, obtenerRangoSemana } from "./tiempo-estu
 // 2026-09-17 — Partes 3/4/5. Los dos son imports circulares intencionales
 // con este archivo (gestion importa helpers de acá); seguros porque nada
 // se usa en el nivel superior del archivo, solo adentro de funciones.
-import { abrirModalGestionCompetencia, construirRegistroCompetencias } from "./tiempo-estudio-competencias-gestion.js";
+import { abrirModalGestionCompetencia, construirRegistroCompetencias, abrirModalMensajeSemanal, enviarMensajePendiente } from "./tiempo-estudio-competencias-gestion.js";
 import { construirAvisosResultados, construirBotonesSimulacion, mostrarAnimacionUnirseCompetencia } from "./tiempo-estudio-celebracion.js";
 // 2026-09-21 — Rediseño (prototipo-competencias-v2): todo lo que se dibuja
 // (avatares con foto, podio, tarjeta, hoja modal, historial) vive en el
@@ -84,6 +84,8 @@ import {
   leerVistaPreferida,
   guardarVistaPreferida,
   leerMensajesVisibles,
+  conMensajePropio,
+  mensajeVisibleDe,
   pintarTarjeta,
   abrirHoja,
   pintarHistorial,
@@ -1319,12 +1321,16 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
   let datosVista = null; // { nombre, participantes, aviso }
   const redibujar = (animar) => {
     if (!datosVista) return;
+    // Mi mensaje semanal se lee de este dispositivo (se ve al instante, haya o no red).
+    const participantesPintados = datosVista.participantes.map((p) => (p.id === base.yoId ? conMensajePropio(p, competencia.id) : p));
+    const yoPintado = participantesPintados.find((p) => p.id === base.yoId);
     pintarTarjeta(tarjeta, {
       ...base,
       nombre: datosVista.nombre || base.nombre,
       vista,
       mensajes,
-      participantes: datosVista.participantes,
+      tieneMensaje: Boolean(mensajeVisibleDe(yoPintado)),
+      participantes: participantesPintados,
       estadoCuerpo: "ok",
       mensajeDesactualizado: datosVista.aviso || null,
       animar,
@@ -1332,6 +1338,10 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
   };
   const cb = {
     alHistorial: () => abrirModalHistorial(competencia),
+    alMensaje: () => {
+      const yo = datosVista && datosVista.participantes.map((p) => (p.id === base.yoId ? conMensajePropio(p, competencia.id) : p)).find((p) => p.id === base.yoId);
+      abrirModalMensajeSemanal(competencia, mensajeVisibleDe(yo), () => redibujar(false));
+    },
     alGestionar: () => abrirModalGestionCompetencia(competencia, refrescar, (visibles) => {
       mensajes = visibles;
       redibujar(false);
@@ -1396,6 +1406,8 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
           foto_url: p.foto_url || null,
           color: p.color || null,
           horas: p.horas_semana_actual || 0,
+          mensaje: p.mensaje || "",
+          mensaje_semana: p.mensaje_semana || "",
         })),
       });
       invalidarVistaCompetencias();
@@ -1411,6 +1423,8 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
       foto_url: p.foto_url || null,
       color: p.color || null,
       horas: p.horas_semana_actual || 0,
+      mensaje: p.mensaje || "",
+      mensaje_semana: p.mensaje_semana || "",
     }));
 
     // Foto y color propios: si el Worker tiene otros (o ninguno), se sube lo
@@ -1436,6 +1450,9 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
         sincronizarPerfilPropio(competencia, cambios);
       }
     }
+
+    // Mi mensaje semanal que quedó sin enviar (sin conexión la vez anterior) se reintenta ahora.
+    enviarMensajePendiente(competencia);
 
     const nombreFinal = datos.nombre || competencia.nombre;
     guardarCacheMarcador(competencia.id, { nombre: nombreFinal, estado: estadoRemoto, participantes });
@@ -1507,7 +1524,7 @@ function obtenerAccionesEncabezadoCompetencias(refrescar) {
  * encabezado se reconstruye siempre, aunque la vista de Competencias se reutilice.
  */
 function armarEasterEggSimulacion(entrada, refrescar) {
-  const titulo = document.querySelector("#seccion-tiempo-estudio .app-encabezado h2");
+  const titulo = document.querySelector("#seccion-tiempo-estudio .app-encabezado .texto-encabezado-seccion");
   if (!titulo || !entrada || !entrada.ancla) return;
   activarLongPress(titulo, DURACION_LONGPRESS_SIMULACION_MS, () => {
     if (entrada.simulacionRevelada || !entrada.ancla.parentNode) return;

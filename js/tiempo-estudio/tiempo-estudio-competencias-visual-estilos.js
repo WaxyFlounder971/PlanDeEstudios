@@ -524,7 +524,7 @@ const CSS_COMPETENCIAS_VISUAL = `
      propia línea (centrado) en vez de pisar el nombre o el tiempo. */
   .cp-podium.cp-con-msg{padding-top:4px}
   .cp-comp .cp-podium.cp-con-msg{padding-top:6px}
-  .cp-bub{--cp-bub-c:#8f83ff;position:relative;z-index:3;box-sizing:border-box;max-width:100%;min-width:0;padding:6px 9px;margin-bottom:11px;
+  .cp-bub{--cp-bub-def:#8f83ff;--cp-bub-c:var(--cp-uc,var(--cp-bub-def));position:relative;z-index:3;box-sizing:border-box;max-width:100%;min-width:0;padding:6px 9px;margin-bottom:11px;
     border-radius:13px;text-align:center;font-size:11.5px;font-weight:700;line-height:1.25;white-space:normal;overflow-wrap:anywhere;
     color:color-mix(in srgb,var(--cp-bub-c) 62%,var(--cp-text));
     background:color-mix(in srgb,var(--cp-bub-c) 16%,var(--bg-header-solido,#0a0920));
@@ -533,9 +533,9 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-bub::after{content:"";position:absolute;left:50%;bottom:-6px;width:9px;height:9px;transform:translateX(-50%) rotate(45deg);
     background:color-mix(in srgb,var(--cp-bub-c) 16%,var(--bg-header-solido,#0a0920));
     border-right:1px solid color-mix(in srgb,var(--cp-bub-c) 55%,transparent);border-bottom:1px solid color-mix(in srgb,var(--cp-bub-c) 55%,transparent)}
-  .cp-bub-1{--cp-bub-c:#8f83ff;font-size:12.5px;padding:7px 11px;margin-bottom:calc(24px*var(--cp-u))}
-  .cp-bub-2{--cp-bub-c:#3ddc84}
-  .cp-bub-3{--cp-bub-c:#2ec4e6}
+  .cp-bub-1{--cp-bub-def:#ffc94d;font-size:12.5px;padding:7px 11px;margin-bottom:calc(24px*var(--cp-u))}
+  .cp-bub-2{--cp-bub-def:#c9d1dd}
+  .cp-bub-3{--cp-bub-def:#d9985f}
   .cp-comp.cp-anim .cp-bub{animation:cp-fadeUp .45s ease var(--cp-bd2,0s) both}
   /* las chispas del 1.º son decoración: nunca por encima de un globo */
   .cp-pc .cp-sp{z-index:0;pointer-events:none}
@@ -543,7 +543,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-who-line{display:flex;flex-wrap:wrap;align-items:center;column-gap:8px;min-width:0}
   .cp-who-line .cp-name{flex:0 1 auto;min-width:0;max-width:100%}
   .cp-msg-fila{flex:1 1 104px;min-width:0;text-align:center;font-size:12px;font-weight:700;line-height:1.25;white-space:normal;overflow-wrap:anywhere;
-    color:color-mix(in srgb,var(--cp-mc,#b3a6ff) 72%,var(--cp-text))}
+    color:color-mix(in srgb,var(--cp-uc,var(--cp-mc-def,#b3a6ff)) 72%,var(--cp-text))}
   .cp-comp.cp-anim .cp-msg-fila{animation:cp-fadeUp .4s ease var(--cp-d,0s) both}
 
   /* interruptor de la hoja Gestionar ("Mensajes del podio") */
@@ -552,6 +552,12 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-opt[aria-checked="true"] .cp-opt-sw{background:var(--cp-accent)}
   .cp-opt[aria-checked="true"] .cp-opt-sw::after{transform:translateX(16px)}
 
+  /* Botón del globo con "+" (junto al trofeo): color de la paleta que usa la persona (--cp-accent). */
+  .cp-ico.cp-msgbtn{color:var(--cp-accent)}
+  .cp-ico.cp-msgbtn.cp-on{background:color-mix(in srgb,var(--cp-accent) 18%,transparent)}
+  .cp-ico.cp-msgbtn.cp-on svg{fill:color-mix(in srgb,var(--cp-accent) 28%,transparent)}
+
+  .cp-c-head>div:first-child{min-width:0;flex:1 1 auto;overflow-wrap:anywhere}
 `;
 
 export { CSS_COMPETENCIAS_VISUAL };
