@@ -248,11 +248,92 @@ function fechaSemana(ms) {
   return new Date(ms).toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" });
 }
 
+/* ===================== Mensajes del podio ===================== */
+
+/* 2026-11-04 — Los mensajes NO son predefinidos: aparecen SI Y SOLO SI la persona escribió uno
+   (botón del globo con "+", junto al trofeo de cada competencia). Es un mensaje SEMANAL: queda
+   atado a la semana en que se escribió (lunes de esa semana, "AAAA-MM-DD") y desaparece solo
+   cuando empieza otra. Se muestra como globo sobre el top 3 y como línea centrada a la altura
+   del nombre del 4.º en adelante, con el color de paleta de cada persona (el mismo del aro de la
+   foto: `--cp-uc`). Largo máximo acotado + el CSS hace saltar de línea, así nada se rompe ni se oculta. */
+const LIMITE_MENSAJE_CARACTERES = 50;
+// Colores de respaldo (cuando la persona no tiene color de paleta propio): los mismos del podio.
+const COLORES_MENSAJE_TOP = ["#ffc94d", "#c9d1dd", "#d9985f"]; // oro, plata, bronce
+const COLOR_MENSAJE_FILA = "#b3a6ff";
+
+function limitarMensaje(texto) {
+  const letras = Array.from(String(texto || "").replace(/\s+/g, " ").trim());
+  return letras.length > LIMITE_MENSAJE_CARACTERES ? letras.slice(0, LIMITE_MENSAJE_CARACTERES - 1).join("").trimEnd() + "…" : letras.join("");
+}
+
+/** Lunes de la semana actual en "AAAA-MM-DD" (hora local). Igual para todos, sin depender de ajustes. */
+function semanaISOActual() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Texto del mensaje de `p` si lo tiene Y es de esta semana; si no, "" (no se pinta nada). */
+function mensajeVisibleDe(p) {
+  if (!p || !p.mensaje || p.mensaje_semana !== semanaISOActual()) return "";
+  return limitarMensaje(p.mensaje);
+}
+
+const CLAVE_MI_MENSAJE_PREFIJO = "te_comp_mi_mensaje_";
+
+/** Mi mensaje de ESTA competencia en este dispositivo: { texto, semana, enviado } o null. */
+function leerMiMensaje(competenciaId) {
+  try {
+    const r = JSON.parse(localStorage.getItem(CLAVE_MI_MENSAJE_PREFIJO + competenciaId) || "null");
+    return r && typeof r === "object" ? r : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function guardarMiMensaje(competenciaId, registro) {
+  try {
+    localStorage.setItem(CLAVE_MI_MENSAJE_PREFIJO + competenciaId, JSON.stringify(registro));
+  } catch (e) {
+    // no crítico: el mensaje igual viaja al servidor
+  }
+}
+
+/** Mi propio participante con mi mensaje local por encima del que vino del servidor (si es de esta semana). */
+function conMensajePropio(p, competenciaId) {
+  const local = leerMiMensaje(competenciaId);
+  if (local && local.semana === semanaISOActual()) return { ...p, mensaje: local.texto, mensaje_semana: local.semana };
+  return p;
+}
+
+const CLAVE_MENSAJES_PREFIJO = "te_comp_mensajes_";
+
+/** ¿Se muestran los mensajes en esta competencia? (por defecto sí). Es una
+ * preferencia de ESTE dispositivo, igual que la vista podio/filas. */
+function leerMensajesVisibles(competenciaId) {
+  try {
+    return localStorage.getItem(CLAVE_MENSAJES_PREFIJO + competenciaId) !== "0";
+  } catch (e) {
+    return true;
+  }
+}
+
+function guardarMensajesVisibles(competenciaId, visibles) {
+  try {
+    if (visibles) localStorage.removeItem(CLAVE_MENSAJES_PREFIJO + competenciaId);
+    else localStorage.setItem(CLAVE_MENSAJES_PREFIJO + competenciaId, "0");
+  } catch (e) {
+    // no crítico: solo se pierde la preferencia entre visitas
+  }
+}
+
 /* ===================== Iconos ===================== */
 
 const ICONO = {
   link: '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>',
   trophy: '<svg viewBox="0 0 24 24"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>',
+  bubblePlus: '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.4 8.4 0 0 1-12.2 7.5L3 21l1.9-5.6A8.4 8.4 0 1 1 21 11.5z"/><path d="M12 8v7M8.5 11.5h7"/></svg>',
   gear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33 1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82 1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
   chev: '<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>',
   right: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
@@ -314,7 +395,7 @@ function ordenarPorHoras(participantes) {
     .map((x) => x.p);
 }
 
-function filaHTML(p, i, ordenados, d, yoId) {
+function filaHTML(p, i, ordenados, d, yoId, conMensajes, incluirTop) {
   const rank = i + 1;
   const lider = i === 0;
   const yo = p.id === yoId;
@@ -323,10 +404,17 @@ function filaHTML(p, i, ordenados, d, yoId) {
   const tonos = tonosDeColor(p.color);
   const cls = ["cp-row", lider ? "cp-lead" : "", yo ? "cp-me-halo" : "", !p.horas ? "cp-zero" : "", tonos ? "cp-tinted" : ""].filter(Boolean).join(" ");
   const rk = `<span class="cp-rk ${rank <= 3 ? "cp-r" + rank : ""}">${rank}</span>`;
+  // Mensaje centrado a la altura del nombre (solo puestos 4+ en la vista podio: el top 3 usa globos).
+  // Solo si la persona escribió un mensaje esta semana. En la vista de lista (sin globos) también los
+  // 3 primeros lo llevan en línea; en la vista podio solo del 4.º en adelante (el top 3 usa globos).
+  const textoMsg = conMensajes && (rank >= 4 || incluirTop) ? mensajeVisibleDe(p) : "";
+  const msgFila = textoMsg
+    ? `<span class="cp-msg-fila" style="--cp-mc-def:${rank <= 3 ? COLORES_MENSAJE_TOP[rank - 1] : COLOR_MENSAJE_FILA}">${esc(textoMsg)}</span>`
+    : "";
   return `<div class="${cls}" style="${varsDeColor(tonos)}--cp-d:${seg(d)};--cp-bd:${seg(d + 0.25)};--cp-dc:${seg(d + 0.6)}">
     ${rk}
     <span class="cp-avw">${lider ? CORONA : ""}${avatarHTML(p, lider ? 48 : 40)}</span>
-    <div class="cp-who"><div class="cp-name">${esc(p.apodo)}</div>
+    <div class="cp-who"><div class="cp-who-line"><div class="cp-name">${esc(p.apodo)}</div>${msgFila}</div>
       <div class="cp-sub"><div class="cp-bar"><i style="--cp-w:${pct}%"></i></div></div></div>
     <div class="cp-time">${fmtHoras(p.horas)}</div>
   </div>`;
@@ -336,7 +424,7 @@ function filaHTML(p, i, ordenados, d, yoId) {
  * Podio de 3. `ordenados` ya viene ordenado. `modo`: "card" (tarjeta, con
  * animación escalonada según T y la marca de "vos") o "modal" (historial).
  */
-function podioHTML(ordenados, modo, T, yoId) {
+function podioHTML(ordenados, modo, T, yoId, conMensajes) {
   const card = modo === "card";
   const t = card
     ? { ped: [T + 0.44, T + 0.22, T], jump: [T + 1.05, T + 0.67, T + 0.45] }
@@ -357,8 +445,13 @@ function podioHTML(ordenados, modo, T, yoId) {
       i === 0
         ? `<i class="cp-sp" style="left:-30px;top:6px;--cp-d:.2s"></i><i class="cp-sp" style="right:-28px;top:26px;--cp-d:1s"></i><i class="cp-sp" style="left:-16px;top:52px;--cp-d:1.7s;width:6px;height:6px"></i><i class="cp-sp" style="right:-12px;top:-4px;--cp-d:2.2s;width:6px;height:6px"></i>`
         : "";
+    // Globo de texto (solo en la tarjeta, no en el historial): va DENTRO de la columna, en el flujo,
+    // encima de la corona/avatar — así nunca tapa ni es tapado por la columna vecina ni por el título.
+    const textoMsg = card && conMensajes ? mensajeVisibleDe(p) : "";
+    const globo = textoMsg ? `<div class="cp-bub cp-bub-${i + 1}" style="--cp-bd2:${seg(dn + 0.1)}"><span>${esc(textoMsg)}</span></div>` : "";
     return `<div class="cp-pc ${cls}${yo ? " cp-me-halo" : ""}${tonos ? " cp-tinted" : ""}" style="${vars}">
       ${brillo}
+      ${globo}
       <span class="cp-avw">${i === 0 ? CORONA : ""}${chispas}${avatarHTML(p)}</span>
       <div class="cp-pn">${esc(p.apodo)}</div>
       <div class="cp-pt">${fmtHoras(p.horas)}</div>
@@ -366,12 +459,12 @@ function podioHTML(ordenados, modo, T, yoId) {
     </div>`;
   };
   const k = card ? `--cp-k1:${seg(t.jump[0] + 0.58)};--cp-k2:${seg(t.jump[0] + 0.93)}` : "";
-  return `<div class="cp-podium ${card ? "cp-card" : ""}" style="${k}">${slot(1, "cp-p2")}${slot(0, "cp-p1")}${slot(2, "cp-p3")}</div>`;
+  return `<div class="cp-podium ${card ? "cp-card" : ""}${card && conMensajes && ordenados.slice(0, 3).some((q) => mensajeVisibleDe(q)) ? " cp-con-msg" : ""}" style="${k}">${slot(1, "cp-p2")}${slot(0, "cp-p1")}${slot(2, "cp-p3")}</div>`;
 }
 
 /* ===================== Tarjeta de competencia ===================== */
 
-function cuerpoTarjetaHTML(participantes, vista, yoId) {
+function cuerpoTarjetaHTML(participantes, vista, yoId, conMensajes) {
   const ord = ordenarPorHoras(participantes);
   const n = ord.length;
   if (vista === "podio") {
@@ -381,12 +474,12 @@ function cuerpoTarjetaHTML(participantes, vista, yoId) {
       .slice(3)
       .map((p, k) => {
         const rank = k + 4; // los de abajo entran primero
-        return filaHTML(p, rank - 1, ord, 0.25 + (n - rank) * 0.1, yoId);
+        return filaHTML(p, rank - 1, ord, 0.25 + (n - rank) * 0.1, yoId, conMensajes);
       })
       .join("");
-    return podioHTML(ord, "card", T, yoId) + (resto ? `<div class="cp-list">${filas}</div>` : "");
+    return podioHTML(ord, "card", T, yoId, conMensajes) + (resto ? `<div class="cp-list">${filas}</div>` : "");
   }
-  return `<div class="cp-list">${ord.map((p, i) => filaHTML(p, i, ord, 0.25 + (n - (i + 1)) * 0.16, yoId)).join("")}</div>`;
+  return `<div class="cp-list">${ord.map((p, i) => filaHTML(p, i, ord, 0.25 + (n - (i + 1)) * 0.16, yoId, conMensajes, true)).join("")}</div>`;
 }
 
 /**
@@ -398,7 +491,7 @@ function cuerpoTarjetaHTML(participantes, vista, yoId) {
  *   estadoCuerpo: "cargando" | "error" | "ok",
  *   vista: "podio" | "filas", animar: boolean, yoId
  * }
- * cb = { alHistorial(), alGestionar(), alCambiarVista(vista) }
+ * cb = { alHistorial(), alMensaje(), alGestionar(), alCambiarVista(vista) }
  */
 function pintarTarjeta(tarjeta, o, cb) {
   asegurarEstilosCompetenciasVisual();
@@ -409,7 +502,7 @@ function pintarTarjeta(tarjeta, o, cb) {
   if (o.estadoCuerpo === "cargando") cuerpo = `<p class="cp-msg">Cargando marcador…</p>`;
   else if (o.estadoCuerpo === "error") cuerpo = `<p class="cp-msg">No se pudo cargar el marcador. Revisá tu conexión.</p>`;
   else if (!o.participantes || o.participantes.length === 0) cuerpo = `<p class="cp-msg">Todavía no hay nadie en el marcador.</p>`;
-  else cuerpo = cuerpoTarjetaHTML(o.participantes, o.vista, o.yoId);
+  else cuerpo = cuerpoTarjetaHTML(o.participantes, o.vista, o.yoId, o.mensajes !== false);
   if (o.mensajeDesactualizado) cuerpo = `<p class="cp-msg cp-stale" role="status">${esc(o.mensajeDesactualizado)}</p>${cuerpo}`;
 
   const coronaTitulo = o.esCreador
@@ -424,6 +517,7 @@ function pintarTarjeta(tarjeta, o, cb) {
       </div>
       <div class="cp-c-icons">
         <button type="button" class="cp-ico cp-gold" data-cp="historial" aria-label="Historial" title="Historial">${ICONO.trophy}</button>
+        <button type="button" class="cp-ico cp-msgbtn${o.tieneMensaje ? " cp-on" : ""}" data-cp="mensaje" aria-label="${esc(traducirTextoInterfaz("Mensaje semanal"))}" title="${esc(traducirTextoInterfaz("Mensaje semanal"))}">${ICONO.bubblePlus}</button>
         <button type="button" class="cp-ico" data-cp="gestionar" aria-label="Gestionar" title="Gestionar">${ICONO.gear}</button>
       </div>
       <div class="cp-vt" role="group" aria-label="Vista de la competencia">
@@ -436,6 +530,7 @@ function pintarTarjeta(tarjeta, o, cb) {
   activarFallbackAvatares(tarjeta);
   ajustarContrasteCpScope(tarjeta);
   tarjeta.querySelector('[data-cp="historial"]').addEventListener("click", () => cb.alHistorial && cb.alHistorial());
+  tarjeta.querySelector('[data-cp="mensaje"]').addEventListener("click", () => cb.alMensaje && cb.alMensaje());
   tarjeta.querySelector('[data-cp="gestionar"]').addEventListener("click", () => cb.alGestionar && cb.alGestionar());
   tarjeta.querySelectorAll(".cp-vt button").forEach((b) =>
     b.addEventListener("click", () => {
@@ -564,15 +659,29 @@ function pintarHistorial(hoja, podios, yoId, abrirEn) {
     if (abrir) {
       wk.classList.add("cp-open");
       cab.setAttribute("aria-expanded", "true");
+      // La semana abierta empuja a las de abajo (el cuerpo del modal scrollea, sin barra visible) y,
+      // una vez armado el podio, se acomoda para que se vea completo.
+      setTimeout(() => mostrarSemanaCompleta(hoja.cuerpo, wk), 260);
     }
   });
 
-  if (abrirSem !== podios[0].semana_cerrada_en) {
-    setTimeout(() => {
-      const el = hoja.cuerpo.querySelector(`.cp-wk[data-semana="${CSS.escape(String(abrirSem))}"]`);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }, 350);
-  }
+  setTimeout(() => {
+    const el = hoja.cuerpo.querySelector(`.cp-wk[data-semana="${CSS.escape(String(abrirSem))}"]`);
+    if (el) mostrarSemanaCompleta(hoja.cuerpo, el);
+  }, 350);
+}
+
+/** Desplaza el cuerpo scrolleable lo mínimo para que `wk` quede entero a la vista
+ * (si es más alta que el cuerpo, alinea su cabecera arriba). */
+function mostrarSemanaCompleta(cuerpo, wk) {
+  if (!cuerpo || !wk || !wk.isConnected || !wk.classList.contains("cp-open")) return;
+  const c = cuerpo.getBoundingClientRect();
+  const w = wk.getBoundingClientRect();
+  let delta = 0;
+  if (w.height >= c.height) delta = w.top - c.top - 4;
+  else if (w.bottom > c.bottom) delta = w.bottom - c.bottom + 8;
+  else if (w.top < c.top) delta = w.top - c.top - 4;
+  if (Math.abs(delta) > 1) cuerpo.scrollBy({ top: delta, behavior: "smooth" });
 }
 
 /* ===================== Aviso de posición (banner) ===================== */
@@ -678,6 +787,14 @@ export {
   leerColorAcentoActual,
   leerVistaPreferida,
   guardarVistaPreferida,
+  leerMensajesVisibles,
+  guardarMensajesVisibles,
+  LIMITE_MENSAJE_CARACTERES,
+  semanaISOActual,
+  mensajeVisibleDe,
+  leerMiMensaje,
+  guardarMiMensaje,
+  conMensajePropio,
   avatarHTML,
   activarFallbackAvatares,
   asegurarEstilosCompetenciasVisual,

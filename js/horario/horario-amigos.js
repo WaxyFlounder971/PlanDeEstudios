@@ -538,18 +538,23 @@ function inicializarPanelAmigos() {
     btnIrEnlaces.addEventListener("click", () => {
       cerrarPanelAmigos();
       if (typeof window.mostrarSeccion === "function") window.mostrarSeccion("configuracion");
-      // Espera a que Configuración vuelva a ser visible antes de abrir el
-      // acordeón; después del reflow desplaza a su encabezado (no al centro
-      // del cuerpo expandido, que puede ser muy largo).
+      // 2026-11-04: antes solo se abría la subsección "Horario compartido", pero esa vive DENTRO de la
+      // sección "Horario" de Ajustes: si la de afuera estaba cerrada, la de adentro seguía oculta
+      // (display:none) y el desplazamiento no llegaba a ningún lado — por eso solo funcionaba con
+      // Horario abierto de antemano. Ahora se abre PRIMERO la sección Horario (la de afuera), luego la
+      // subsección, y recién después —ya con el contenido visible— se desplaza hasta ella.
+      // Se abren con classList (no con .click()) a propósito: el click es un toggle y cerraría una
+      // sección que ya estuviera abierta.
       requestAnimationFrame(() => requestAnimationFrame(() => {
         const seccion = document.getElementById("ajuste-seccion-horario-enlaces");
-        const cabecera = seccion?.querySelector(".ajuste-seccion-cabecera");
-        if (seccion?.classList.contains("colapsada")) cabecera?.click();
-        // Respaldo si el delegado de Ajustes todavía no recibió el click.
-        if (seccion?.classList.contains("colapsada")) seccion.classList.remove("colapsada");
+        if (!seccion) return;
+        const seccionHorario = seccion.parentElement?.closest(".ajuste-seccion");
+        if (seccionHorario) seccionHorario.classList.remove("colapsada");
+        seccion.classList.remove("colapsada");
         renderizarListaEnlacesCompartidos();
+        // Espera al reflow de las dos secciones recién abiertas antes de medir el destino.
         requestAnimationFrame(() => requestAnimationFrame(() => {
-          setTimeout(() => desplazarYResaltarElemento("#ajuste-seccion-horario-enlaces .ajuste-seccion-cabecera"), 80);
+          setTimeout(() => desplazarYResaltarElemento("#ajuste-seccion-horario-enlaces .ajuste-seccion-cabecera"), 120);
         }));
       }));
     });

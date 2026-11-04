@@ -41,7 +41,7 @@ import {
   construirLinkInvitacion,
 } from "./tiempo-estudio-competencias.js";
 // 2026-09-21 — Rediseño: el menú Gestionar usa la hoja del módulo visual.
-import { abrirHoja, esc, ICONO } from "./tiempo-estudio-competencias-visual.js";
+import { abrirHoja, esc, ICONO, leerMensajesVisibles, guardarMensajesVisibles, LIMITE_MENSAJE_CARACTERES, semanaISOActual, leerMiMensaje, guardarMiMensaje } from "./tiempo-estudio-competencias-visual.js";
 import { abrirAjustesAudioCompetencia } from "./tiempo-estudio-audio-competencias.js";
 
 /* ===================== Menú "Gestionar" (punto 4.1) ===================== */
@@ -94,7 +94,7 @@ function opcionesGestion(competencia) {
  * Una competencia finalizada no acepta gente nueva: en vez del enlace se
  * explica por qué (mismo criterio que tenía el botón "Enlace").
  */
-function abrirModalGestionCompetencia(competencia, refrescar) {
+function abrirModalGestionCompetencia(competencia, refrescar, alCambiarMensajes) {
   asegurarEstilosGestion();
   const finalizada = competencia.estado === "finalizada";
 
@@ -125,6 +125,7 @@ function abrirModalGestionCompetencia(competencia, refrescar) {
       <div class="cp-grp">Invitar</div>
       ${bloqueInvitar}
       <div class="cp-grp">Opciones</div>
+      <button type="button" class="cp-opt" data-cp="mensajes" role="switch" aria-checked="${leerMensajesVisibles(competencia.id)}"><span class="cp-opt-emoji">💬</span><span>${esc(traducirTextoInterfaz("Mensajes del podio", "Podium messages"))}</span><span class="cp-opt-sw" aria-hidden="true"></span></button>
       ${opciones
         .map(
           (o) =>
@@ -142,6 +143,18 @@ function abrirModalGestionCompetencia(competencia, refrescar) {
       setTimeout(() => {
         if (btnCopiar.isConnected) btnCopiar.textContent = "Copiar";
       }, 1600);
+    });
+  }
+
+  // Mostrar/ocultar los mensajes del podio: se guarda en este dispositivo y la tarjeta se
+  // redibuja al instante con los datos que ya tiene (sin volver a pedir nada a la red).
+  const btnMensajes = hoja.cuerpo.querySelector('[data-cp="mensajes"]');
+  if (btnMensajes) {
+    btnMensajes.addEventListener("click", () => {
+      const visibles = !leerMensajesVisibles(competencia.id);
+      guardarMensajesVisibles(competencia.id, visibles);
+      btnMensajes.setAttribute("aria-checked", String(visibles));
+      if (typeof alCambiarMensajes === "function") alCambiarMensajes(visibles);
     });
   }
 
@@ -182,6 +195,76 @@ function ejecutarOpcionGestion(id, competencia, refrescar) {
     default:
       break;
   }
+}
+
+/* ===================== Mensaje semanal (globo de texto del podio) ===================== */
+
+/**
+ * Manda mi mensaje semanal al marcador (mismo endpoint de perfil que foto y color).
+ * `mensaje: ""` lo borra. Si no hay conexión queda como pendiente y se reintenta la próxima vez
+ * que se cargue el marcador (ver cargarMarcadorEnTarjeta). Mientras tanto SIEMPRE se ve el propio
+ * (se lee de este dispositivo), así que guardar nunca "no hace nada".
+ */
+async function enviarMensajePendiente(competencia) {
+  const registro = leerMiMensaje(competencia.id);
+  if (!registro || registro.enviado) return;
+  try {
+    const respuesta = await fetchConTimeout(
+      `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/participantes/${encodeURIComponent(competencia.participante_id)}/perfil`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identificador_usuario: estado.datos.perfil.correo, mensaje: registro.texto, mensaje_semana: registro.semana }),
+      }
+    );
+    if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
+    const actual = leerMiMensaje(competencia.id);
+    // Solo se marca como enviado si mientras tanto no lo cambiaron otra vez.
+    if (actual && actual.texto === registro.texto && actual.semana === registro.semana) guardarMiMensaje(competencia.id, { ...actual, enviado: true });
+  } catch (e) {
+    console.warn("[competencias] No se pudo enviar el mensaje semanal — se reintenta la próxima vez:", e);
+  }
+}
+
+/** Ventana "Agregar mensaje semanal": cuadro de texto + Borrar / Guardar (mismo ancho). */
+function abrirModalMensajeSemanal(competencia, textoInicial, alCambiar) {
+  const { overlay, caja, cerrar } = construirCajaModal();
+  caja.innerHTML = `
+    <div>
+      <h2 style="margin:0;">${esc(traducirTextoInterfaz("Agregar mensaje semanal"))}</h2>
+      <p class="muted" style="margin:4px 0 0; font-size:0.85rem;">${esc(traducirTextoInterfaz("Lo ven todos en la competencia durante esta semana."))}</p>
+    </div>
+    <div>
+      <textarea id="comp-mensaje-texto" class="form-input" rows="3" maxlength="${LIMITE_MENSAJE_CARACTERES}" autocomplete="off" placeholder="${esc(traducirTextoInterfaz("Escribí tu mensaje…"))}" style="resize:none; width:100%; box-sizing:border-box;"></textarea>
+      <div class="muted" id="comp-mensaje-contador" style="text-align:right; font-size:0.75rem; margin-top:4px;"></div>
+    </div>
+    <div class="row" style="gap:10px;">
+      <button type="button" class="btn btn-secondary" id="comp-mensaje-borrar" style="flex:1 1 0; min-width:0;">${esc(traducirTextoInterfaz("Borrar"))}</button>
+      <button type="button" class="btn btn-primary" id="comp-mensaje-guardar" style="flex:1 1 0; min-width:0;">${esc(traducirTextoInterfaz("Guardar"))}</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  const campo = caja.querySelector("#comp-mensaje-texto");
+  const contador = caja.querySelector("#comp-mensaje-contador");
+  campo.value = textoInicial || "";
+  const actualizarContador = () => { contador.textContent = `${Array.from(campo.value).length}/${LIMITE_MENSAJE_CARACTERES}`; };
+  campo.addEventListener("input", actualizarContador);
+  actualizarContador();
+  campo.focus();
+
+  const aplicar = (texto, aviso) => {
+    guardarMiMensaje(competencia.id, { texto, semana: semanaISOActual(), enviado: false });
+    cerrar();
+    mostrarToast(traducirTextoInterfaz(aviso));
+    if (typeof alCambiar === "function") alCambiar();
+    enviarMensajePendiente(competencia);
+  };
+  caja.querySelector("#comp-mensaje-borrar").addEventListener("click", () => aplicar("", "Mensaje borrado"));
+  caja.querySelector("#comp-mensaje-guardar").addEventListener("click", () => {
+    const texto = Array.from(campo.value.replace(/\s+/g, " ").trim()).slice(0, LIMITE_MENSAJE_CARACTERES).join("");
+    if (!texto) aplicar("", "Mensaje borrado");
+    else aplicar(texto, "Mensaje guardado");
+  });
 }
 
 /* ===================== Renombrar competencia ===================== */
@@ -746,4 +829,4 @@ function asegurarEstilosGestion() {
   document.head.appendChild(estilo);
 }
 
-export { abrirModalGestionCompetencia, construirRegistroCompetencias };
+export { abrirModalGestionCompetencia, construirRegistroCompetencias, abrirModalMensajeSemanal, enviarMensajePendiente };
