@@ -6508,3 +6508,116 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
 }
 .app-encabezado .te-racha-chip .te-llama--chip { height: 24px; flex: none; align-self: center; }
 .app-encabezado .te-racha-chip .te-racha-num { align-items: center; line-height: 1; height: 100%; }
+
+/* =========================================================================
+   2026-11-04 (parche 5) — Encabezado centrado, filtro Estado extendido, Configuración con usuario,
+   píldora de horas y botones de símbolo
+   ========================================================================= */
+/* Encabezado: el botón del semestre (arriba) y la fila de la fecha (abajo) miden lo mismo, así
+   "Semana N" queda centrada verticalmente en el panel y el espacio de arriba es igual al de abajo.
+   Un solo valor (--enc-alto-semestre) gobierna ambos. */
+:root { --enc-alto-semestre: 22px; }
+.app-encabezado__semestre { height: var(--enc-alto-semestre); padding-block: 0; }
+.app-encabezado__rango { box-sizing: border-box; min-height: var(--enc-alto-semestre); align-items: center; }
+/* Competencias: mismo botón de semestre, sin función. */
+.app-encabezado__semestre--inerte { cursor: default; pointer-events: none; }
+
+/* Botón de solo símbolo en color de acento (Asistente: nueva conversación). */
+.app-encabezado__icono--acento { color: var(--accent-1); }
+.app-encabezado__icono--acento:hover { background: color-mix(in srgb, var(--accent-1) 16%, transparent); }
+.app-encabezado__icono svg { display: block; flex: none; }
+
+/* Horario: descargar como botón redondo con SVG, del mismo tamaño que el "+". */
+.app-encabezado__descargar { color: var(--text-secondary); }
+.app-encabezado__descargar svg { display: block; flex: none; }
+
+/* Agenda — filtro "Estado" extendido (PRUEBA). Se activa con FILTRO_ESTADO_EXTENDIDO en agenda.js.
+   Los filtros no se mueven: el panel sale a la derecha de "Estado", fuera del flujo. Si no cabe,
+   JS añade --en-flujo y la barra se reacomoda como antes. Para volver al menú de antes basta
+   poner esa constante en false (estas reglas dejan de aplicar). */
+.agenda-filtro-estados--ext .agenda-filtro-estado-menu { position: relative; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover {
+  position: absolute; left: calc(100% + 6px); right: auto; top: 50%; z-index: 5;
+  display: flex; flex-direction: row; align-items: center; gap: 6px;
+  min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; white-space: nowrap;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translate(-10px, -50%);
+  transition: opacity .2s ease, transform .2s ease, visibility 0s linear .2s;
+}
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover.abierto {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: translate(0, -50%);
+  transition-delay: 0s;
+}
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover--sin-anim { transition: none; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover .agenda-filtro-estado-btn { min-height: 24px; justify-content: center; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover--en-flujo { position: static; transform: none; margin-left: 2px; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover--en-flujo:not(.abierto) { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .agenda-filtro-estados--ext .agenda-filtro-estado-popover { transition: none; }
+}
+
+/* Tiempo › Estadísticas: pequeño espacio entre tarjetas. */
+.te-estadisticas-lista { display: flex; flex-direction: column; gap: 12px; }
+
+/* Competencias: aviso de horas por enviar. Píldora flotante, fuera del flujo (no mueve nada). */
+.te-horas-pendientes {
+  position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 400;
+  display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px;
+  border: 1px solid var(--border-glass); border-radius: 999px;
+  background: var(--bg-card, var(--bg-panel)); box-shadow: var(--shadow-float, 0 8px 20px rgba(0, 0, 0, 0.4));
+  font-size: 0.82rem; color: var(--text-secondary); white-space: nowrap; max-width: calc(100vw - 24px);
+  opacity: 0; visibility: hidden; pointer-events: none; transform: translate(-50%, 8px);
+  transition: opacity .2s ease, transform .2s ease, visibility 0s linear .2s;
+}
+.te-horas-pendientes--visible {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: translate(-50%, 0); transition-delay: 0s;
+}
+.te-horas-pendientes__btn {
+  border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; font-weight: 700;
+  color: var(--accent-1); background: color-mix(in srgb, var(--accent-1) 16%, transparent);
+}
+.te-horas-pendientes__btn:disabled { opacity: .6; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .te-horas-pendientes { transition: none; } }
+
+/* Configuración — tarjeta de usuario (siempre abierta, sin título). */
+.ajuste-usuario {
+  display: flex; align-items: center; gap: 18px; padding: 18px 20px;
+  background-image: linear-gradient(135deg, color-mix(in srgb, var(--accent-1) 14%, transparent), transparent 62%);
+}
+.ajuste-usuario-foto-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
+.ajuste-usuario-avatar {
+  position: relative; display: block; width: 92px; height: 92px; padding: 3px; border: 0; border-radius: 50%; cursor: pointer;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent-1) 35%, transparent);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+.ajuste-usuario-avatar:hover { transform: scale(1.03); }
+.ajuste-usuario-avatar:active { transform: scale(0.97); }
+.ajuste-usuario-avatar:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+.ajuste-usuario-avatar > img,
+.ajuste-usuario-inicial {
+  display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; box-sizing: border-box;
+  border: 3px solid var(--bg-card, var(--bg-panel));
+}
+.ajuste-usuario-inicial {
+  display: grid; place-items: center; font-size: 1.9rem; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+}
+.ajuste-usuario-inicial.oculto, .ajuste-usuario-avatar > img.oculto { display: none; }
+.ajuste-usuario-camara {
+  position: absolute; right: -2px; bottom: -2px; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: var(--accent-1);
+  border: 2px solid var(--bg-card, var(--bg-panel)); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.ajuste-usuario-quitar { font-size: 0.75rem; padding: 2px 8px; }
+.ajuste-usuario-datos { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.ajuste-usuario-correo { margin: 0; font-size: 0.8rem; overflow-wrap: anywhere; }
+.ajuste-usuario-correo:empty { display: none; }
+@media (max-width: 480px) {
+  .ajuste-usuario { flex-direction: column; text-align: center; padding: 18px 16px; }
+  .ajuste-usuario-datos { width: 100%; }
+}
+
+/* Onboarding: "Cambiar foto" bajo el avatar de bienvenida. */
+.onb-bienvenida-cambiar-foto { display: block; margin: 2px auto 10px; font-size: 0.85rem; }
