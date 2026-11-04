@@ -222,15 +222,16 @@ a { color: var(--accent-1); }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
+  width: 38px;
+  height: 38px;
   flex-shrink: 0;
   border: none;
   border-radius: var(--radius-pill);
   background: none;
   box-shadow: none;
   color: var(--text-secondary);
-  font-size: 1.25rem;
+  /* 2026-11-04: el glifo ya no es el engranaje sino los 2 puntos verticales (⋮), mismo tamaño en toda la app */
+  font-size: 1.7rem;
   line-height: 1;
   cursor: pointer;
   transition: background var(--transition-fast), transform var(--transition-fast);
@@ -538,9 +539,17 @@ a { color: var(--accent-1); }
   width: 100%;
   min-width: 0;
 }
+/* 2026-11-04: el panel que no se ve deja de ocupar alto una vez terminada la animación de la pista
+   (380 ms > 360 ms), así el alto de la sección es el de la vista activa y no el del panel más largo.
+   Mientras se arrastra, las vecinas quedan completas (sin hueco ni corte). Igual que .nav-vista-pane. */
+.te-vista-pane { max-height: 100000px; }
 .te-vista-pane[aria-hidden="true"] {
   pointer-events: none;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0s linear 380ms;
 }
+.te-vistas-viewport.te-vistas-arrastrando .te-vista-pane { max-height: 100000px; overflow: visible; transition: none; }
 .pill-switch-binario .pill-switch-thumb[style*="--te-pill-progreso"] {
   transform: translateX(calc(var(--te-pill-progreso) * 100%));
   transition: none;
@@ -6403,6 +6412,22 @@ summary.desglose-cabecera { cursor: pointer; }
   .app-encabezado__fila { gap: 4px; }
 }
 
-#horario-header { gap: 10px; }
 /* botones redondos de acción (Agenda "+", Notas "+"/⋮, Comunidad "+") con el mismo tamaño dentro del encabezado */
 .app-encabezado .notas-cab-acciones .nt-btn-circulo { width: 38px; height: 38px; min-width: 38px; min-height: 38px; }
+
+/* =========================================================================
+   2026-11-04 — Encabezados: piezas compartidas (referencia = Agenda)
+   ========================================================================= */
+/* Misma altura en la fila del título y en la del rango/fecha para TODAS las secciones, con o sin flechas ‹ › o "Hoy". */
+.app-encabezado__titulofila { align-items: center; justify-content: center; gap: 6px; min-height: calc(1.3rem + 12px); }
+.app-encabezado__rango { align-items: baseline; justify-content: center; gap: 8px; min-height: 1.3rem; font-size: 0.78rem; }
+/* botón "+" redondo del encabezado (el de Agenda) */
+.app-encabezado__mas {
+  width: 38px; height: 38px; padding: 0; font-size: 1.35rem; line-height: 1; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center; flex: none;
+}
+/* Barra de scroll: se reserva SIEMPRE su espacio lateral, haya o no scroll, para que al pasar de una
+   sección con scroll a otra sin scroll nada se reacomode con un saltito. */
+html { overflow-y: scroll; scrollbar-gutter: stable; }
+.app-encabezado__lado { height: 38px; padding: 0 14px; font-size: 0.85rem; white-space: nowrap; }
+.app-encabezado__semestre { box-sizing: border-box; height: 26px; line-height: 1.2; display: inline-flex; align-items: center; justify-content: center; }
