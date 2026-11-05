@@ -115,7 +115,7 @@ async function borrarDatosCuentaApp() {
     "google_calendar_scope_otorgado_v1", "google_ya_autorizado",
     "seccion_activa_v1", "asistente_historial_dispositivo",
     "tema_paleta", "tema_modo", "tema_paleta_personalizada_colores",
-    "modo_diseno_local_v1", "sidebar_colapsada", "idioma_interfaz_v1",
+    "modo_diseno_local_v1", "sidebar_colapsada", "menu_lateral_no_contraer_v1", "idioma_interfaz_v1",
     "horario_amigo_pendiente", "horario_amigos_ocultos_vista", "horario_amigos_snapshots_backup_v1",
     "te_comp_vista", "te_filtro_vista_v1", "te_racha_oferta_dia_v1", "te_racha_perdida_dia_v1", "te_timer_activo_v1",
     "app_academica_dispositivo_id", "app_academica_reloj_logico", "notas_share_pendientes_v1",

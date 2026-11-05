@@ -262,8 +262,8 @@ function cerrarDrawerEnlacesMovil() {
 }
 
 function restaurarEstadoSidebar() {
-  const colapsada = localStorage.getItem(CLAVE_SIDEBAR_COLAPSADA) === "1";
-  document.getElementById("app-sidebar").classList.toggle("colapsada", colapsada);
+  // Ya no se restaura una preferencia guardada: la barra solo se contrae sola (Finanzas abierta o ancho medio),
+  // ver ajustarBarraPrincipal() en finanzas/finanzas-navegacion.js.
 }
 
 /* ===================== Botón "X" propio en todos los modales (v5 #2) ===================== */

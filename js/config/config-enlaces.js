@@ -20,6 +20,7 @@ function renderizarEnlacesRapidos() {
   // (ej. una vista que no cargó el drawer), renderizarListaEnlacesEn ya
   // resuelve el `if (!cont) return;` sin romper nada.
   renderizarListaEnlacesEn("lista-enlaces-drawer-movil", enlaces, false);
+  window.actualizarLayoutLateral?.(); // el riel de Enlaces rápidos depende de que haya enlaces
 
   const btnAgregar = document.getElementById("btn-agregar-enlace");
   btnAgregar.disabled = enlaces.length >= LIMITE_ENLACES_RAPIDOS;
@@ -50,6 +51,8 @@ function renderizarListaEnlacesEn(contenedorId, enlaces, conEditar) {
     enlaceAbrir.target = "_blank";
     enlaceAbrir.rel = "noopener";
     enlaceAbrir.className = "row";
+    enlaceAbrir.title = enlace.nombre; // en el riel de solo iconos es lo único que dice a dónde lleva
+    enlaceAbrir.setAttribute("aria-label", enlace.nombre);
     enlaceAbrir.style.textDecoration = "none";
     enlaceAbrir.style.flex = "1";
     enlaceAbrir.style.minWidth = "0";

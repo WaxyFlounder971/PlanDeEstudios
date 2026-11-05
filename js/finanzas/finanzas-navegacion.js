@@ -21,9 +21,9 @@
    ========================================================================= */
 
 import { traducirTextoInterfaz } from "../core/i18n.js";
+import { fijarFinanzasAbierta } from "../ui/layout-lateral.js";
 
 const NS = "http://www.w3.org/2000/svg";
-const CLAVE_SIDEBAR_COLAPSADA = "sidebar_colapsada"; // la misma que usa ui/componentes.js
 
 const ICONOS = {
   resumen: '<path d="M4 11.5 12 5l8 6.5V19a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M10 20v-5h4v5"/>',
@@ -78,7 +78,6 @@ const T = (texto) => traducirTextoInterfaz(texto);
 
 let config = null; // última configuración recibida de finanzas.js
 let shellListo = false; // false en onboarding / paso de saldo inicial: ahí no hay navegación
-let sidebarAutoColapsada = false;
 let elSubnav = null;
 let elBarra = null;
 let elHoja = null;
@@ -293,21 +292,9 @@ function esEscritorio() {
   return window.innerWidth >= 900;
 }
 
-function ajustarBarraPrincipal(mostrar) {
-  const sidebar = document.getElementById("app-sidebar");
-  if (!sidebar) return;
-  if (mostrar && esEscritorio()) {
-    if (!sidebar.classList.contains("colapsada")) {
-      sidebar.classList.add("colapsada");
-      sidebarAutoColapsada = true;
-    }
-  } else if (sidebarAutoColapsada) {
-    // Se devuelve a la preferencia guardada de la persona (el botón ⟨⟨ la escribe en localStorage).
-    let guardada = false;
-    try { guardada = localStorage.getItem(CLAVE_SIDEBAR_COLAPSADA) === "1"; } catch (e) { /* sin storage */ }
-    sidebar.classList.toggle("colapsada", guardada);
-    sidebarAutoColapsada = false;
-  }
+/** Quién contrae la barra principal (y los Enlaces rápidos de la derecha) vive en ui/layout-lateral.js. */
+function ajustarBarraPrincipal(mostrarFinanzas) {
+  fijarFinanzasAbierta(mostrarFinanzas);
 }
 
 /** Muestra u oculta la navegación según la sección activa y si el shell de Finanzas está pintado. */
@@ -375,3 +362,7 @@ window.addEventListener("resize", () => {
   clearTimeout(temporizadorResize);
   temporizadorResize = setTimeout(() => aplicarVisibilidad(), 120);
 });
+
+// Estado inicial (la barra contraída por ancho debe verse desde que carga la app, sin esperar a Finanzas).
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => aplicarVisibilidad());
+else aplicarVisibilidad();

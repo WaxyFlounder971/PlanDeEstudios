@@ -21,6 +21,7 @@ import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoTemaLocal, guardarModoDisenoLocal } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { crearIconoSeccion } from "../ui/icono-seccion.js";
+import { fijarMenuLateralNoContraer, menuLateralNoContraer } from "../ui/layout-lateral.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import {
   eliminarAdjuntosDeCronogramaDeSemestre,
@@ -1714,6 +1715,13 @@ function renderizarAjustes() {
       aplicarModoRendimiento(modoDiseno === "optimizado");
     }
   );
+
+  // Menú lateral: «No contraer» (preferencia local del dispositivo) impide que la barra principal se contraiga nunca.
+  const chkNoContraer = document.getElementById("switch-no-contraer-menu");
+  if (chkNoContraer) {
+    chkNoContraer.checked = menuLateralNoContraer();
+    chkNoContraer.onchange = () => fijarMenuLateralNoContraer(chkNoContraer.checked);
+  }
 
   // Switch general de sincronización con Google Calendar (Ajustes
   // Avanzados). Se acepte o no en el onboarding (ver
