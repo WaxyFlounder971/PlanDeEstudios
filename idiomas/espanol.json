@@ -3,6 +3,11 @@
   "nombre": "Español",
   "locale": "es",
   "traducciones": {
+    "Originales": "Originales",
+    "Paleta": "Paleta",
+    "Personalizados": "Personalizados",
+    "Según logo": "Según logo",
+    "Multicolor": "Multicolor",
     "Semana del semestre": "Semana del semestre",
     "Semana del año": "Semana del año",
     "Semana del semestre (columna izquierda)": "Semana del semestre (columna izquierda)",

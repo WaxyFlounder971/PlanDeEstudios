@@ -3,6 +3,10 @@
   "nombre": "Italiano",
   "locale": "it",
   "traducciones": {
+    "Originales": "Originali",
+    "Paleta": "Palette",
+    "Personalizados": "Personalizzati",
+    "Según logo": "Secondo il logo",
     "Semana del semestre": "Settimana del semestre",
     "Semana del año": "Settimana dell’anno",
     "Semana del semestre (columna izquierda)": "Settimana del semestre (colonna sinistra)",

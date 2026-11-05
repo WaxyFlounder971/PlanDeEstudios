@@ -3,6 +3,10 @@
   "nombre": "English",
   "locale": "en",
   "traducciones": {
+    "Originales": "Original",
+    "Paleta": "Palette",
+    "Personalizados": "Custom",
+    "Según logo": "By logo",
     "Semana del semestre": "Semester week",
     "Semana del año": "Week of the year",
     "Semana del semestre (columna izquierda)": "Semester week (left column)",
@@ -1039,6 +1043,7 @@
     "Llevás {variable} pago{variable} = {variable} hasta hoy.": "You've made {variable} payment{variable} = {variable} so far.",
     "Lo ven todos los participantes.": "All participants can see it.",
     "Logo App Académica": "App Académica Logo",
+    "Logo Wapper": "Wapper Logo",
     "Los puntos deben estar entre 0 y {variable}": "Points must be between 0 and {variable}",
     "Los puntos deben ser un número mayor a 0": "Points must be a number greater than 0",
     "MA-1001": "MA-1001",
