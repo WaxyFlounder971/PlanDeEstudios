@@ -527,13 +527,14 @@
             <span class="form-label">Animación de apertura</span>
             <p class="muted ajuste-subtitulo">Un folder muestra sus pestañas mientras la app carga y se abre al terminar. Si la apagas, se usa el cargador de siempre.</p>
             <div class="row-between"><span>Animación de apertura</span><label class="switch switch-tema"><input type="checkbox" id="switch-intro-apertura"><span class="track"><span class="thumb"></span></span></label></div>
-            <div id="intro-colores-bloque" class="stack">
+            <div class="intro-ver-fila" style="display:flex;justify-content:center;"><button type="button" class="btn-discreto" id="btn-intro-ver">Ver animación</button></div>
+            <!-- Ya no se usa: los colores de la animación son los del logo. Se deja oculto para no romper config-ajustes.js. -->
+            <div id="intro-colores-bloque" class="stack" hidden style="display:none!important">
               <span class="form-label">Colores de las pestañas</span>
               <div class="intro-colores" id="intro-colores" role="group" aria-label="Colores de las pestañas"><label class="intro-color-bolita"><input type="color" data-intro-color="0" aria-label="Color de la pestaña 1"></label><label class="intro-color-bolita"><input type="color" data-intro-color="1" aria-label="Color de la pestaña 2"></label><label class="intro-color-bolita"><input type="color" data-intro-color="2" aria-label="Color de la pestaña 3"></label><label class="intro-color-bolita"><input type="color" data-intro-color="3" aria-label="Color de la pestaña 4"></label><label class="intro-color-bolita"><input type="color" data-intro-color="4" aria-label="Color de la pestaña 5"></label><label class="intro-color-bolita"><input type="color" data-intro-color="5" aria-label="Color de la pestaña 6"></label></div>
               <button type="button" class="btn btn-secondary" id="btn-intro-colores-paleta" aria-pressed="false">Usar colores de la paleta</button>
               <div class="intro-colores-acciones">
                 <button type="button" class="btn-discreto" id="btn-intro-colores-original">Restablecer</button>
-                <button type="button" class="btn-discreto" id="btn-intro-ver">Ver animación</button>
               </div>
             </div>
           </div>
