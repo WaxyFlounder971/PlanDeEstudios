@@ -8,7 +8,7 @@
    acción explícita ("Ver en Lista") dentro de ese detalle ya desplegado.
    ========================================================================= */
 
-import { fechaLocalDesdeISO } from "../horario/horario.js";
+import { calcularNumeroSemanaSinAcotarParaFecha, fechaLocalDesdeISO } from "../horario/horario.js";
 import { estado } from "../core/storage/storage.js";
 import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { desplazarYResaltarElemento } from "../ui/componentes.js";
@@ -110,15 +110,38 @@ function resumenDia(fecha, semestresSeleccionados) {
   return { eventos, colores: coloresPresentes, coloresPorEvento, total: eventos.length };
 }
 
-function construirCabeceraDiasSemana() {
+/** Semana ISO del año (1-53) de una fecha. */
+function numeroSemanaIso(fecha) {
+  const d = new Date(Date.UTC(fecha.getFullYear(), fecha.getMonth(), fecha.getDate()));
+  const dia = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dia);
+  const inicioAnio = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d - inicioAnio) / 86400000 + 1) / 7);
+}
+
+/** Columnas de semana del calendario mensual (parche 7): ambas activas por defecto, se apagan en Ajustes de Agenda. */
+function obtenerColumnasSemanaCalendario() {
+  const cfg = estado.datos?.configuracion || {};
+  return { izq: cfg.agenda_calendario_semana_semestre !== false, der: cfg.agenda_calendario_semana_anio !== false };
+}
+
+function plantillaColumnasCalendario({ izq, der }) {
+  return `${izq ? "var(--cal-ancho-semana) " : ""}repeat(7, minmax(0, 1fr))${der ? " var(--cal-ancho-semana)" : ""}`;
+}
+
+function construirCabeceraDiasSemana(columnas = { izq: false, der: false }) {
   const fila = document.createElement("div");
   fila.className = "agenda-cal-grid agenda-cal-fila-cabecera";
+  const espaciador = () => { const e = document.createElement("div"); e.setAttribute("aria-hidden", "true"); return e; };
+  if (columnas.izq || columnas.der) fila.style.gridTemplateColumns = plantillaColumnasCalendario(columnas);
+  if (columnas.izq) fila.appendChild(espaciador());
   obtenerDiasSemanaOrdenAgenda().forEach((dia) => {
     const celda = document.createElement("div");
     celda.className = "agenda-cal-cabecera-dia muted";
     celda.textContent = dia.etiquetaCorta;
     fila.appendChild(celda);
   });
+  if (columnas.der) fila.appendChild(espaciador());
   return fila;
 }
 
@@ -301,12 +324,30 @@ function construirGridMensual(semestresSeleccionados) {
   const cont = document.createElement("div");
   cont.className = "stack";
   cont.style.gap = "4px";
-  cont.appendChild(construirCabeceraDiasSemana());
+  const columnas = obtenerColumnasSemanaCalendario();
+  cont.appendChild(construirCabeceraDiasSemana(columnas));
 
   const grid = document.createElement("div");
   grid.className = "agenda-cal-grid";
+  if (columnas.izq || columnas.der) grid.style.gridTemplateColumns = plantillaColumnasCalendario(columnas);
+  const semestreRef = columnas.izq ? obtenerSemestreActivoAgenda() : null;
+  const crearCeldaSemana = (texto, titulo) => {
+    const c = document.createElement("div");
+    c.className = "agenda-cal-semana muted";
+    c.textContent = texto;
+    if (titulo) c.title = titulo;
+    return c;
+  };
   const cursor = new Date(inicioGrid);
+  let diaDeFila = 0;
   while (cursor <= finGrid) {
+    if (diaDeFila === 0 && columnas.izq) {
+      // Semana relativa al semestre: solo si la fila cae dentro del semestre (si no, queda vacía).
+      const mitad = new Date(cursor); mitad.setDate(mitad.getDate() + 3);
+      const n = semestreRef ? calcularNumeroSemanaSinAcotarParaFecha(semestreRef, mitad) : null;
+      const dentro = n != null && n >= 1 && n <= (Number(semestreRef.duracion_semanas) || 16);
+      grid.appendChild(crearCeldaSemana(dentro ? String(n) : "", dentro ? traducirTextoInterfaz("Semana del semestre") : ""));
+    }
     grid.appendChild(
       construirCelda(new Date(cursor), {
         delMesActual: cursor.getMonth() === baseMes.getMonth(),
@@ -315,6 +356,14 @@ function construirGridMensual(semestresSeleccionados) {
       })
     );
     cursor.setDate(cursor.getDate() + 1);
+    diaDeFila += 1;
+    if (diaDeFila === 7) {
+      diaDeFila = 0;
+      if (columnas.der) {
+        const mitad = new Date(cursor); mitad.setDate(mitad.getDate() - 4);
+        grid.appendChild(crearCeldaSemana(String(numeroSemanaIso(mitad)), traducirTextoInterfaz("Semana del año")));
+      }
+    }
   }
   cont.appendChild(grid);
   return { cont, tituloRango: baseMes.toLocaleDateString(obtenerLocaleInterfaz(), { month: "long", year: "numeric" }) };
@@ -350,7 +399,8 @@ function construirSubheaderCalendario() {
 
   const pillsModo = document.createElement("div");
   pillsModo.className = "pill-group";
-  pillsModo.style.maxWidth = "220px";
+  pillsModo.style.maxWidth = "none"; // parche 7: el selector Mensual/Semanal ocupa todo el ancho disponible
+  pillsModo.style.width = "100%";
   ["mensual", "semanal"].forEach((modo) => {
     const btn = document.createElement("button");
     btn.type = "button";

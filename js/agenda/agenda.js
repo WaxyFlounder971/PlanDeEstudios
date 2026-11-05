@@ -2087,6 +2087,10 @@ function inicializarFiltrosAgenda() {
     // que el resto de persistentes de este modal.
     const chkRepetirPuntos = document.getElementById("chk-agenda-calendario-repetir-puntos");
     if (chkRepetirPuntos) chkRepetirPuntos.checked = cfg.agenda_calendario_repetir_puntos !== false;
+    const chkSemSem = document.getElementById("chk-agenda-calendario-semana-semestre");
+    if (chkSemSem) chkSemSem.checked = cfg.agenda_calendario_semana_semestre !== false;
+    const chkSemAnio = document.getElementById("chk-agenda-calendario-semana-anio");
+    if (chkSemAnio) chkSemAnio.checked = cfg.agenda_calendario_semana_anio !== false;
     sincronizarSwitchesVenceHoy();
     modal.classList.remove("oculto");
   });
@@ -2160,6 +2164,16 @@ function inicializarFiltrosAgenda() {
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
     renderizarAgenda();
+  });
+
+  // Parche 7: columnas de semana del calendario mensual (semestre / año), cada una por separado.
+  [["chk-agenda-calendario-semana-semestre", "agenda_calendario_semana_semestre"], ["chk-agenda-calendario-semana-anio", "agenda_calendario_semana_anio"]].forEach(([id, clave]) => {
+    document.getElementById(id)?.addEventListener("change", (ev) => {
+      estado.datos.configuracion[clave] = ev.target.checked;
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      renderizarAgenda();
+    });
   });
 
   modal.addEventListener("click", (ev) => {

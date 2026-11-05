@@ -1184,7 +1184,6 @@ function activarModoConjunto() {
   document.getElementById("btn-horario-agregar")?.classList.add("oculto");
   const btnSalir = document.getElementById("btn-salir-modo-conjunto");
   if (btnSalir) {
-    btnSalir.textContent = "Salir";
     btnSalir.classList.remove("oculto");
   }
   renderizarHorarioInterno();
@@ -1244,8 +1243,7 @@ function activarVistaIndividualAmigo(fileId, { pantallaCompleta = true } = {}) {
   document.getElementById("btn-horario-agregar")?.classList.add("oculto");
   const btnSalir = document.getElementById("btn-salir-modo-conjunto");
   if (btnSalir) {
-    btnSalir.textContent = "← Cerrar horario";
-    btnSalir.classList.remove("oculto");
+    btnSalir.classList.remove("oculto"); // mismo botón de símbolo (SVG) que en el modo conjunto
   }
   renderizarHorarioInterno();
 
@@ -1416,7 +1414,6 @@ function desactivarVistaIndividualAmigo() {
   document.getElementById("btn-horario-agregar")?.classList.remove("oculto");
   const btnSalir = document.getElementById("btn-salir-modo-conjunto");
   if (btnSalir) {
-    btnSalir.textContent = "Salir";
     btnSalir.classList.add("oculto");
   }
   if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
