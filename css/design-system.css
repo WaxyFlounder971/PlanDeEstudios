@@ -6700,3 +6700,107 @@ html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado { white-
    (antes su padding de 6px la hacía 4px más alta y bajaba el texto 2px en Horario). */
 .app-encabezado__titulofila .btn-icono-fantasma { padding-block: 0; line-height: 1; }
 #horario-header .app-encabezado__titulofila { gap: 4px; }
+
+/* Parche 9 — Sidebar sin "botones". Solo la sección activa va rellena (sigue siendo .btn-primary: mostrarSeccion()
+   alterna btn-primary/btn-secondary como siempre, el JS no cambia); las demás quedan planas, sin fondo ni borde.
+   Los emojis pasan a iconos SVG propios (sprite inline en index.html, sin red). Color por variables:
+   --nav-c1 = trazo principal, --nav-c2 = relleno y detalles. Estilo elegido en Ajustes > Personalizar y guardado en
+   <html data-iconos-nav="fijo|logo|paleta"> (sin atributo = "fijo"). */
+
+/* Clases del sprite (los <symbol> viven en index.html; heredan las variables del botón que los usa). */
+.ni-s1, .ni-s2 { fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ni-s1 { stroke: var(--nav-c1); }
+.ni-s2 { stroke: var(--nav-c2); }
+.ni-fl { fill: color-mix(in srgb, var(--nav-c2) 32%, transparent); }
+.ni-d1 { fill: var(--nav-c1); }
+.ni-d2 { fill: var(--nav-c2); }
+/* Casa: pared, zócalo y puerta con color propio solo en "Multicolor" (más abajo); en el resto vuelve al duotono. */
+.ni-hw { fill: var(--nav-wall, color-mix(in srgb, var(--nav-c2) 32%, transparent)); stroke: var(--nav-wallst, none); stroke-width: 1; }
+.ni-hb { fill: var(--nav-base, none); }
+.ni-hd { fill: var(--nav-door, none); }
+
+/* Forma: fila plana con icono + texto. :not(.oculto) para no pisar el display:none de siempre. */
+#app-sidebar .btn-nav:not(.oculto) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 14px;
+}
+#app-sidebar .btn-nav .nav-ico { width: 22px; height: 22px; flex: none; display: block; }
+#app-sidebar .btn-nav .texto-nav { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Inactivas: sin fondo ni borde (mismo alto de caja que antes: el borde de 1px queda transparente). */
+#app-sidebar .btn-nav.btn-secondary {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--text-primary) 84%, transparent);
+}
+#app-sidebar .btn-nav.btn-secondary:hover {
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  color: var(--text-primary);
+}
+
+/* Colores por sección. --ni-a / --ni-b = tonos del estilo "Multicolor"; --ni-logo = tono del estilo "Colores del logo".
+   Van por sección (no por posición): reordenar u ocultar secciones en Ajustes no cambia el color de cada una. */
+#app-sidebar .btn-nav[data-seccion="resumen"]        { --ni-a: #E0352F; --ni-b: #2F86DC; --ni-logo: #E0352F; }
+#app-sidebar .btn-nav[data-seccion="asistente"]      { --ni-a: #8A48DE; --ni-b: #2F86DC; --ni-logo: #E8632F; }
+#app-sidebar .btn-nav[data-seccion="agenda"]         { --ni-a: #35A878; --ni-b: #2F86DC; --ni-logo: #E3BC38; }
+#app-sidebar .btn-nav[data-seccion="horario"]        { --ni-a: #2F86DC; --ni-b: #E0352F; --ni-logo: #35A878; }
+#app-sidebar .btn-nav[data-seccion="tiempo-estudio"] { --ni-a: #E0352F; --ni-b: #E3BC38; --ni-logo: #2F86DC; }
+#app-sidebar .btn-nav[data-seccion="semestres"]      { --ni-a: #2F86DC; --ni-b: #35A878; --ni-logo: #8A48DE; }
+#app-sidebar .btn-nav[data-seccion="comunidad"]      { --ni-a: #E8632F; --ni-b: #2F86DC; --ni-logo: #E0352F; }
+#app-sidebar .btn-nav[data-seccion="finanzas"]       { --ni-a: #35A878; --ni-b: #E3BC38; --ni-logo: #E8632F; }
+#app-sidebar .btn-nav[data-seccion="plan-estudios"]  { --ni-a: #8A48DE; --ni-b: #E3BC38; --ni-logo: #E3BC38; }
+#app-sidebar .btn-nav[data-seccion="notas"]          { --ni-a: #E3BC38; --ni-b: #F2D66B; --ni-logo: #35A878; }
+#app-sidebar .btn-nav[data-seccion="configuracion"]  { --ni-a: #8E9AB8; --ni-b: #2F86DC; --ni-logo: #2F86DC; }
+
+/* Estilo "Multicolor" (por defecto). --ni-k = cuánto del color se conserva: 100% en oscuro, 72% en claro (más oscuro para
+   que se lea sobre fondo claro; la casa de Resumen es la excepción porque lleva su propia pared). */
+#app-sidebar .btn-nav {
+  --ni-k: 100%;
+  --nav-c1: color-mix(in srgb, var(--ni-a) var(--ni-k), black);
+  --nav-c2: color-mix(in srgb, var(--ni-b) var(--ni-k), black);
+}
+html[data-mode="light"] #app-sidebar .btn-nav { --ni-k: 72%; }
+html[data-mode="light"]:not([data-iconos-nav="logo"]):not([data-iconos-nav="paleta"]) #app-sidebar .btn-nav[data-seccion="resumen"] { --ni-k: 100%; }
+
+/* Casa de Resumen en "Multicolor", sin seleccionar: techo rojo, pared blanca translúcida, zócalo azul y puerta café. */
+html:not([data-iconos-nav="logo"]):not([data-iconos-nav="paleta"]) #app-sidebar .btn-nav[data-seccion="resumen"]:not(.btn-primary) {
+  --nav-wall: rgba(255, 255, 255, 0.38);
+  --nav-wallst: none;
+  --nav-base: color-mix(in srgb, #2F86DC 45%, transparent);
+  --nav-door: color-mix(in srgb, #B8743F 62%, transparent);
+}
+html[data-mode="light"]:not([data-iconos-nav="logo"]):not([data-iconos-nav="paleta"]) #app-sidebar .btn-nav[data-seccion="resumen"]:not(.btn-primary) {
+  --nav-wall: rgba(255, 255, 255, 0.75);
+  --nav-wallst: #C3CAD9;
+  --nav-door: color-mix(in srgb, #8A4B22 70%, transparent);
+}
+
+/* Estilo "Colores del logo": las seis pestañas del logo repartidas entre las secciones. */
+html[data-iconos-nav="logo"] #app-sidebar .btn-nav {
+  --ni-a: var(--ni-logo);
+  --ni-b: color-mix(in srgb, var(--ni-logo) 70%, white);
+}
+
+/* Estilo "Sigue la paleta": dos tonos de --accent-1 / --accent-2, así que cambia solo con cualquier paleta
+   (también la personalizada, que ya escribe esas mismas variables). */
+html[data-iconos-nav="paleta"] #app-sidebar .btn-nav {
+  --nav-c1: var(--accent-2);
+  --nav-c2: color-mix(in srgb, var(--accent-1) 55%, var(--accent-2));
+}
+
+/* Sección activa (btn-primary, relleno de siempre): icono en el color de texto sobre el acento. Va al final a propósito. */
+html #app-sidebar .btn-nav.btn-primary {
+  --nav-c1: var(--on-accent);
+  --nav-c2: var(--on-accent);
+}
+
+/* Sidebar colapsada (escritorio): solo el icono, centrado. En móvil el texto vuelve (ver el bloque < 900px). */
+.app-sidebar.colapsada .btn-nav:not(.oculto) { justify-content: center; padding-inline: 0; }
+@media (max-width: 899.98px) {
+  .app-sidebar.colapsada .btn-nav:not(.oculto) { justify-content: flex-start; padding-inline: 14px; }
+}

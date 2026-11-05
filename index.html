@@ -256,6 +256,72 @@
   <button id="btn-flotante-enlaces" class="btn-flotante-enlaces" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
   <button id="btn-instalar-app-flotante" class="btn-instalar-app-flotante oculto" aria-label="Instalar App Académica" title="Instalar App Académica"><span class="instalar-app-icono" aria-hidden="true">⇩</span><span class="instalar-app-texto">Instalar app</span></button>
 
+  <!-- Iconos del menú lateral (sprite inline, sin peticiones de red: cargan junto con el HTML y funcionan sin conexión).
+       Colores por variables CSS (--nav-c1 trazo principal, --nav-c2 relleno y detalles): ver "Parche 9" en design-system.css. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="ni-resumen" viewBox="0 0 24 24">
+        <path class="ni-fl ni-hw" d="M6 10.5 12 5.5l6 5V19a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z"/>
+        <path class="ni-hb" d="M6 16.8h12V19a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z"/>
+        <path class="ni-s1" d="M3.5 11.5 12 4.5l8.5 7"/>
+        <path class="ni-hd" d="M10 20v-4.5a2 2 0 0 1 4 0V20z"/>
+        <path class="ni-s1" d="M10 20v-4.5a2 2 0 0 1 4 0V20"/>
+      </symbol>
+      <symbol id="ni-asistente" viewBox="0 0 24 24">
+        <path class="ni-s1 ni-fl" d="M10.5 3c.7 4.2 2.8 6.3 7 7-4.2.7-6.3 2.8-7 7-.7-4.2-2.8-6.3-7-7 4.2-.7 6.3-2.8 7-7z"/>
+        <path class="ni-d2" d="M19 14.2c.3 1.7 1 2.4 2.7 2.7-1.7.3-2.4 1-2.7 2.7-.3-1.7-1-2.4-2.7-2.7 1.7-.3 2.4-1 2.7-2.7z"/>
+      </symbol>
+      <symbol id="ni-agenda" viewBox="0 0 24 24">
+        <path class="ni-s1" d="m4 6.6 1.4 1.4L8 5.2M4 12.1l1.4 1.4L8 10.7M4 17.6l1.4 1.4L8 16.2"/>
+        <path class="ni-s2" d="M11.5 6.6H20M11.5 12.1H20M11.5 17.6H17"/>
+      </symbol>
+      <symbol id="ni-horario" viewBox="0 0 24 24">
+        <rect class="ni-s1 ni-fl" x="4" y="5.5" width="16" height="14.5" rx="3.2"/>
+        <path class="ni-s1" d="M8 3.5V7M16 3.5V7M4 10.5h16"/>
+        <circle class="ni-d2" cx="8.5" cy="14.2" r="1"/><circle class="ni-d2" cx="12" cy="14.2" r="1"/><circle class="ni-d1" cx="15.5" cy="14.2" r="1"/>
+        <circle class="ni-d2" cx="8.5" cy="17.2" r="1"/><circle class="ni-d2" cx="12" cy="17.2" r="1"/>
+      </symbol>
+      <symbol id="ni-tiempo" viewBox="0 0 24 24">
+        <circle class="ni-s1 ni-fl" cx="12" cy="13.5" r="7.5"/>
+        <path class="ni-s1" d="M10 3h4M12 3v3M18.2 6.8l1.4-1.4"/>
+        <path class="ni-s2" d="m12 13.5 2.8-3"/>
+        <circle class="ni-d2" cx="12" cy="13.5" r="1.1"/>
+      </symbol>
+      <symbol id="ni-libro" viewBox="0 0 24 24">
+        <path class="ni-s1 ni-fl" d="M12 6.5C10 5 7 4.6 3.5 5v13c3.5-.4 6.5 0 8.5 1.5 2-1.5 5-1.9 8.5-1.5V5c-3.5-.4-6.5 0-8.5 1.5z"/>
+        <path class="ni-s1" d="M12 6.5v13"/>
+        <path class="ni-s2" d="M6.5 9.2c1.3 0 2.5.2 3.5.7M6.5 12.6c1.3 0 2.5.2 3.5.7M17.5 9.2c-1.3 0-2.5.2-3.5.7M17.5 12.6c-1.3 0-2.5.2-3.5.7"/>
+      </symbol>
+      <symbol id="ni-comunidad" viewBox="0 0 24 24">
+        <circle class="ni-s1 ni-fl" cx="9" cy="8.5" r="3.2"/>
+        <path class="ni-s1" d="M3.5 19.5c0-3.2 2.4-5.2 5.5-5.2s5.5 2 5.5 5.2"/>
+        <circle class="ni-s2" cx="17" cy="9.5" r="2.5"/>
+        <path class="ni-s2" d="M16 14.6c2.9-.3 5 1.5 5 4.4"/>
+      </symbol>
+      <symbol id="ni-finanzas" viewBox="0 0 24 24">
+        <rect class="ni-s1 ni-fl" x="3.5" y="7" width="17" height="12.5" rx="3"/>
+        <path class="ni-s1" d="M6.5 7 15 4.3a1 1 0 0 1 1.3.95V7"/>
+        <path class="ni-s2" d="M20.5 11.2h-4a2.2 2.2 0 0 0 0 4.4h4"/>
+        <circle class="ni-d2" cx="16.6" cy="13.4" r="1"/>
+      </symbol>
+      <symbol id="ni-birrete" viewBox="0 0 24 24">
+        <path class="ni-s1 ni-fl" d="M12 5 2.5 9.5 12 14l9.5-4.5z"/>
+        <path class="ni-s1" d="M6.5 12v4.2c0 1.2 2.4 2.8 5.5 2.8s5.5-1.6 5.5-2.8V12"/>
+        <path class="ni-s2" d="M21.5 9.5v5"/>
+      </symbol>
+      <symbol id="ni-notas" viewBox="0 0 24 24">
+        <path class="ni-s1 ni-fl" d="M6.5 4h11A2.5 2.5 0 0 1 20 6.5V14l-6 6H6.5A2.5 2.5 0 0 1 4 17.5v-11A2.5 2.5 0 0 1 6.5 4z"/>
+        <path class="ni-s2" d="M20 14h-3.5a2.5 2.5 0 0 0-2.5 2.5V20M8 9h8M8 12.5h4"/>
+      </symbol>
+      <symbol id="ni-config" viewBox="0 0 24 24">
+        <path class="ni-s1" d="M4 7h5.5M14.5 7H20M4 12h1.6M10.4 12H20M4 17h7.6M16.4 17H20"/>
+        <circle class="ni-s2 ni-fl" cx="12" cy="7" r="2.4"/>
+        <circle class="ni-s2 ni-fl" cx="8" cy="12" r="2.4"/>
+        <circle class="ni-s2 ni-fl" cx="14" cy="17" r="2.4"/>
+      </symbol>
+    </defs>
+  </svg>
+
   <div class="app-layout">
 
     <!-- Sidebar -->
@@ -264,19 +330,19 @@
       <h3 class="sidebar-titulo" style="display:flex; align-items:center; gap:8px;"><img id="logo-app-header" src="imagenes/LogoAppFolder-512.png" alt="Logo App Académica" data-app-logo style="height:1.3em; width:auto; vertical-align:middle;"> <span class="texto">App Académica</span></h3>
 
       <div class="sidebar-scroll">
-        <button id="nav-resumen" class="btn btn-secondary btn-block btn-nav" data-seccion="resumen" title="Resumen">🏠 <span class="texto-nav">Resumen</span></button>
-        <button id="nav-agenda" class="btn btn-secondary btn-block btn-nav" data-seccion="agenda" title="Agenda">📖 <span class="texto-nav">Agenda</span></button>
-        <button id="nav-horario" class="btn btn-secondary btn-block btn-nav" data-seccion="horario" title="Horario">🗓️ <span class="texto-nav">Horario</span></button>
+        <button id="nav-resumen" class="btn btn-secondary btn-block btn-nav" data-seccion="resumen" title="Resumen"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-resumen"/></svg><span class="texto-nav">Resumen</span></button>
+        <button id="nav-agenda" class="btn btn-secondary btn-block btn-nav" data-seccion="agenda" title="Agenda"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-agenda"/></svg><span class="texto-nav">Agenda</span></button>
+        <button id="nav-horario" class="btn btn-secondary btn-block btn-nav" data-seccion="horario" title="Horario"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-horario"/></svg><span class="texto-nav">Horario</span></button>
         <!-- Tiempo de Estudio (Parte 1): sin gate de existencia (no depende
              de ninguna clave), siempre visible — mismo criterio que
              Agenda/Horario/Semestres. Entra después de Horario (confirmado
              con Wagner). -->
-        <button id="nav-tiempo-estudio" class="btn btn-secondary btn-block btn-nav" data-seccion="tiempo-estudio" title="Tiempo">⏱️ <span class="texto-nav">Tiempo</span></button>
-        <button id="nav-semestres" class="btn btn-secondary btn-block btn-nav" data-seccion="semestres" title="Semestres">📅 <span class="texto-nav">Semestres</span></button>
-        <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad">👥 <span class="texto-nav">Comunidad</span></button>
-        <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas">💰 <span class="texto-nav">Finanzas</span></button>
-        <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
-        <button id="nav-notas" class="btn btn-secondary btn-block btn-nav" data-seccion="notas" title="Notas rápidas">🗒️ <span class="texto-nav">Notas rápidas</span></button>
+        <button id="nav-tiempo-estudio" class="btn btn-secondary btn-block btn-nav" data-seccion="tiempo-estudio" title="Tiempo"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-tiempo"/></svg><span class="texto-nav">Tiempo</span></button>
+        <button id="nav-semestres" class="btn btn-secondary btn-block btn-nav" data-seccion="semestres" title="Semestres"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-libro"/></svg><span class="texto-nav">Semestres</span></button>
+        <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-comunidad"/></svg><span class="texto-nav">Comunidad</span></button>
+        <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-finanzas"/></svg><span class="texto-nav">Finanzas</span></button>
+        <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-birrete"/></svg><span class="texto-nav">Plan de Estudios</span></button>
+        <button id="nav-notas" class="btn btn-secondary btn-block btn-nav" data-seccion="notas" title="Notas rápidas"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-notas"/></svg><span class="texto-nav">Notas rápidas</span></button>
         <!-- Asistente IA (Gemini), 2026-08-22 (revisado 2026-08-22): el botón
              participa del mismo sistema de navegacion_oculta/navegacion_orden
              que el resto (ver DEFAULT_ORDEN_NAV/SECCIONES_TOGGLEABLES en
@@ -288,8 +354,8 @@
              aplicarVisibilidadNavegacion() en main.js. Arranca oculto por
              defecto (igual que cualquier cuenta sin clave todavía) hasta que
              esa función corra al cargar la app. -->
-        <button id="nav-asistente" class="btn btn-secondary btn-block btn-nav oculto" data-seccion="asistente" title="Asistente IA">✨ <span class="texto-nav">Asistente</span><span id="badge-cola-wapper" class="badge badge-warning oculto" aria-label="Mensajes pendientes de Wapper">0</span></button>
-        <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
+        <button id="nav-asistente" class="btn btn-secondary btn-block btn-nav oculto" data-seccion="asistente" title="Asistente IA"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-asistente"/></svg><span class="texto-nav">Asistente</span><span id="badge-cola-wapper" class="badge badge-warning oculto" aria-label="Mensajes pendientes de Wapper">0</span></button>
+        <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-config"/></svg><span class="texto-nav">Configuración</span></button>
         <div style="flex:1;"></div>
         <div class="row" style="justify-content:flex-start; gap:8px;">
           <span id="indicador-conflictos" class="badge badge-danger oculto" style="cursor:pointer;" title="Ver todos los choques pendientes de resolver"></span>
@@ -416,6 +482,16 @@
           <div>
             <span class="form-label">Paleta de color</span>
             <div class="palette-grid" id="grid-paletas"></div>
+          </div>
+
+          <div id="ajuste-iconos-nav">
+            <span class="form-label">Color de los iconos del menú</span>
+            <p class="muted ajuste-subtitulo">Cómo se colorean los iconos del menú lateral. "Sigue la paleta" cambia solo con tu paleta, incluida la personalizada.</p>
+            <div class="pill-group" role="group" aria-label="Color de los iconos del menú">
+              <button type="button" class="pill-item" data-iconos-nav="fijo">Multicolor</button>
+              <button type="button" class="pill-item" data-iconos-nav="logo">Colores del logo</button>
+              <button type="button" class="pill-item" data-iconos-nav="paleta">Sigue la paleta</button>
+            </div>
           </div>
 
           <div>
