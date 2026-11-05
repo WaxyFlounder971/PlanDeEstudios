@@ -63,6 +63,7 @@
   }
 </script>
 <link rel="stylesheet" href="css/design-system.css?v=3.22.34">
+<link rel="stylesheet" href="css/personalizar-marca.css?v=1">
 <link rel="icon" type="image/png" href="imagenes/LogoAppFolder-512.png" data-app-favicon>
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2563EB">
@@ -256,6 +257,72 @@
   <button id="btn-flotante-enlaces" class="btn-flotante-enlaces" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
   <button id="btn-instalar-app-flotante" class="btn-instalar-app-flotante oculto" aria-label="Instalar App Académica" title="Instalar App Académica"><span class="instalar-app-icono" aria-hidden="true">⇩</span><span class="instalar-app-texto">Instalar app</span></button>
 
+  <!-- Iconos del menú lateral (sprite inline, sin peticiones de red: cargan junto con el HTML y funcionan sin conexión).
+       Colores por variables CSS (--nav-c1 trazo principal, --nav-c2 relleno y detalles): ver "Parche 9" en design-system.css. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+    <defs>
+      <symbol id="ni-resumen" viewBox="0 0 24 24">
+        <path class="ni-fl ni-hw" d="M6 10.5 12 5.5l6 5V19a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z"/>
+        <path class="ni-hb" d="M6 16.8h12V19a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1z"/>
+        <path class="ni-s1" d="M3.5 11.5 12 4.5l8.5 7"/>
+        <path class="ni-hd" d="M10 20v-4.5a2 2 0 0 1 4 0V20z"/>
+        <path class="ni-s1" d="M10 20v-4.5a2 2 0 0 1 4 0V20"/>
+      </symbol>
+      <symbol id="ni-asistente" viewBox="0 0 24 24">
+        <path class="ni-s1 ni-fl" d="M10.5 3c.7 4.2 2.8 6.3 7 7-4.2.7-6.3 2.8-7 7-.7-4.2-2.8-6.3-7-7 4.2-.7 6.3-2.8 7-7z"/>
+        <path class="ni-d2" d="M19 14.2c.3 1.7 1 2.4 2.7 2.7-1.7.3-2.4 1-2.7 2.7-.3-1.7-1-2.4-2.7-2.7 1.7-.3 2.4-1 2.7-2.7z"/>
+      </symbol>
+      <symbol id="ni-agenda" viewBox="0 0 24 24">
+        <path class="ni-s1" d="m4 6.6 1.4 1.4L8 5.2M4 12.1l1.4 1.4L8 10.7M4 17.6l1.4 1.4L8 16.2"/>
+        <path class="ni-s2" d="M11.5 6.6H20M11.5 12.1H20M11.5 17.6H17"/>
+      </symbol>
+      <symbol id="ni-horario" viewBox="0 0 24 24">
+        <rect class="ni-s1 ni-fl" x="4" y="5.5" width="16" height="14.5" rx="3.2"/>
+        <path class="ni-s1" d="M8 3.5V7M16 3.5V7M4 10.5h16"/>
+        <circle class="ni-d2" cx="8.5" cy="14.2" r="1"/><circle class="ni-d2" cx="12" cy="14.2" r="1"/><circle class="ni-d1" cx="15.5" cy="14.2" r="1"/>
+        <circle class="ni-d2" cx="8.5" cy="17.2" r="1"/><circle class="ni-d2" cx="12" cy="17.2" r="1"/>
+      </symbol>
+      <symbol id="ni-tiempo" viewBox="0 0 24 24">
+        <circle class="ni-s1 ni-fl" cx="12" cy="13.5" r="7.5"/>
+        <path class="ni-s1" d="M10 3h4M12 3v3M18.2 6.8l1.4-1.4"/>
+        <path class="ni-s2" d="m12 13.5 2.8-3"/>
+        <circle class="ni-d2" cx="12" cy="13.5" r="1.1"/>
+      </symbol>
+      <symbol id="ni-libro" viewBox="0 0 24 24">
+        <path class="ni-s1 ni-fl" d="M12 6.5C10 5 7 4.6 3.5 5v13c3.5-.4 6.5 0 8.5 1.5 2-1.5 5-1.9 8.5-1.5V5c-3.5-.4-6.5 0-8.5 1.5z"/>
+        <path class="ni-s1" d="M12 6.5v13"/>
+        <path class="ni-s2" d="M6.5 9.2c1.3 0 2.5.2 3.5.7M6.5 12.6c1.3 0 2.5.2 3.5.7M17.5 9.2c-1.3 0-2.5.2-3.5.7M17.5 12.6c-1.3 0-2.5.2-3.5.7"/>
+      </symbol>
+      <symbol id="ni-comunidad" viewBox="0 0 24 24">
+        <circle class="ni-s1 ni-fl" cx="9" cy="8.5" r="3.2"/>
+        <path class="ni-s1" d="M3.5 19.5c0-3.2 2.4-5.2 5.5-5.2s5.5 2 5.5 5.2"/>
+        <circle class="ni-s2" cx="17" cy="9.5" r="2.5"/>
+        <path class="ni-s2" d="M16 14.6c2.9-.3 5 1.5 5 4.4"/>
+      </symbol>
+      <symbol id="ni-finanzas" viewBox="0 0 24 24">
+        <rect class="ni-s1 ni-fl" x="3.5" y="7" width="17" height="12.5" rx="3"/>
+        <path class="ni-s1" d="M6.5 7 15 4.3a1 1 0 0 1 1.3.95V7"/>
+        <path class="ni-s2" d="M20.5 11.2h-4a2.2 2.2 0 0 0 0 4.4h4"/>
+        <circle class="ni-d2" cx="16.6" cy="13.4" r="1"/>
+      </symbol>
+      <symbol id="ni-birrete" viewBox="0 0 24 24">
+        <path class="ni-s1 ni-fl" d="M12 5 2.5 9.5 12 14l9.5-4.5z"/>
+        <path class="ni-s1" d="M6.5 12v4.2c0 1.2 2.4 2.8 5.5 2.8s5.5-1.6 5.5-2.8V12"/>
+        <path class="ni-s2" d="M21.5 9.5v5"/>
+      </symbol>
+      <symbol id="ni-notas" viewBox="0 0 24 24">
+        <path class="ni-s1 ni-fl" d="M6.5 4h11A2.5 2.5 0 0 1 20 6.5V14l-6 6H6.5A2.5 2.5 0 0 1 4 17.5v-11A2.5 2.5 0 0 1 6.5 4z"/>
+        <path class="ni-s2" d="M20 14h-3.5a2.5 2.5 0 0 0-2.5 2.5V20M8 9h8M8 12.5h4"/>
+      </symbol>
+      <symbol id="ni-config" viewBox="0 0 24 24">
+        <path class="ni-s1" d="M4 7h5.5M14.5 7H20M4 12h1.6M10.4 12H20M4 17h7.6M16.4 17H20"/>
+        <circle class="ni-s2 ni-fl" cx="12" cy="7" r="2.4"/>
+        <circle class="ni-s2 ni-fl" cx="8" cy="12" r="2.4"/>
+        <circle class="ni-s2 ni-fl" cx="14" cy="17" r="2.4"/>
+      </symbol>
+    </defs>
+  </svg>
+
   <div class="app-layout">
 
     <!-- Sidebar -->
@@ -264,19 +331,19 @@
       <h3 class="sidebar-titulo" style="display:flex; align-items:center; gap:8px;"><img id="logo-app-header" src="imagenes/LogoAppFolder-512.png" alt="Logo App Académica" data-app-logo style="height:1.3em; width:auto; vertical-align:middle;"> <span class="texto">App Académica</span></h3>
 
       <div class="sidebar-scroll">
-        <button id="nav-resumen" class="btn btn-secondary btn-block btn-nav" data-seccion="resumen" title="Resumen">🏠 <span class="texto-nav">Resumen</span></button>
-        <button id="nav-agenda" class="btn btn-secondary btn-block btn-nav" data-seccion="agenda" title="Agenda">📖 <span class="texto-nav">Agenda</span></button>
-        <button id="nav-horario" class="btn btn-secondary btn-block btn-nav" data-seccion="horario" title="Horario">🗓️ <span class="texto-nav">Horario</span></button>
+        <button id="nav-resumen" class="btn btn-secondary btn-block btn-nav" data-seccion="resumen" title="Resumen"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-resumen"/></svg><span class="texto-nav">Resumen</span></button>
+        <button id="nav-agenda" class="btn btn-secondary btn-block btn-nav" data-seccion="agenda" title="Agenda"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-agenda"/></svg><span class="texto-nav">Agenda</span></button>
+        <button id="nav-horario" class="btn btn-secondary btn-block btn-nav" data-seccion="horario" title="Horario"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-horario"/></svg><span class="texto-nav">Horario</span></button>
         <!-- Tiempo de Estudio (Parte 1): sin gate de existencia (no depende
              de ninguna clave), siempre visible — mismo criterio que
              Agenda/Horario/Semestres. Entra después de Horario (confirmado
              con Wagner). -->
-        <button id="nav-tiempo-estudio" class="btn btn-secondary btn-block btn-nav" data-seccion="tiempo-estudio" title="Tiempo">⏱️ <span class="texto-nav">Tiempo</span></button>
-        <button id="nav-semestres" class="btn btn-secondary btn-block btn-nav" data-seccion="semestres" title="Semestres">📅 <span class="texto-nav">Semestres</span></button>
-        <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad">👥 <span class="texto-nav">Comunidad</span></button>
-        <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas">💰 <span class="texto-nav">Finanzas</span></button>
-        <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios">📚 <span class="texto-nav">Plan de Estudios</span></button>
-        <button id="nav-notas" class="btn btn-secondary btn-block btn-nav" data-seccion="notas" title="Notas rápidas">🗒️ <span class="texto-nav">Notas rápidas</span></button>
+        <button id="nav-tiempo-estudio" class="btn btn-secondary btn-block btn-nav" data-seccion="tiempo-estudio" title="Tiempo"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-tiempo"/></svg><span class="texto-nav">Tiempo</span></button>
+        <button id="nav-semestres" class="btn btn-secondary btn-block btn-nav" data-seccion="semestres" title="Semestres"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-libro"/></svg><span class="texto-nav">Semestres</span></button>
+        <button id="nav-comunidad" class="btn btn-secondary btn-block btn-nav" data-seccion="comunidad" title="Comunidad"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-comunidad"/></svg><span class="texto-nav">Comunidad</span></button>
+        <button id="nav-finanzas" class="btn btn-secondary btn-block btn-nav" data-seccion="finanzas" title="Finanzas"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-finanzas"/></svg><span class="texto-nav">Finanzas</span></button>
+        <button id="nav-plan-estudios" class="btn btn-secondary btn-block btn-nav" data-seccion="plan-estudios" title="Plan de Estudios"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-birrete"/></svg><span class="texto-nav">Plan de Estudios</span></button>
+        <button id="nav-notas" class="btn btn-secondary btn-block btn-nav" data-seccion="notas" title="Notas rápidas"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-notas"/></svg><span class="texto-nav">Notas rápidas</span></button>
         <!-- Asistente IA (Gemini), 2026-08-22 (revisado 2026-08-22): el botón
              participa del mismo sistema de navegacion_oculta/navegacion_orden
              que el resto (ver DEFAULT_ORDEN_NAV/SECCIONES_TOGGLEABLES en
@@ -288,8 +355,8 @@
              aplicarVisibilidadNavegacion() en main.js. Arranca oculto por
              defecto (igual que cualquier cuenta sin clave todavía) hasta que
              esa función corra al cargar la app. -->
-        <button id="nav-asistente" class="btn btn-secondary btn-block btn-nav oculto" data-seccion="asistente" title="Asistente IA">✨ <span class="texto-nav">Asistente</span><span id="badge-cola-wapper" class="badge badge-warning oculto" aria-label="Mensajes pendientes de Wapper">0</span></button>
-        <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración">⚙️ <span class="texto-nav">Configuración</span></button>
+        <button id="nav-asistente" class="btn btn-secondary btn-block btn-nav oculto" data-seccion="asistente" title="Asistente IA"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-asistente"/></svg><span class="texto-nav">Asistente</span><span id="badge-cola-wapper" class="badge badge-warning oculto" aria-label="Mensajes pendientes de Wapper">0</span></button>
+        <button id="nav-configuracion" class="btn btn-primary btn-block btn-nav" data-seccion="configuracion" title="Configuración"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-config"/></svg><span class="texto-nav">Configuración</span></button>
         <div style="flex:1;"></div>
         <div class="row" style="justify-content:flex-start; gap:8px;">
           <span id="indicador-conflictos" class="badge badge-danger oculto" style="cursor:pointer;" title="Ver todos los choques pendientes de resolver"></span>
@@ -340,17 +407,30 @@
       <!-- ===================== SECCIÓN: Configuración ===================== -->
       <div id="seccion-configuracion" class="stack">
 
+        <section class="glass-card ajuste-usuario" id="ajuste-usuario" aria-label="Tu perfil">
+          <span class="ajuste-usuario-avatar" aria-hidden="true">
+            <img id="ajuste-usuario-foto" class="oculto" alt="" referrerpolicy="no-referrer">
+            <span id="ajuste-usuario-inicial" class="ajuste-usuario-inicial"></span>
+          </span>
+          <div class="ajuste-usuario-datos">
+            <h2 class="ajuste-usuario-saludo" id="ajuste-usuario-saludo"></h2>
+            <p class="ajuste-usuario-correo" id="ajuste-usuario-correo"></p>
+          </div>
+          <button type="button" class="btn btn-secondary ajuste-usuario-editar" id="btn-ajuste-cambiar-datos">Cambiar datos</button>
+        </section>
+
         <section class="glass-card stack ajuste-seccion colapsada">
           <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Ajustes generales</h2><span class="ajuste-seccion-chevron">▾</span></button>
           <div class="ajuste-seccion-cuerpo">
 
-          <label class="form-label" for="input-nombre-preferido">Nombre para saludarte</label>
-          <input id="input-nombre-preferido" class="form-input" type="text" maxlength="60" autocomplete="given-name" placeholder="Tu nombre">
           <button type="button" class="btn btn-secondary btn-block" id="btn-repetir-tutorial">Ver bienvenida y mini tutorial</button>
 
           <div class="ajuste-idioma-app">
-            <label class="form-label" for="selector-idioma-app">Idioma</label>
-            <select id="selector-idioma-app" class="form-input" aria-label="Idioma"></select>
+            <span class="form-label" id="label-selector-idioma-app">Idioma</span>
+            <div class="select-custom" id="selector-idioma-app">
+              <button type="button" id="selector-idioma-app-boton" class="form-input select-custom-boton" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="label-selector-idioma-app selector-idioma-app-valor"><span id="selector-idioma-app-valor" data-i18n-keep>Español</span></button>
+              <ul id="selector-idioma-app-lista" class="select-custom-lista oculto" role="listbox"></ul>
+            </div>
           </div>
 
           <div>
@@ -371,6 +451,93 @@
           <div>
             <span class="form-label">Nota de aprobación por universidad/plan</span>
             <div id="seccion-notas-aprobacion" class="stack"></div>
+          </div>
+          </div>
+        </section>
+
+        <section class="glass-card stack ajuste-seccion colapsada">
+          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Personalizar</h2><span class="ajuste-seccion-chevron">▾</span></button>
+          <div class="ajuste-seccion-cuerpo">
+
+          <div id="ajuste-tamano-texto">
+            <span class="form-label">Tamaño de letra</span>
+            <p class="muted ajuste-subtitulo">Elige un tamaño cómodo. El contenido puede ocupar más espacio para que el texto no se corte.</p>
+            <div class="pill-group" role="group" aria-label="Tamaño de letra">
+              <button type="button" class="pill-item" data-tamano-texto="pequeno">Pequeño</button>
+              <button type="button" class="pill-item" data-tamano-texto="mediano">Mediano</button>
+              <button type="button" class="pill-item" data-tamano-texto="grande">Grande</button>
+            </div>
+          </div>
+
+          <div>
+            <span class="form-label">Apariencia</span>
+            <div class="pill-group selector-modos-apariencia" id="selector-modos-apariencia" role="group" aria-label="Apariencia">
+              <button type="button" class="pill-item" data-modo-tema="light">Modo claro</button>
+              <button type="button" class="pill-item" data-modo-tema="dark">Modo color</button>
+              <button type="button" class="pill-item" data-modo-tema="true-dark">Modo oscuro</button>
+            </div>
+          </div>
+          <div>
+            <span class="form-label">Calidad</span>
+            <p class="muted ajuste-subtitulo">Fancy puede usar más recursos en algunos dispositivos.</p>
+            <div class="row-between"><span>Modo fancy</span><label class="switch switch-tema"><input type="checkbox" id="switch-rendimiento"><span class="track"><span class="thumb"></span></span></label></div>
+          </div>
+
+          <div>
+            <span class="form-label">Paleta de color</span>
+            <div class="palette-grid" id="grid-paletas"></div>
+          </div>
+
+          <div>
+            <span class="form-label">Navegación</span>
+            <p class="muted ajuste-subtitulo">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
+            <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
+          </div>
+
+          <div id="ajuste-personalizar-marca" class="ajuste-grupo">
+          <div id="ajuste-logo-app" class="stack">
+            <span class="form-label ajuste-titulo">Personalizar logo</span>
+            <p class="muted ajuste-subtitulo">Elige cómo se colorea el logo de la app. Con colores personalizados puedes cambiar cada una de las seis pestañas.</p>
+            <div class="ajuste-logo-fila">
+              <img class="ajuste-logo-vista" src="imagenes/LogoAppFolder-512.png" alt="Logo de la app" data-app-logo>
+              <div class="pill-group" role="group" aria-label="Personalizar logo">
+                <button type="button" class="pill-item" data-estilo-logo="original">Colores originales</button>
+                <button type="button" class="pill-item" data-estilo-logo="paleta">Colores de la paleta</button>
+                <button type="button" class="pill-item" data-estilo-logo="personalizado">Colores personalizados</button>
+              </div>
+            </div>
+            <div id="logo-colores-bloque" class="stack oculto">
+              <div class="intro-colores" id="logo-colores" role="group" aria-label="Colores de las pestañas del logo"><label class="intro-color-bolita"><input type="color" data-logo-color="0" aria-label="Color de la pestaña 1"></label><label class="intro-color-bolita"><input type="color" data-logo-color="1" aria-label="Color de la pestaña 2"></label><label class="intro-color-bolita"><input type="color" data-logo-color="2" aria-label="Color de la pestaña 3"></label><label class="intro-color-bolita"><input type="color" data-logo-color="3" aria-label="Color de la pestaña 4"></label><label class="intro-color-bolita"><input type="color" data-logo-color="4" aria-label="Color de la pestaña 5"></label><label class="intro-color-bolita"><input type="color" data-logo-color="5" aria-label="Color de la pestaña 6"></label></div>
+              <div class="intro-colores-acciones"><button type="button" class="btn-discreto" id="btn-logo-colores-original">Restablecer</button></div>
+            </div>
+          </div>
+
+          <div id="ajuste-iconos-nav">
+            <span class="form-label ajuste-titulo">Personalizar iconos</span>
+            <p class="muted ajuste-subtitulo">Cómo se colorean los iconos del menú lateral. "Color según logo" usa los colores de tu logo; si el logo sigue la paleta, usa los del logo original.</p>
+            <div class="pill-group" role="group" aria-label="Personalizar iconos">
+              <button type="button" class="pill-item" data-iconos-nav="fijo">Multicolor</button>
+              <button type="button" class="pill-item" data-iconos-nav="logo">Color según logo</button>
+              <button type="button" class="pill-item" data-iconos-nav="paleta">Color según paleta</button>
+            </div>
+            <div class="pm-iconos" id="pm-iconos-vista" aria-hidden="true"></div>
+          </div>
+          </div>
+
+          <div id="ajuste-intro-apertura" class="stack">
+            <span class="form-label">Animación de apertura</span>
+            <p class="muted ajuste-subtitulo">Un folder muestra sus pestañas mientras la app carga y se abre al terminar. Si la apagas, se usa el cargador de siempre.</p>
+            <div class="row-between"><span>Animación de apertura</span><label class="switch switch-tema"><input type="checkbox" id="switch-intro-apertura"><span class="track"><span class="thumb"></span></span></label></div>
+            <div class="intro-ver-fila" style="display:flex;justify-content:center;"><button type="button" class="btn-discreto" id="btn-intro-ver">Ver animación</button></div>
+            <!-- Ya no se usa: los colores de la animación son los del logo. Se deja oculto para no romper config-ajustes.js. -->
+            <div id="intro-colores-bloque" class="stack" hidden style="display:none!important">
+              <span class="form-label">Colores de las pestañas</span>
+              <div class="intro-colores" id="intro-colores" role="group" aria-label="Colores de las pestañas"><label class="intro-color-bolita"><input type="color" data-intro-color="0" aria-label="Color de la pestaña 1"></label><label class="intro-color-bolita"><input type="color" data-intro-color="1" aria-label="Color de la pestaña 2"></label><label class="intro-color-bolita"><input type="color" data-intro-color="2" aria-label="Color de la pestaña 3"></label><label class="intro-color-bolita"><input type="color" data-intro-color="3" aria-label="Color de la pestaña 4"></label><label class="intro-color-bolita"><input type="color" data-intro-color="4" aria-label="Color de la pestaña 5"></label><label class="intro-color-bolita"><input type="color" data-intro-color="5" aria-label="Color de la pestaña 6"></label></div>
+              <button type="button" class="btn btn-secondary" id="btn-intro-colores-paleta" aria-pressed="false">Usar colores de la paleta</button>
+              <div class="intro-colores-acciones">
+                <button type="button" class="btn-discreto" id="btn-intro-colores-original">Restablecer</button>
+              </div>
+            </div>
           </div>
           </div>
         </section>
@@ -476,73 +643,7 @@
           </div>
         </section>
 
-        <section class="glass-card stack ajuste-seccion colapsada">
-          <button type="button" class="ajuste-seccion-cabecera"><h2 class="texto-encabezado-seccion">Personalizar</h2><span class="ajuste-seccion-chevron">▾</span></button>
-          <div class="ajuste-seccion-cuerpo">
-
-          <div id="ajuste-tamano-texto">
-            <span class="form-label">Tamaño de letra</span>
-            <p class="muted ajuste-subtitulo">Elige un tamaño cómodo. El contenido puede ocupar más espacio para que el texto no se corte.</p>
-            <div class="pill-group" role="group" aria-label="Tamaño de letra">
-              <button type="button" class="pill-item" data-tamano-texto="pequeno">Pequeño</button>
-              <button type="button" class="pill-item" data-tamano-texto="mediano">Mediano</button>
-              <button type="button" class="pill-item" data-tamano-texto="grande">Grande</button>
-            </div>
-          </div>
-
-          <div>
-            <span class="form-label">Apariencia</span>
-            <div class="pill-group selector-modos-apariencia" id="selector-modos-apariencia" role="group" aria-label="Apariencia">
-              <button type="button" class="pill-item" data-modo-tema="light">Modo claro</button>
-              <button type="button" class="pill-item" data-modo-tema="dark">Modo color</button>
-              <button type="button" class="pill-item" data-modo-tema="true-dark">Modo oscuro</button>
-            </div>
-          </div>
-          <div>
-            <span class="form-label">Calidad</span>
-            <p class="muted ajuste-subtitulo">Fancy puede usar más recursos en algunos dispositivos.</p>
-            <div class="row-between"><span>Modo fancy</span><label class="switch switch-tema"><input type="checkbox" id="switch-rendimiento"><span class="track"><span class="thumb"></span></span></label></div>
-          </div>
-
-          <div>
-            <span class="form-label">Paleta de color</span>
-            <div class="palette-grid" id="grid-paletas"></div>
-          </div>
-
-          <div>
-            <span class="form-label">Navegación</span>
-            <p class="muted ajuste-subtitulo">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
-            <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
-          </div>
-
-          <div id="selector-logo-app" class="stack">
-            <div class="logo-selector-encabezado"><span class="form-label">Logo de la app</span><label class="logo-selector-personalizado" for="input-logo-app-archivo">Personalizado</label></div>
-            <div class="onboarding-logos">
-              <button type="button" data-logo-app="folder" aria-label="Logo carpeta"><img src="imagenes/LogoAppFolder-512.png" alt="Logo con carpeta"></button>
-              <button type="button" data-logo-app="birrete" aria-label="Logo birrete"><img src="imagenes/LogoAppBirrete.png" alt="Logo con birrete"></button>
-            </div>
-            <input id="input-logo-app-archivo" class="oculto" type="file" accept="image/png,image/jpeg,image/webp">
-            <small class="muted ajuste-subtitulo">Por seguridad, el navegador solo permite leer un archivo si lo eliges aquí.</small>
-          </div>
-
-          <div id="ajuste-intro-apertura" class="stack">
-            <span class="form-label">Animación de apertura</span>
-            <p class="muted ajuste-subtitulo">Un folder muestra sus pestañas mientras la app carga y se abre al terminar. Si la apagas, se usa el cargador de siempre.</p>
-            <div class="row-between"><span>Animación de apertura</span><label class="switch switch-tema"><input type="checkbox" id="switch-intro-apertura"><span class="track"><span class="thumb"></span></span></label></div>
-            <div id="intro-colores-bloque" class="stack">
-              <span class="form-label">Colores de las pestañas</span>
-              <div class="intro-colores" id="intro-colores" role="group" aria-label="Colores de las pestañas"><label class="intro-color-bolita"><input type="color" data-intro-color="0" aria-label="Color de la pestaña 1"></label><label class="intro-color-bolita"><input type="color" data-intro-color="1" aria-label="Color de la pestaña 2"></label><label class="intro-color-bolita"><input type="color" data-intro-color="2" aria-label="Color de la pestaña 3"></label><label class="intro-color-bolita"><input type="color" data-intro-color="3" aria-label="Color de la pestaña 4"></label><label class="intro-color-bolita"><input type="color" data-intro-color="4" aria-label="Color de la pestaña 5"></label><label class="intro-color-bolita"><input type="color" data-intro-color="5" aria-label="Color de la pestaña 6"></label></div>
-              <button type="button" class="btn btn-secondary" id="btn-intro-colores-paleta" aria-pressed="false">Usar colores de la paleta</button>
-              <div class="intro-colores-acciones">
-                <button type="button" class="btn-discreto" id="btn-intro-colores-original">Restablecer</button>
-                <button type="button" class="btn-discreto" id="btn-intro-ver">Ver animación</button>
-              </div>
-            </div>
-          </div>
-          </div>
-        </section>
-
-        <!-- Ronda de ajustes visuales — punto 3: la sección "Agenda" que vivía
+<!-- Ronda de ajustes visuales — punto 3: la sección "Agenda" que vivía
              acá (mostrar días sin eventos ni tareas / mostrar clases ese día)
              se sacó de Ajustes global — ahora vive únicamente en el modal de
              Ajustes de Agenda (#modal-agenda-ajustes), accesible solo desde
@@ -763,11 +864,11 @@
           <!-- 2026-11-04: ESTA es la estructura de referencia de todos los encabezados de la app
                (botón de semestre · fila izquierda / centro / derecha). Ver .app-encabezado en design-system.css. -->
           <div class="app-encabezado__fila">
-            <div class="app-encabezado__izq"><button type="button" class="btn btn-primary app-encabezado__mas" id="btn-agenda-agregar" title="Agregar">+</button></div>
+            <div class="app-encabezado__izq"><button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda" aria-label="Ajustes de Agenda">⋮</button></div>
 
             <div id="agenda-subheader-dinamico" class="app-encabezado__centro"></div>
 
-            <div class="app-encabezado__der"><button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda" aria-label="Ajustes de Agenda">⋮</button></div>
+            <div class="app-encabezado__der"><button type="button" class="btn btn-primary app-encabezado__mas" id="btn-agenda-agregar" title="Agregar">+</button></div>
           </div>
         </section>
 
@@ -801,20 +902,20 @@
           <button type="button" class="btn-discreto app-encabezado__semestre" id="horario-nombre-semestre"></button>
           <div class="app-encabezado__fila">
             <div class="app-encabezado__izq">
-              <button type="button" class="app-encabezado__icono" id="btn-horario-descargar" title="Descargar horario como imagen" aria-label="Descargar horario como imagen">⬇</button>
-              <button type="button" class="btn btn-primary app-encabezado__mas" id="btn-horario-agregar" title="Agregar" aria-label="Agregar">+</button>
-              <button type="button" class="btn btn-secondary app-encabezado__salir oculto" id="btn-salir-modo-conjunto">Salir</button>
+              <button type="button" class="app-encabezado__icono app-encabezado__descargar" id="btn-horario-descargar" title="Descargar horario como imagen" aria-label="Descargar horario como imagen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg></button>
+              <button type="button" class="app-encabezado__icono app-encabezado__salir oculto" id="btn-salir-modo-conjunto" title="Salir" aria-label="Salir"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>
+              <button type="button" class="btn btn-primary app-encabezado__lado" id="btn-horario-amigos" title="Amigos" aria-label="Amigos"><span class="app-encabezado__lado-icono" aria-hidden="true">👥</span><span class="app-encabezado__lado-texto">Amigos</span></button>
             </div>
             <div class="app-encabezado__centro">
-              <div class="row app-encabezado__titulofila">
+              <div class="row app-encabezado__titulofila" style="align-items:center; justify-content:center;">
                 <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;">‹</button>
                 <span id="horario-semana-actual" class="texto-encabezado-seccion"></span>
                 <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;">›</button>
               </div>
-              <div class="row app-encabezado__rango"><span class="muted" id="horario-fecha-actual" style="font-size:0.78rem;"></span></div>
+              <div class="row app-encabezado__rango"><span class="muted" id="horario-fecha-actual" style="font-size:var(--enc-fs-sub);"></span></div>
             </div>
             <div class="app-encabezado__der">
-              <button type="button" class="btn btn-secondary app-encabezado__lado" id="btn-horario-amigos" title="Amigos" aria-label="Amigos"><span class="app-encabezado__lado-icono" aria-hidden="true">👥</span><span class="app-encabezado__lado-texto">Amigos</span></button>
+              <button type="button" class="btn btn-primary app-encabezado__mas" id="btn-horario-agregar" title="Agregar" aria-label="Agregar">+</button>
               <button type="button" class="app-encabezado__icono" id="btn-horario-pantalla-completa" title="Pantalla completa" aria-label="Pantalla completa">⛶</button>
             </div>
           </div>
@@ -1517,6 +1618,22 @@
       </label>
     </div>
 
+    <!-- 2026-11-04 (parche 7): columnas de semana en el calendario mensual, cada una se apaga por separado. -->
+    <div class="row-between">
+      <span>Semana del semestre (columna izquierda)</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="chk-agenda-calendario-semana-semestre" checked>
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+    <div class="row-between">
+      <span>Semana del año (columna derecha)</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="chk-agenda-calendario-semana-anio" checked>
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+
     <!-- Pedido nuevo: qué mostrar en la columna derecha de un pendiente
          cuando "vence hoy" — 2 switches INDEPENDIENTES (ya no un grupo de
          radio con "Ambos"), ambos default ON. Con los 2 activos se ve la
@@ -1740,5 +1857,6 @@
 </style>
 
 <script type="module" src="js/main.js"></script>
+<script type="module" src="js/core/vista-iconos-nav.js"></script>
 </body>
 </html>
