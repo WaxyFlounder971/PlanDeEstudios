@@ -714,6 +714,8 @@ async function iniciarAplicacionDemo() {
     estado.conexionDrive = "ok";
     estado.ultimoModifiedTimeConocido = null;
     aplicarTamanoTexto(estado.datos);
+    aplicarEstiloIconosNav(estado.datos);
+    iniciarAnchoSidebarAutomatico();
     // El arranque normal también registra navegación y eventos de cada
     // módulo. La demo omite deliberadamente auth/sync, así que inicializa
     // aquí solo las piezas de interfaz que necesita para funcionar.
@@ -1247,6 +1249,8 @@ function mostrarAppInterno() {
   const cfg = estado.datos.configuracion;
   window.procesarNotasCompartidas?.();
   aplicarTamanoTexto(estado.datos);
+  aplicarEstiloIconosNav(estado.datos);
+  iniciarAnchoSidebarAutomatico();
   const modoVistaDemo = new URLSearchParams(location.search).get("preview") === "1" ? (cfg.modo || "dark") : "dark";
   aplicarPaleta(cfg.paleta, MODO_DEMO ? modoVistaDemo : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
   aplicarLogoApp();
@@ -1332,6 +1336,68 @@ function mostrarAppInterno() {
     }
     if (!MODO_DEMO) mostrarInvitacionInstalacion();
   });
+}
+
+// Color de los iconos del menú lateral (Ajustes > Personalizar). Solo pone un
+// atributo en <html>; los colores salen de CSS (ver "Parche 9" en
+// design-system.css), así que cambiar de estilo no recarga ni dibuja nada.
+// Sin valor guardado (o valor desconocido) = "fijo", el multicolor de siempre.
+function aplicarEstiloIconosNav(datos) {
+  const valores = ["fijo", "logo", "paleta"];
+  const elegido = datos?.configuracion?.estilo_iconos_nav;
+  document.documentElement.dataset.iconosNav = valores.includes(elegido) ? elegido : "fijo";
+}
+
+// Ancho de la sidebar (escritorio): el que pide el texto más largo del menú (o el título), con 230px de mínimo, para que
+// nada se corte con letra grande ni en idiomas de palabras largas. Solo escribe --sidebar-ancho; el CSS lo aplica.
+let observadorAnchoSidebar = null;
+function ajustarAnchoSidebar() {
+  const barra = document.getElementById("app-sidebar");
+  if (!barra) return;
+  const num = (valor) => parseFloat(valor) || 0; // "normal" / "" -> 0
+  const visible = (el) => el.getClientRects().length > 0;
+  const ancho = (el) => el.getBoundingClientRect().width; // offsetWidth no existe en el <svg> de los iconos
+  const cs = getComputedStyle(barra);
+  let necesario = 0;
+  barra.querySelectorAll(".btn-nav:not(.oculto)").forEach((btn) => {
+    const texto = btn.querySelector(".texto-nav");
+    if (!texto || !visible(btn)) return;
+    const bs = getComputedStyle(btn);
+    const otros = Array.from(btn.children).filter((el) => el !== texto && visible(el));
+    const extras = otros.reduce((suma, el) => suma + ancho(el), 0) + num(bs.columnGap) * otros.length;
+    // Texto completo (scrollWidth, aunque esté recortado) + icono/insignias + hueco + relleno + borde del botón.
+    necesario = Math.max(necesario, texto.scrollWidth + extras + num(bs.paddingLeft) + num(bs.paddingRight) + 2);
+  });
+  // Título: se suma el ancho de sus piezas (logo + texto). Su scrollWidth no sirve: nunca baja del ancho de la barra.
+  const titulo = barra.querySelector(".sidebar-titulo");
+  if (titulo) {
+    const piezas = Array.from(titulo.children).filter(visible);
+    const hueco = num(getComputedStyle(titulo).columnGap) * Math.max(0, piezas.length - 1);
+    necesario = Math.max(necesario, piezas.reduce((suma, el) => suma + ancho(el), 0) + hueco);
+  }
+  // + relleno de la barra + margen para la barra de scroll fina de la lista.
+  const total = Math.ceil(necesario + num(cs.paddingLeft) + num(cs.paddingRight) + 10);
+  const valor = Math.min(Math.max(total, 230), Math.round(window.innerWidth * 0.4));
+  document.documentElement.style.setProperty("--sidebar-ancho", `${valor}px`);
+}
+
+function iniciarAnchoSidebarAutomatico() {
+  ajustarAnchoSidebar();
+  if (observadorAnchoSidebar) return;
+  let pendiente = false;
+  const reprogramar = () => {
+    if (pendiente) return;
+    pendiente = true;
+    requestAnimationFrame(() => { pendiente = false; ajustarAnchoSidebar(); });
+  };
+  const barra = document.getElementById("app-sidebar");
+  observadorAnchoSidebar = new MutationObserver(reprogramar);
+  // Cambia el texto (idioma), se muestran/ocultan secciones o se agrega una insignia.
+  if (barra) observadorAnchoSidebar.observe(barra, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["class", "hidden"] });
+  // Cambia el tamaño de letra o el idioma de la página.
+  observadorAnchoSidebar.observe(document.documentElement, { attributes: true, attributeFilter: ["data-text-size", "lang"] });
+  window.addEventListener("resize", reprogramar);
+  document.fonts?.ready?.then(reprogramar);
 }
 
 function aplicarTamanoTexto(datos) {
@@ -1550,43 +1616,54 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
     btn.classList.toggle("btn-secondary", !activo);
   });
   if (!MODO_DEMO) localStorage.setItem(CLAVE_SECCION_ACTIVA, nombre);
-  if (nombre === "plan-estudios") {
-    // Cada entrada al Plan parte con bloques abiertos y materias cerradas.
-    // Esta preferencia de presentación vive en memoria en cada dispositivo.
-    estado.bloquesColapsados = new Set();
-    estado.materiasExpandidas = new Map();
-    renderizarPlanEstudios();
-  }
-  // Finanzas lee la moneda preferida al renderizar. Redibujarla al entrar
-  // asegura que un cambio hecho en Ajustes se vea inmediatamente.
-  if (nombre === "finanzas") renderizarFinanzas();
-  // Horario depende de datos que se editan en otras pestañas (nombre/fechas
-  // de semestre, materias matriculadas) - se re-renderiza al entrar para
-  // que nunca se vea desactualizado.
-  if (nombre === "horario") window.renderizarHorario?.();
-  // Agenda: mismo motivo (materias matriculadas/bloques de Horario que se
-  // editan en otras secciones), más el hecho de que "hoy"/"esta semana"
-  // pueden haber cambiado si la pestaña quedó abierta de un día para otro.
-  if (nombre === "agenda") window.renderizarAgenda?.();
-  // Tiempo de Estudio: mismo motivo que Agenda/Horario arriba (meta y
-  // sesiones se pueden haber editado en otra pestaña/dispositivo) - se
-  // re-renderiza fresco cada vez que se entra a la sección.
-  if (nombre === "tiempo-estudio") window.renderizarTiempoEstudio?.();
-  // Resumen: agrega datos de Agenda/Horario/Semestres, así que le aplican
-  // los mismos motivos de arriba (datos editados en otras secciones, más
-  // "hoy" pudiendo haber cambiado) - se re-renderiza fresco cada vez que se
-  // entra, en vez de confiar en el render inicial de mostrarApp().
-  if (nombre === "resumen") window.renderizarResumen?.();
-  // Asistente IA (revisado 2026-08-22): renderizarAsistente() SIEMPRE
-  // reconstruye el DOM de cero al entrar (nunca deja restos de una visita
-  // anterior colgando), pero eso no significa "chat en blanco siempre" -
-  // si hay una conversación guardada en localStorage con menos de 1h desde
-  // el último mensaje, esa misma función ofrece "Continuar"/"Nueva
-  // conversación" antes de arrancar (ver leerHistorialLocalVigente +
-  // mostrarAvisoContinuar en js/asistente/asistente.js). Con más de 1h, o
-  // sin conversación guardada, arranca directo en blanco.
-  if (nombre === "asistente") window.renderizarAsistente?.();
-  if (nombre === "notas") renderizarNotas();
+  // INP: el clic solo cambia visibilidad y estado del botón; el render pesado
+  // de la sección se difiere hasta después del primer pintado para que la
+  // interacción responda de inmediato en equipos lentos.
+  const renderSeccion = () => {
+    if (seccionNavegacionActual !== nombre) return; // el usuario ya cambió de sección
+    if (nombre === "plan-estudios") {
+      // Cada entrada al Plan parte con bloques abiertos y materias cerradas.
+      // Esta preferencia de presentación vive en memoria en cada dispositivo.
+      estado.bloquesColapsados = new Set();
+      estado.materiasExpandidas = new Map();
+      renderizarPlanEstudios();
+    }
+    // Finanzas lee la moneda preferida al renderizar. Redibujarla al entrar
+    // asegura que un cambio hecho en Ajustes se vea inmediatamente.
+    if (nombre === "finanzas") renderizarFinanzas();
+    // Horario depende de datos que se editan en otras pestañas (nombre/fechas
+    // de semestre, materias matriculadas) - se re-renderiza al entrar para
+    // que nunca se vea desactualizado.
+    if (nombre === "horario") window.renderizarHorario?.();
+    // Agenda: mismo motivo (materias matriculadas/bloques de Horario que se
+    // editan en otras secciones), más el hecho de que "hoy"/"esta semana"
+    // pueden haber cambiado si la pestaña quedó abierta de un día para otro.
+    if (nombre === "agenda") window.renderizarAgenda?.();
+    // Tiempo de Estudio: mismo motivo que Agenda/Horario arriba (meta y
+    // sesiones se pueden haber editado en otra pestaña/dispositivo) - se
+    // re-renderiza fresco cada vez que se entra a la sección.
+    if (nombre === "tiempo-estudio") window.renderizarTiempoEstudio?.();
+    // Resumen: agrega datos de Agenda/Horario/Semestres, así que le aplican
+    // los mismos motivos de arriba (datos editados en otras secciones, más
+    // "hoy" pudiendo haber cambiado) - se re-renderiza fresco cada vez que se
+    // entra, en vez de confiar en el render inicial de mostrarApp().
+    if (nombre === "resumen") window.renderizarResumen?.();
+    // Asistente IA (revisado 2026-08-22): renderizarAsistente() SIEMPRE
+    // reconstruye el DOM de cero al entrar (nunca deja restos de una visita
+    // anterior colgando), pero eso no significa "chat en blanco siempre" -
+    // si hay una conversación guardada en localStorage con menos de 1h desde
+    // el último mensaje, esa misma función ofrece "Continuar"/"Nueva
+    // conversación" antes de arrancar (ver leerHistorialLocalVigente +
+    // mostrarAvisoContinuar en js/asistente/asistente.js). Con más de 1h, o
+    // sin conversación guardada, arranca directo en blanco.
+    if (nombre === "asistente") window.renderizarAsistente?.();
+    if (nombre === "notas") renderizarNotas();
+  };
+  cancelAnimationFrame(window.__renderSeccionRaf);
+  clearTimeout(window.__renderSeccionTimer);
+  window.__renderSeccionRaf = requestAnimationFrame(() => {
+    window.__renderSeccionTimer = setTimeout(renderSeccion, 0);
+  });
   if (dependencia && seccionSolicitada !== nombre) setTimeout(() => mostrarToastAccion(dependencia.mensaje, "Entendido", () => mostrarSeccion(nombre)), 220);
   if (cambioSeccion && (!MODO_DEMO || !PREVIEW_DEMO) && estado.datos?.configuracion?.onboarding_v1_completado !== false) requestAnimationFrame(() => mostrarTutorialPrimeraVez(nombre));
 }
@@ -1752,7 +1829,9 @@ function renderizarPerfil() {
   foto.classList.add("oculto");
   fallback.classList.remove("oculto");
 
-  if (perfil.foto_url) {
+  // Foto elegida por la persona (Configuración u onboarding) > foto de la cuenta de Google.
+  const fotoMostrada = perfil.foto_personalizada || perfil.foto_url;
+  if (fotoMostrada) {
     foto.onload = () => {
       foto.classList.remove("oculto");
       fallback.classList.add("oculto");
@@ -1761,9 +1840,10 @@ function renderizarPerfil() {
       foto.classList.add("oculto");
       fallback.classList.remove("oculto");
     };
-    foto.src = perfil.foto_url;
+    foto.src = fotoMostrada;
     foto.alt = nombreVisible || "Foto de perfil";
   }
+  window.renderizarUsuarioAjustes?.();
 
   wrap.onclick = () => {
     // El popover con confirmación solo tiene sentido cuando el sidebar está

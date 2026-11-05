@@ -242,15 +242,29 @@ async function cargarListaIdiomas() {
   }
 }
 
+// Hay dos selectores con el mismo componente (.select-custom, igual que Moneda): el del inicio de sesión
+// ("selector-idioma") y el de Ajustes > Ajustes generales ("selector-idioma-app"). Cada uno se identifica por su prefijo de ids.
+const PREFIJOS_SELECTOR_IDIOMA = ["selector-idioma", "selector-idioma-app"];
+const cierresSelectorIdioma = new Map(); // prefijo -> función que cierra su lista (también quita sus listeners)
+
+function elementosSelectorIdioma(prefijo) {
+  return {
+    selector: document.getElementById(prefijo),
+    boton: document.getElementById(`${prefijo}-boton`),
+    texto: document.getElementById(`${prefijo}-valor`),
+    lista: document.getElementById(`${prefijo}-lista`),
+  };
+}
+
 function renderizarSelector() {
-  const selector = document.getElementById("selector-idioma");
-  const boton = document.getElementById("selector-idioma-boton");
-  const lista = document.getElementById("selector-idioma-lista");
+  PREFIJOS_SELECTOR_IDIOMA.forEach(renderizarSelectorIdioma);
+  actualizarSelectorIdioma();
+}
+
+function renderizarSelectorIdioma(prefijo) {
+  const { selector, boton, lista } = elementosSelectorIdioma(prefijo);
   if (!selector || !boton || !lista) return;
-  // El selector vive solo en el inicio de sesión, para no ocupar espacio
-  // en las vistas de la app (en especial en pantallas de teléfono).
   boton.title = "Idioma";
-  boton.setAttribute("aria-label", "Idioma");
   lista.replaceChildren();
   for (const idioma of idiomasDisponibles) {
     const opcion = document.createElement("li");
@@ -261,38 +275,23 @@ function renderizarSelector() {
     opcion.tabIndex = -1;
     opcion.addEventListener("click", async () => {
       await aplicarIdioma(idioma.id);
-      cerrarListaIdiomas();
+      cerrarListaIdiomas(prefijo);
       boton.focus();
     });
     lista.append(opcion);
-  }
-
-  const selectorAplicacion = document.getElementById("selector-idioma-app");
-  if (selectorAplicacion) {
-    selectorAplicacion.replaceChildren();
-    for (const idioma of idiomasDisponibles) {
-      const opcion = document.createElement("option");
-      opcion.value = idioma.id;
-      opcion.textContent = idioma.nombre;
-      opcion.dataset.i18nKeep = "";
-      selectorAplicacion.append(opcion);
-    }
-    selectorAplicacion.addEventListener("change", async () => {
-      await aplicarIdioma(selectorAplicacion.value);
-    });
   }
 
   lista._volverA = selector;
   boton.setAttribute("aria-controls", lista.id);
   boton.onclick = (evento) => {
     evento.stopPropagation();
-    if (lista.classList.contains("oculto")) abrirListaIdiomas();
-    else cerrarListaIdiomas();
+    if (lista.classList.contains("oculto")) abrirListaIdiomas(prefijo);
+    else cerrarListaIdiomas(prefijo);
   };
   boton.onkeydown = (evento) => {
     if (evento.key !== "ArrowDown" && evento.key !== "Enter" && evento.key !== " ") return;
     evento.preventDefault();
-    abrirListaIdiomas();
+    abrirListaIdiomas(prefijo);
     lista.querySelector("[role='option']")?.focus();
   };
   lista.onkeydown = (evento) => {
@@ -300,7 +299,7 @@ function renderizarSelector() {
     const actual = opciones.indexOf(document.activeElement);
     if (evento.key === "Escape") {
       evento.preventDefault();
-      cerrarListaIdiomas();
+      cerrarListaIdiomas(prefijo);
       boton.focus();
     } else if (evento.key === "ArrowDown" || evento.key === "ArrowUp") {
       evento.preventDefault();
@@ -311,34 +310,31 @@ function renderizarSelector() {
       document.activeElement?.click();
     }
   };
-  document.addEventListener("click", (evento) => {
-    if (!selector.contains(evento.target) && !lista.contains(evento.target)) cerrarListaIdiomas();
-  });
-  actualizarSelectorIdioma();
+  if (!selector.dataset.cierreExterno) {
+    selector.dataset.cierreExterno = "1";
+    document.addEventListener("click", (evento) => {
+      if (!selector.contains(evento.target) && !lista.contains(evento.target)) cerrarListaIdiomas(prefijo);
+    });
+  }
 }
 
 function actualizarSelectorIdioma() {
-  const selector = document.getElementById("selector-idioma");
-  const boton = document.getElementById("selector-idioma-boton");
-  const texto = document.getElementById("selector-idioma-valor");
-  const lista = document.getElementById("selector-idioma-lista");
-  if (!selector || !boton || !texto || !lista) return;
   const seleccionado = idiomasDisponibles.find((idioma) => idioma.id === idiomaActual);
-  texto.textContent = seleccionado?.nombre || "Español";
-  lista.querySelectorAll("[role='option']").forEach((opcion, indice) => {
-    const idioma = idiomasDisponibles[indice];
-    const activa = idioma?.id === idiomaActual;
-    opcion.classList.toggle("activa", activa);
-    opcion.setAttribute("aria-selected", String(activa));
+  PREFIJOS_SELECTOR_IDIOMA.forEach((prefijo) => {
+    const { selector, boton, texto, lista } = elementosSelectorIdioma(prefijo);
+    if (!selector || !boton || !texto || !lista) return;
+    texto.textContent = seleccionado?.nombre || "Español";
+    lista.querySelectorAll("[role='option']").forEach((opcion, indice) => {
+      const idioma = idiomasDisponibles[indice];
+      const activa = idioma?.id === idiomaActual;
+      opcion.classList.toggle("activa", activa);
+      opcion.setAttribute("aria-selected", String(activa));
+    });
   });
-  const selectorAplicacion = document.getElementById("selector-idioma-app");
-  if (selectorAplicacion) selectorAplicacion.value = idiomaActual;
 }
 
-function abrirListaIdiomas() {
-  const selector = document.getElementById("selector-idioma");
-  const boton = document.getElementById("selector-idioma-boton");
-  const lista = document.getElementById("selector-idioma-lista");
+function abrirListaIdiomas(prefijo) {
+  const { selector, boton, lista } = elementosSelectorIdioma(prefijo);
   if (!selector || !boton || !lista) return;
 
   document.querySelectorAll(".select-custom-lista").forEach((otraLista) => {
@@ -347,6 +343,8 @@ function abrirListaIdiomas() {
     if (otraLista.parentElement === document.body && otraLista._volverA) otraLista._volverA.appendChild(otraLista);
   });
 
+  const cerrar = () => cerrarListaIdiomas(prefijo);
+  cierresSelectorIdioma.set(prefijo, cerrar);
   lista._volverA = selector;
   document.body.appendChild(lista);
   const rect = boton.getBoundingClientRect();
@@ -356,20 +354,21 @@ function abrirListaIdiomas() {
   lista.style.width = `${rect.width}px`;
   lista.classList.remove("oculto");
   boton.setAttribute("aria-expanded", "true");
-  window.addEventListener("resize", cerrarListaIdiomas);
-  window.addEventListener("scroll", cerrarListaIdiomas, true);
+  window.addEventListener("resize", cerrar);
+  // Se cierra al hacer scroll fuera de la propia lista (igual que Moneda), para poder recorrer la lista con el mouse.
+  lista._cerrarPorScroll = (evento) => { if (!lista.contains(evento.target)) cerrar(); };
+  window.addEventListener("scroll", lista._cerrarPorScroll, true);
 }
 
-function cerrarListaIdiomas() {
-  const selector = document.getElementById("selector-idioma");
-  const boton = document.getElementById("selector-idioma-boton");
-  const lista = document.getElementById("selector-idioma-lista");
+function cerrarListaIdiomas(prefijo) {
+  const { selector, boton, lista } = elementosSelectorIdioma(prefijo);
   if (!selector || !lista) return;
   lista.classList.add("oculto");
   boton?.setAttribute("aria-expanded", "false");
   if (lista.parentElement === document.body) selector.appendChild(lista);
-  window.removeEventListener("resize", cerrarListaIdiomas);
-  window.removeEventListener("scroll", cerrarListaIdiomas, true);
+  const cerrar = cierresSelectorIdioma.get(prefijo);
+  if (cerrar) window.removeEventListener("resize", cerrar);
+  if (lista._cerrarPorScroll) window.removeEventListener("scroll", lista._cerrarPorScroll, true);
 }
 
 export async function inicializarIdiomas() {

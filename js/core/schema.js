@@ -51,7 +51,10 @@ function crearDatosUsuarioNuevo() {
       onboarding_plan_en_blanco_pendiente: false, // continúa a Semestres al crear la primera materia del flujo inicial en blanco
       icono_app: "📘",              // icono personal localizable que acompaña la paleta elegida
       logo_app: "folder",
-      logo_app_url: null,
+      logo_app_url: null,            // en desuso: ya no se puede subir un logo propio (se ignora)
+      // Ajustes > Personalizar > "Personalizar logo": "original" | "paleta" (el de siempre) | "personalizado".
+      estilo_logo: "paleta",
+      logo_colores_personalizados: null, // null = los de las pestañas originales; o [6 × "#rrggbb"] de arriba abajo
       // Animación de apertura (2026-10-09): folder cuyas pestañas salen y entran
       // mientras la app carga y que se abre al terminar. false = se usa el
       // cargador de siempre. Se refleja en localStorage (ver core/intro-apertura.js)
