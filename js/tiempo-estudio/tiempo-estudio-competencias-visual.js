@@ -268,7 +268,11 @@ function limitarMensaje(texto) {
 
 /** Lunes de la semana actual en "AAAA-MM-DD" (hora local). Igual para todos, sin depender de ajustes. */
 function semanaISOActual() {
-  const d = new Date();
+  return semanaISODe(Date.now());
+}
+
+function semanaISODe(ms) {
+  const d = new Date(Number.isFinite(Number(ms)) ? Number(ms) : Date.now());
   d.setHours(0, 0, 0, 0);
   d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -791,6 +795,7 @@ export {
   guardarMensajesVisibles,
   LIMITE_MENSAJE_CARACTERES,
   semanaISOActual,
+  semanaISODe,
   mensajeVisibleDe,
   leerMiMensaje,
   guardarMiMensaje,

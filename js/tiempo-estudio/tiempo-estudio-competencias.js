@@ -84,6 +84,7 @@ import {
   leerVistaPreferida,
   guardarVistaPreferida,
   leerMensajesVisibles,
+  semanaISODe,
   conMensajePropio,
   mensajeVisibleDe,
   pintarTarjeta,
@@ -356,6 +357,36 @@ function activarLongPress(elemento, duracionMs, alCompletar) {
  */
 function obtenerOffsetMinutosUtc() {
   return -new Date().getTimezoneOffset();
+}
+
+function inicioSemanaLocalMs() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.getTime();
+}
+
+async function leerMensajesRemotos(competenciaId) {
+  const url = `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competenciaId)}/mensajes?desde=${inicioSemanaLocalMs()}&limite=200`;
+  const respuesta = await fetchConTimeout(url, { cache: "no-store" });
+  if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status} al leer mensajes`);
+  const datos = await respuesta.json();
+  const porParticipante = new Map();
+  (Array.isArray(datos.mensajes) ? datos.mensajes : []).forEach((mensaje) => {
+    if (mensaje?.participante_id && typeof mensaje.texto === "string") porParticipante.set(mensaje.participante_id, mensaje);
+  });
+  return porParticipante;
+}
+
+function aplicarMensajesRemotos(participantes, porParticipante) {
+  return participantes.map((p) => {
+    const mensaje = porParticipante.get(p.id);
+    return {
+      ...p,
+      mensaje: mensaje?.texto || "",
+      mensaje_semana: mensaje ? semanaISODe(mensaje.creado_en) : "",
+    };
+  });
 }
 
 function formatearHoras(horas) {
@@ -1361,6 +1392,38 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
       animar,
     }, cb);
   };
+  const instalarPollingMensajes = () => {
+    if (tarjeta.__timerMensajesCompetencia) return;
+    tarjeta.__timerMensajesCompetencia = setInterval(() => {
+      if (!tarjeta.isConnected) {
+        clearInterval(tarjeta.__timerMensajesCompetencia);
+        tarjeta.__timerMensajesCompetencia = null;
+        return;
+      }
+      const seccion = document.getElementById("seccion-tiempo-estudio");
+      if (document.visibilityState === "visible" && seccion?.getClientRects().length && navigator.onLine !== false) {
+        tarjeta.__sincronizarMensajesCompetencia?.();
+      }
+    }, 30000);
+  };
+  tarjeta.__sincronizarMensajesCompetencia = async () => {
+    instalarPollingMensajes();
+    if (!datosVista || !tarjeta.isConnected || navigator.onLine === false) return;
+    try {
+      const porParticipante = await leerMensajesRemotos(competencia.id);
+      const participantesActualizados = aplicarMensajesRemotos(datosVista.participantes, porParticipante);
+      if (JSON.stringify(datosVista.participantes) === JSON.stringify(participantesActualizados)) return;
+      datosVista.participantes = participantesActualizados;
+      guardarCacheMarcador(competencia.id, {
+        nombre: datosVista.nombre || base.nombre,
+        estado: leerCacheMarcador(competencia.id)?.estado || "activa",
+        participantes: participantesActualizados,
+      });
+      redibujar(false);
+    } catch (e) {
+      console.warn("[competencias] No se pudieron actualizar los mensajes compartidos:", e);
+    }
+  };
   const cb = {
     alHistorial: () => abrirModalHistorial(competencia),
     alMensaje: () => {
@@ -1442,7 +1505,13 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
 
     // El Worker guarda `horas_semana_actual` en HORAS; el módulo visual
     // trabaja con `horas` a secas.
-    const participantes = (datos.participantes || []).map((p) => ({
+    let mensajesRemotos = null;
+    try {
+      mensajesRemotos = await leerMensajesRemotos(competencia.id);
+    } catch (e) {
+      console.warn("[competencias] No se pudieron cargar los mensajes compartidos:", e);
+    }
+    const participantesBase = (datos.participantes || []).map((p) => ({
       id: p.id,
       apodo: p.apodo,
       foto_url: p.foto_url || null,
@@ -1451,6 +1520,9 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
       mensaje: p.mensaje || "",
       mensaje_semana: p.mensaje_semana || "",
     }));
+    const participantes = mensajesRemotos
+      ? aplicarMensajesRemotos(participantesBase, mensajesRemotos)
+      : participantesBase;
 
     // Foto y color propios: si el Worker tiene otros (o ninguno), se sube lo
     // actual de este dispositivo y mientras tanto se muestra directamente.
@@ -1488,9 +1560,9 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
       && !datosVista.aviso
       && datosVista.nombre === nombreFinal
       && JSON.stringify(datosVista.participantes) === JSON.stringify(participantes);
-    if (sinCambios) return;
-
     datosVista = { nombre: nombreFinal, participantes, aviso: null };
+    instalarPollingMensajes();
+    if (sinCambios) return;
     redibujar(datosVista && !cacheInicial ? animarEstaVez() : false);
   } catch (e) {
     console.error("[competencias] Falló cargar el marcador:", e);
@@ -1625,6 +1697,7 @@ function construirVistaCompetencias(cont, refrescar) {
   const previa = vistaCompetenciasCache;
   if (previa && previa.firma === firma && Date.now() - previa.creadaEn < TTL_VISTA_COMPETENCIAS_MS) {
     cont.appendChild(previa.envoltorio);
+    previa.envoltorio.querySelectorAll(".cp-comp").forEach((tarjeta) => tarjeta.__sincronizarMensajesCompetencia?.());
     armarEasterEggSimulacion(previa, refrescar);
     return;
   }
