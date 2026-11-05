@@ -199,22 +199,34 @@ function ejecutarOpcionGestion(id, competencia, refrescar) {
 
 /* ===================== Mensaje semanal (globo de texto del podio) ===================== */
 
-/**
- * Manda mi mensaje semanal al marcador (mismo endpoint de perfil que foto y color).
- * `mensaje: ""` lo borra. Si no hay conexión queda como pendiente y se reintenta la próxima vez
- * que se cargue el marcador (ver cargarMarcadorEnTarjeta). Mientras tanto SIEMPRE se ve el propio
- * (se lee de este dispositivo), así que guardar nunca "no hace nada".
- */
+function crearIdClienteMensaje() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID().replace(/-/g, "");
+  return `msg_${Date.now()}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+/** Envía el mensaje al Worker; el registro local permanece como cola de reintento offline. */
 async function enviarMensajePendiente(competencia) {
-  const registro = leerMiMensaje(competencia.id);
-  if (!registro || registro.enviado) return;
+  let registro = leerMiMensaje(competencia.id);
+  if (!registro || registro.semana !== semanaISOActual()) return;
+  // Registros antiguos se marcaban como enviados aunque solo se guardaban en local.
+  // Asignarles una clave nueva permite subirlos una vez y deduplicarlos en los reintentos.
+  if (!registro.id_cliente) {
+    registro = { ...registro, id_cliente: crearIdClienteMensaje(), creado_en: Date.now(), enviado: false };
+    guardarMiMensaje(competencia.id, registro);
+  }
+  if (registro.enviado) return;
   try {
     const respuesta = await fetchConTimeout(
-      `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/participantes/${encodeURIComponent(competencia.participante_id)}/perfil`,
+      `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/mensajes`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identificador_usuario: estado.datos.perfil.correo, mensaje: registro.texto, mensaje_semana: registro.semana }),
+        body: JSON.stringify({
+          identificador_usuario: estado.datos.perfil.correo,
+          texto: registro.texto || "",
+          id_cliente: registro.id_cliente,
+          creado_en: registro.creado_en || Date.now(),
+        }),
       }
     );
     if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
@@ -253,7 +265,7 @@ function abrirModalMensajeSemanal(competencia, textoInicial, alCambiar) {
   campo.focus();
 
   const aplicar = (texto, aviso) => {
-    guardarMiMensaje(competencia.id, { texto, semana: semanaISOActual(), enviado: false });
+    guardarMiMensaje(competencia.id, { texto, semana: semanaISOActual(), enviado: false, id_cliente: crearIdClienteMensaje(), creado_en: Date.now() });
     cerrar();
     mostrarToast(traducirTextoInterfaz(aviso));
     if (typeof alCambiar === "function") alCambiar();
