@@ -158,7 +158,7 @@ function construirEncabezadoFinanzas() {
   const cab = document.createElement("header");
   cab.className = "finanzas-encabezado";
   const h = document.createElement("h2");
-  h.className = "finanzas-encabezado-titulo";
+  h.className = "finanzas-encabezado-titulo texto-encabezado-seccion";
   h.textContent = traducirTextoInterfaz(info.etiqueta);
   const p = document.createElement("p");
   p.className = "finanzas-encabezado-ayuda muted";

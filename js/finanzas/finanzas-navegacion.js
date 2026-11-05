@@ -131,15 +131,10 @@ function construirSubnav() {
   const cab = document.createElement("div");
   cab.className = "finanzas-subnav-cab";
   const titulo = document.createElement("h2");
-  titulo.className = "finanzas-subnav-titulo";
+  titulo.className = "finanzas-subnav-titulo texto-encabezado-seccion";
   titulo.textContent = T("Finanzas");
   cab.appendChild(titulo);
   caja.appendChild(cab);
-
-  if (config.anadir) {
-    const cta = crearBotonAccion("Añadir movimiento", "anadir", "btn btn-primary finanzas-nav-cta", config.anadir);
-    caja.appendChild(cta);
-  }
 
   const lista = document.createElement("div");
   lista.className = "finanzas-subnav-lista";
@@ -160,7 +155,8 @@ function construirSubnav() {
   });
   caja.appendChild(lista);
 
-  if (config.atajos.length) {
+  // «Atajos» queda fijo al fondo (fuera del área con scroll); «Añadir movimiento» es siempre el último.
+  if (config.atajos.length || config.anadir) {
     const pie = document.createElement("div");
     pie.className = "finanzas-nav-grupo finanzas-subnav-pie";
     const t = document.createElement("div");
@@ -168,6 +164,7 @@ function construirSubnav() {
     t.textContent = T("Atajos");
     pie.appendChild(t);
     config.atajos.forEach((a) => pie.appendChild(crearBotonAccion(a.texto, a.icono, "finanzas-nav-item finanzas-nav-atajo", a.alClick)));
+    if (config.anadir) pie.appendChild(crearBotonAccion("Añadir movimiento", "anadir", "finanzas-nav-item finanzas-nav-atajo finanzas-nav-cta", config.anadir));
     caja.appendChild(pie);
   }
 }
@@ -210,7 +207,7 @@ function construirHoja() {
   asa.setAttribute("aria-hidden", "true");
   hoja.appendChild(asa);
   const h = document.createElement("h2");
-  h.className = "finanzas-hoja-titulo";
+  h.className = "finanzas-hoja-titulo texto-encabezado-seccion";
   h.textContent = T("Finanzas");
   hoja.appendChild(h);
 
@@ -318,9 +315,32 @@ function aplicarVisibilidad(seccion) {
   const actual = seccion || window.__appSeccionActiva;
   const mostrar = shellListo && actual === "finanzas" && Boolean(config);
   document.body.classList.toggle("finanzas-subnav-activa", mostrar);
-  if (elSubnav) elSubnav.hidden = !mostrar;
+  if (elSubnav) mostrarSubnav(mostrar);
   if (!mostrar) cerrarHoja();
   ajustarBarraPrincipal(mostrar);
+}
+
+/** La sub-barra entra y sale animada (en paralelo a la barra principal que se contrae/expande). */
+function mostrarSubnav(mostrar) {
+  const sinAnimacion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || !esEscritorio();
+  if (mostrar) {
+    const eraVisible = !elSubnav.hidden && !elSubnav.classList.contains("saliendo");
+    elSubnav.classList.remove("saliendo");
+    if (!eraVisible) {
+      elSubnav.hidden = false;
+      // Reinicia la animación de entrada.
+      elSubnav.style.animation = "none"; void elSubnav.offsetWidth; elSubnav.style.animation = "";
+    }
+    return;
+  }
+  if (elSubnav.hidden || elSubnav.classList.contains("saliendo")) return;
+  if (sinAnimacion) { elSubnav.hidden = true; return; }
+  elSubnav.classList.add("saliendo");
+  const terminar = () => {
+    if (elSubnav.classList.contains("saliendo")) { elSubnav.hidden = true; elSubnav.classList.remove("saliendo"); }
+  };
+  elSubnav.addEventListener("animationend", terminar, { once: true });
+  setTimeout(terminar, 400); // red de seguridad si el evento no llega
 }
 
 /**
