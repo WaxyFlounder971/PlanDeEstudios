@@ -31,6 +31,7 @@ import {
   guardarRefreshTokenGoogle,
   leerRefreshTokenGoogle,
   refrescarAccessTokenViaWorker,
+  registrarMotivoSesion,
 } from "../auth.js";
 import { FRECUENCIAS_BACKUP_DRIVE, crearBackupDriveDefault, migrarDatosAntiguos, sellarTimestamp } from "../schema.js";
 import { fusionarDatos } from "./storage-merge.js";
@@ -130,6 +131,7 @@ async function asegurarTokenValido() {
       // evento "online" y manejarFalloReconexion más abajo) recupere la
       // sesión solo, sin pedirle nada al usuario.
       if (e.invalidGrant) {
+        registrarMotivoSesion("google_invalid_grant"); // se muestra en el login: Google ya no acepta la sesión guardada
         borrarRefreshTokenGoogle();
       }
       // 2026-10-05: ya no se salta directo a gris. La recuperación

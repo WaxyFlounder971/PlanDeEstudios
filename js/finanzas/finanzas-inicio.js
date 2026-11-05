@@ -44,20 +44,47 @@ function montoVisible(n, conSigno = "") {
   return conSigno ? conSigno + formatearMonto(Math.abs(Number(n) || 0)) : formatearMonto(n);
 }
 
-function construirBarraPrivacidad() {
-  const barra = document.createElement("div");
-  barra.className = "row";
-  barra.style.cssText = "justify-content:flex-end;";
-  const activa = privacidadActiva();
-  const boton = crearBoton(
-    (activa ? "👁 " : "🙈 ") + t(activa ? "Mostrar importes" : "Ocultar importes"),
-    "btn-discreto",
-    () => { fijarPrivacidad(!privacidadActiva()); renderizarFinanzas(); },
-  );
-  boton.style.fontSize = "0.85rem";
-  boton.setAttribute("aria-pressed", activa ? "true" : "false");
-  barra.appendChild(boton);
-  return barra;
+const NS_SVG = "http://www.w3.org/2000/svg";
+
+/** Ojo abierto (importes visibles) y ojo cerrado con pestañas (importes ocultos). Trazo, no relleno: igual que los iconos de Finanzas. */
+const FORMAS_OJO = {
+  abierto: ["M2.5 12s3.6-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.6 6.5-9.5 6.5S2.5 12 2.5 12z", "circle"],
+  cerrado: ["M3 10c2.3 3.1 5.3 4.8 9 4.8s6.7-1.7 9-4.8", "M5.9 13.4 4.3 15.8", "M10 14.7 9.5 17.5", "M14 14.7l.5 2.8", "M18.1 13.4l1.6 2.4"],
+};
+
+function dibujarOjo(cerrado) {
+  const svg = document.createElementNS(NS_SVG, "svg");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("class", "finanzas-ojo-ico");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  FORMAS_OJO[cerrado ? "cerrado" : "abierto"].forEach((d) => {
+    if (d === "circle") {
+      const c = document.createElementNS(NS_SVG, "circle");
+      c.setAttribute("cx", "12"); c.setAttribute("cy", "12"); c.setAttribute("r", "3");
+      svg.appendChild(c);
+      return;
+    }
+    const p = document.createElementNS(NS_SVG, "path");
+    p.setAttribute("d", d);
+    svg.appendChild(p);
+  });
+  return svg;
+}
+
+/** Botón del ojo para el encabezado de Finanzas (Inicio). Ojo abierto = se ven los importes; cerrado = ocultos. */
+function construirBotonPrivacidad() {
+  const ocultos = privacidadActiva();
+  const texto = t(ocultos ? "Mostrar importes" : "Ocultar importes");
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.className = "finanzas-ojo";
+  boton.title = texto;
+  boton.setAttribute("aria-label", texto);
+  boton.setAttribute("aria-pressed", ocultos ? "true" : "false");
+  boton.appendChild(dibujarOjo(ocultos));
+  boton.addEventListener("click", () => { fijarPrivacidad(!privacidadActiva()); renderizarFinanzas(); });
+  return boton;
 }
 
 /* ===================== Piezas pequeñas ===================== */
@@ -310,11 +337,11 @@ function construirTarjetaRecordatorios() {
 }
 
 /**
- * Bloques que abren el Inicio: [barra de privacidad, Disponible, Próximos]. Disponible solo existe con
- * "Mi dinero" (Gastos, Matrícula o Beca encendidos); sin él, solo queda la barra de privacidad.
+ * Bloques que abren el Inicio: [Disponible, Próximos, recordatorios]. Disponible solo existe con
+ * "Mi dinero" (Gastos, Matrícula o Beca encendidos). El ojo de privacidad vive en el encabezado (finanzas.js).
  */
 function construirBloquesInicio() {
-  const bloques = [construirBarraPrivacidad()];
+  const bloques = [];
   const calculo = calcularDisponible(estado.datos);
   const recordatorios = construirTarjetaRecordatorios();
   if (!calculo.aplica) { if (recordatorios) bloques.push(recordatorios); return bloques; }
@@ -331,4 +358,4 @@ function hayProximos() {
   return calculo.aplica && calculo.proximos.length > 0;
 }
 
-export { abrirDesgloseDisponible, construirBloquesInicio, hayProximos, construirFilaProximo, fijarPrivacidad, montoVisible, privacidadActiva };
+export { abrirDesgloseDisponible, construirBloquesInicio, construirBotonPrivacidad, hayProximos, construirFilaProximo, fijarPrivacidad, montoVisible, privacidadActiva };

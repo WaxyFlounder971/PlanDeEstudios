@@ -3,6 +3,10 @@
   "nombre": "Français",
   "locale": "fr",
   "traducciones": {
+    "Originales": "Originaux",
+    "Paleta": "Palette",
+    "Personalizados": "Personnalisés",
+    "Según logo": "Selon le logo",
     "Semana del semestre": "Semaine du semestre",
     "Semana del año": "Semaine de l’année",
     "Semana del semestre (columna izquierda)": "Semaine du semestre (colonne gauche)",

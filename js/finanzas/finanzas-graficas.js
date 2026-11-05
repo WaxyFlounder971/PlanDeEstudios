@@ -163,7 +163,7 @@ function construirLeyendaDonut(totalEntradas, totalGastado) {
 
   const leyenda = document.createElement("div");
   leyenda.className = "stack";
-  leyenda.style.cssText = "gap:10px; min-width:200px;";
+  leyenda.style.cssText = "gap:10px; min-width:min(200px, 100%);";
 
   const fila = (clase, texto, pct, monto) => {
     const f = document.createElement("div");
@@ -229,6 +229,7 @@ function construirSeccionDonut(totalBecas, totalIngresos, totalGastado) {
   centro.className = "resumen-donut-centro";
   const cifra = document.createElement("strong");
   cifra.textContent = formatearMonto(disponible);
+  centro.style.setProperty("--largo", String(Math.max(cifra.textContent.length, 6))); // el CSS achica la letra según el largo
   const rotulo = document.createElement("span");
   rotulo.textContent = disponible >= 0 ? traducirTextoInterfaz("Disponible") : traducirTextoInterfaz("Sobregasto");
   centro.append(cifra, rotulo);
