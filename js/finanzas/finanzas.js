@@ -21,6 +21,7 @@ import { renderizarPestanaMovimientos } from "./finanzas-movimientos.js";
 import { construirAnilloMeta, renderizarPestanaMetas } from "./finanzas-metas.js";
 import { renderizarPestanaPlan } from "./finanzas-plan.js";
 import { construirSelectorPerfil } from "./finanzas-modulos-ui.js";
+import { INFO_SECCIONES_FINANZAS, configurarNavegacionFinanzas, ocultarNavegacionFinanzas } from "./finanzas-navegacion.js";
 import { construirBloquesInicio, hayProximos, montoVisible, privacidadActiva } from "./finanzas-inicio.js";
 import { construirBloqueSobresEnRiesgo, pestanaPresupuestoVisible, renderizarPestanaPresupuesto } from "./finanzas-presupuesto.js";
 import { abrirAjustarSaldo, abrirRegistroRapido, construirPasoSaldoInicial } from "./finanzas-registro-rapido.js";
@@ -148,35 +149,53 @@ function pestanasVisiblesConPresupuesto(modulos) {
   return modulos.deudas && !base.includes("deudas") ? [...base, "deudas"] : base;
 }
 
-function construirTabsFinanzas() {
-  // v2.9.1: antes esto dependía de .finanzas-tabs-contenedor (container-type:
-  // inline-size) + .pill-group-finanzas apilándose en columna cuando no
-  // entraban las 4 en una fila — pedido explícito de sacar ese apilado: las
-  // 4 pestañas se quedan SIEMPRE en una sola línea horizontal, y si el
-  // ancho aprieta se encoge la letra/padding en vez de bajar de línea.
-  const envoltorio = document.createElement("div");
-  envoltorio.className = "finanzas-tabs-contenedor";
+/**
+ * Título de la pantalla + una frase de qué se hace ahí. La navegación (sub-barra en escritorio,
+ * barra inferior en teléfono) vive en finanzas-navegacion.js; aquí solo se le dice qué mostrar.
+ */
+function construirEncabezadoFinanzas() {
+  const info = INFO_SECCIONES_FINANZAS[estado.finanzasVistaActiva] || INFO_SECCIONES_FINANZAS.resumen;
+  const cab = document.createElement("header");
+  cab.className = "finanzas-encabezado";
+  const h = document.createElement("h2");
+  h.className = "finanzas-encabezado-titulo";
+  h.textContent = traducirTextoInterfaz(info.etiqueta);
+  const p = document.createElement("p");
+  p.className = "finanzas-encabezado-ayuda muted";
+  p.textContent = traducirTextoInterfaz(info.ayuda);
+  cab.append(h, p);
+  return cab;
+}
 
-  const grupo = document.createElement("div");
-  grupo.className = "pill-group-finanzas";
-
-  const visibles = pestanasVisiblesConPresupuesto(obtenerModulosFinanzas(estado.datos));
-  PESTANAS_FINANZAS.filter((p) => visibles.includes(p.id)).forEach((pestana) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "pill-item" + (estado.finanzasVistaActiva === pestana.id ? " active" : "");
-    btn.dataset.valor = pestana.id;
-    btn.textContent = traducirTextoInterfaz(pestana.etiqueta);
-
-    btn.addEventListener("click", () => {
-      if (estado.finanzasVistaActiva === pestana.id) return;
-      estado.finanzasVistaActiva = pestana.id;
+/** Le pasa a la navegación qué secciones hay, cuál está activa y qué hacen los botones de acción. */
+function actualizarNavegacionFinanzas() {
+  const modulos = obtenerModulosFinanzas(estado.datos);
+  const visibles = pestanasVisiblesConPresupuesto(modulos);
+  const abrirNuevo = () => abrirRegistroRapido({ abrirFormularioCompleto: () => abrirModalMovimiento({ alGuardar: renderizarFinanzas }) });
+  const atajos = [
+    { tipo: "matricula", texto: "Pago de matrícula", icono: "matricula" },
+    { tipo: "beca", texto: "Ingreso de beca", icono: "beca" },
+  ].filter(({ tipo }) => modulos[tipo]).map(({ tipo, texto, icono }) => ({
+    texto,
+    icono,
+    alClick: () => abrirSelectorSemestreParaFinanzas(tipo, (semestreId) => {
+      estado.finanzasVistaActiva = "semestres";
       renderizarFinanzas();
-    });
-    grupo.appendChild(btn);
+      iniciarEdicionMovimientoFinanzas(tipo, semestreId, document.getElementById("finanzas-contenido"));
+    }),
+  }));
+  configurarNavegacionFinanzas({
+    visibles,
+    activa: estado.finanzasVistaActiva,
+    anadir: tiposDisponiblesRegistroRapido(estado.datos).length ? abrirNuevo : null,
+    atajos,
+    alElegir: (id) => {
+      if (estado.finanzasVistaActiva === id) return;
+      estado.finanzasVistaActiva = id;
+      renderizarFinanzas();
+      window.scrollTo({ top: 0, behavior: "auto" });
+    },
   });
-  envoltorio.appendChild(grupo);
-  return envoltorio;
 }
 
 /** Tarjeta principal del Resumen (0C): una cifra grande con texto y signo, y el desglose debajo. */
@@ -396,6 +415,7 @@ function renderizarFinanzas() {
   cont.innerHTML = "";
 
   if (estado.finanzasPasoSaldoInicial) {
+    ocultarNavegacionFinanzas();
     cont.appendChild(construirPasoSaldoInicial(() => {
       estado.finanzasPasoSaldoInicial = false;
       renderizarFinanzas();
@@ -405,6 +425,7 @@ function renderizarFinanzas() {
   }
 
   if (debeMostrarOnboardingFinanzas(estado.datos)) {
+    ocultarNavegacionFinanzas();
     cont.appendChild(construirOnboardingFinanzas());
     return;
   }
@@ -413,35 +434,8 @@ function renderizarFinanzas() {
   if (!pestanasVisiblesConPresupuesto(obtenerModulosFinanzas(estado.datos)).includes(estado.finanzasVistaActiva)) {
     estado.finanzasVistaActiva = "resumen";
   }
-  cont.appendChild(construirTabsFinanzas());
-
-  const modulosActuales = obtenerModulosFinanzas(estado.datos);
-  const accesosRapidos = document.createElement("div");
-  accesosRapidos.className = "row finanzas-accesos-rapidos";
-  if (tiposDisponiblesRegistroRapido(estado.datos).length) {
-    const rapido = document.createElement("button");
-    rapido.type = "button";
-    rapido.className = "btn btn-primary";
-    rapido.textContent = "＋ " + traducirTextoInterfaz("Añadir movimiento");
-    rapido.addEventListener("click", () => abrirRegistroRapido({ abrirFormularioCompleto: () => abrirModalMovimiento({ alGuardar: renderizarFinanzas }) }));
-    accesosRapidos.appendChild(rapido);
-  }
-  [
-    { tipo: "matricula", texto: "Pago de matrícula" },
-    { tipo: "beca", texto: "Ingreso de beca" },
-  ].filter(({ tipo }) => modulosActuales[tipo]).forEach(({ tipo, texto }) => {
-    const boton = document.createElement("button");
-    boton.type = "button";
-    boton.className = "btn btn-secondary";
-    boton.textContent = traducirTextoInterfaz(texto);
-    boton.addEventListener("click", () => abrirSelectorSemestreParaFinanzas(tipo, (semestreId) => {
-      estado.finanzasVistaActiva = "semestres";
-      renderizarFinanzas();
-      iniciarEdicionMovimientoFinanzas(tipo, semestreId, document.getElementById("finanzas-contenido"));
-    }));
-    accesosRapidos.appendChild(boton);
-  });
-  if (accesosRapidos.childElementCount) cont.appendChild(accesosRapidos);
+  actualizarNavegacionFinanzas();
+  cont.appendChild(construirEncabezadoFinanzas());
 
   const contenido = document.createElement("div");
   contenido.id = "finanzas-contenido";

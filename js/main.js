@@ -1605,6 +1605,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   }
   seccionNavegacionActual = nombre;
   window.__appSeccionActiva = nombre;
+  window.sincronizarNavFinanzas?.(nombre); // sub-barra de Finanzas: solo visible en esa sección
   if (cambioSeccion) registrarAnaliticaUso(nombre, "Abrir sección");
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);

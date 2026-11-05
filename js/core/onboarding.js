@@ -2355,8 +2355,8 @@ const SELECTORES_GUIA_SECCION = {
     () => filaDocenteComunidad() || [...document.querySelectorAll("#seccion-comunidad .pill-group")][2] || document.getElementById("seccion-comunidad"),
   ],
  finanzas: [
-    () => document.querySelector("#seccion-finanzas .finanzas-tabs-contenedor") || document.getElementById("seccion-finanzas"),
-    () => [...document.querySelectorAll("#seccion-finanzas button")].find(b => /agregar|nuevo|gasto|ingreso/i.test(b.textContent)) || document.getElementById("seccion-finanzas"),
+    () => [...document.querySelectorAll("[data-finanzas-nav]")].find((n) => n.getClientRects().length) || document.getElementById("seccion-finanzas"),
+    () => [...document.querySelectorAll(".finanzas-nav-cta,.finanzas-bar-fab")].find((b) => b.getClientRects().length) || document.getElementById("seccion-finanzas"),
     () => document.getElementById("finanzas-contenido") || document.getElementById("seccion-finanzas"),
   ],
   asistente: [
@@ -2420,7 +2420,7 @@ const PASOS_GUIA_FINANZAS = [
   { tab:"semestres", target:()=>document.getElementById("finanzas-contenido"), texto:"Semestres reúne matrícula y becas por periodo. Puedes repartir el total en cuotas, ajustar fechas y confirmar cada una cuando se realice; asociar el semestre no es obligatorio para los movimientos cotidianos." },
   { tab:"plan", target:()=>document.getElementById("finanzas-contenido"), texto:"Plan sirve para anticipar pagos e ingresos con fecha. Lo pendiente alimenta los próximos días de Inicio; al confirmar, se registra el movimiento para evitar contarlo dos veces." },
   { tab:"gastos-u", target:()=>document.querySelector("#finanzas-contenido h3")?.parentElement||document.getElementById("finanzas-contenido"), texto:"Movimientos es el registro central: gastos, ingresos, ahorros, ajustes de saldo, préstamos y traspasos. Añade fecha, categoría y cuenta cuando aplique; usa las vistas por tipo o cronológica para revisar el historial." },
-  { tab:"gastos-u", target:()=>[...document.querySelectorAll("#seccion-finanzas button")].find(b=>/añadir movimiento/i.test(b.textContent))||document.getElementById("finanzas-contenido"), texto:"Añadir movimiento abre el registro rápido. Para más campos, abre el formulario completo: puedes indicar categoría, cuenta, semestre, meta o recurrencia. Las plantillas usan tus registros recientes como atajos." },
+  { tab:"gastos-u", target:()=>[...document.querySelectorAll(".finanzas-nav-cta,.finanzas-bar-fab")].find((b)=>b.getClientRects().length)||document.getElementById("finanzas-contenido"), texto:"Añadir movimiento abre el registro rápido. Para más campos, abre el formulario completo: puedes indicar categoría, cuenta, semestre, meta o recurrencia. Las plantillas usan tus registros recientes como atajos." },
   { tab:"metas", target:()=>document.getElementById("finanzas-contenido"), texto:"Metas separa objetivos de ahorro y límites de gasto por categorías. Los aportes programados son recordatorios o planes: no mueven dinero automáticamente. Si configuras un reparto de ingresos para una meta, la app propone cuánto separar y tú confirmas el aporte." },
   { tab:"presupuesto", target:()=>document.getElementById("finanzas-contenido"), texto:"Presupuesto crea límites para categorías y periodos. El gasto registrado consume el presupuesto y puedes consultar el resumen mensual para ajustar tus topes." },
   { tab:"gastos-estudiantiles", target:()=>document.getElementById("finanzas-contenido"), texto:"Beneficios reúne apoyos y gastos estudiantiles vinculados a tu vida académica. Usa Semestres para pagos de matrícula y becas; aquí encuentras el seguimiento de beneficios relacionados." },
@@ -2431,7 +2431,7 @@ const PASOS_GUIA_FINANZAS = [
 ];
 
 function iniciarGuiaFinanzas() {
-  const tabs = [...document.querySelectorAll("#seccion-finanzas .finanzas-tabs-contenedor button[data-valor]")];
+  const tabs = [...document.querySelectorAll(".finanzas-nav-item[data-valor]")];
   if (!tabs.length || document.querySelector(".guia-seccion-flotante,.guia-plan-flotante,.tutorial-seccion-overlay")) return false;
   const idsVisibles = new Set(tabs.map((b)=>b.dataset.valor));
   const pasos = PASOS_GUIA_FINANZAS.filter((p)=>!p.tab||idsVisibles.has(p.tab));
