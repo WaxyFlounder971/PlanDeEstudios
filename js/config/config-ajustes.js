@@ -62,6 +62,29 @@ function inicializarTamanoTextoAjustes() {
   });
 }
 
+function inicializarIconosNavAjustes() {
+  const cont = document.getElementById("ajuste-iconos-nav");
+  if (!cont || !estado.datos?.configuracion) return;
+  const valores = ["fijo", "logo", "paleta"];
+  const actual = valores.includes(estado.datos.configuracion.estilo_iconos_nav) ? estado.datos.configuracion.estilo_iconos_nav : "fijo";
+  document.documentElement.dataset.iconosNav = actual;
+  cont.querySelectorAll("[data-iconos-nav]").forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.iconosNav === actual);
+    if (btn.dataset.listenerIconosNav) return;
+    btn.dataset.listenerIconosNav = "1";
+    btn.addEventListener("click", () => {
+      const nuevo = btn.dataset.iconosNav;
+      if (!valores.includes(nuevo)) return;
+      // Igual que el tamaño de letra: escribir siempre sobre el objeto vigente.
+      estado.datos.configuracion.estilo_iconos_nav = nuevo;
+      document.documentElement.dataset.iconosNav = nuevo;
+      cont.querySelectorAll("[data-iconos-nav]").forEach((otro) => otro.classList.toggle("active", otro === btn));
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+    });
+  });
+}
+
 function inicializarBorradoCuentaApp() {
   const btn = document.getElementById("btn-borrar-cuenta-app");
   if (!btn || btn.dataset.inicializado === "1") return;
@@ -1566,6 +1589,7 @@ function inicializarAjusteIntroApertura() {
 function renderizarAjustes() {
   inicializarAccesoDocumentosLegales();
   inicializarTamanoTextoAjustes();
+  inicializarIconosNavAjustes();
   inicializarBorradoCuentaApp();
   inicializarAccordionAjustes();
   inicializarAsistenteAjustes();

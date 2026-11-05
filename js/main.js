@@ -714,6 +714,7 @@ async function iniciarAplicacionDemo() {
     estado.conexionDrive = "ok";
     estado.ultimoModifiedTimeConocido = null;
     aplicarTamanoTexto(estado.datos);
+    aplicarEstiloIconosNav(estado.datos);
     // El arranque normal también registra navegación y eventos de cada
     // módulo. La demo omite deliberadamente auth/sync, así que inicializa
     // aquí solo las piezas de interfaz que necesita para funcionar.
@@ -1247,6 +1248,7 @@ function mostrarAppInterno() {
   const cfg = estado.datos.configuracion;
   window.procesarNotasCompartidas?.();
   aplicarTamanoTexto(estado.datos);
+  aplicarEstiloIconosNav(estado.datos);
   const modoVistaDemo = new URLSearchParams(location.search).get("preview") === "1" ? (cfg.modo || "dark") : "dark";
   aplicarPaleta(cfg.paleta, MODO_DEMO ? modoVistaDemo : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
   aplicarLogoApp();
@@ -1332,6 +1334,16 @@ function mostrarAppInterno() {
     }
     if (!MODO_DEMO) mostrarInvitacionInstalacion();
   });
+}
+
+// Color de los iconos del menú lateral (Ajustes > Personalizar). Solo pone un
+// atributo en <html>; los colores salen de CSS (ver "Parche 9" en
+// design-system.css), así que cambiar de estilo no recarga ni dibuja nada.
+// Sin valor guardado (o valor desconocido) = "fijo", el multicolor de siempre.
+function aplicarEstiloIconosNav(datos) {
+  const valores = ["fijo", "logo", "paleta"];
+  const elegido = datos?.configuracion?.estilo_iconos_nav;
+  document.documentElement.dataset.iconosNav = valores.includes(elegido) ? elegido : "fijo";
 }
 
 function aplicarTamanoTexto(datos) {
