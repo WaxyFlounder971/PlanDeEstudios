@@ -7,18 +7,11 @@
 import { ESCALAS_DISPONIBLES, FRECUENCIAS_BACKUP_DRIVE, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, PALETAS_DISPONIBLES, calcularObjetivoPasarRaspando, crearBackupDriveDefault, migrarDatosAntiguos, obtenerEscalaPorId, migrarNotasAsignacionesEscalaPlan, sellarTimestamp } from "../core/schema.js";
 import { actualizarIndicadorSync, forzarBackupManual, marcarCambioPendiente } from "../core/storage/storage-sync.js";
 import { estado } from "../core/storage/storage.js";
-import { borrarDatosCuentaApp } from "../core/eliminar-cuenta-app.js";
 import { copiarPromptConAviso } from "../core/clipboard.js";
-import { aplicarFormatoTexto, obtenerIniciales } from "../core/utils.js";
-import { obtenerFotoPerfil, elegirYGuardarFotoPerfil, guardarFotoPersonalizada } from "../core/foto-perfil.js";
-import { aplicarLogoApp, inicializarSelectorLogo } from "../core/marca.js";
-import { coloresDePaletaActual, coloresIntroEfectivos, espejarColoresIntroLocal, espejarIntroAperturaLocal, introAperturaActivada, modoColoresIntro, verAnimacionIntro } from "../core/intro-apertura.js";
-import { obtenerIdiomaActual, traducirTextoInterfaz } from "../core/i18n.js";
-import { renderizarMarkdownSimple } from "../core/onboarding.js";
-import { renderizarModulosFinanzasAjustes } from "../finanzas/finanzas-modulos-ui.js";
+import { aplicarFormatoTexto } from "../core/utils.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
-import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
-import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoTemaLocal, guardarModoDisenoLocal } from "../ui/tema.js";
+import { abrirConfirmacion, mostrarToast } from "../ui/componentes.js";
+import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import {
@@ -28,120 +21,19 @@ import {
   eliminarAdjuntosDeTareasDeSemestre,
   hayAdjuntosGuardados,
 } from "../core/storage/storage-adjuntos.js";
-// Ajustes usa Google Calendar para los recordatorios vigentes. El módulo
-// antiguo de Web Push no forma parte del flujo activo.
+// Notificaciones push reales (Ajustes Avanzados) — ver
+// core/notificaciones-push.js. Este archivo solo dibuja el switch y
+// delega toda la lógica de permiso/suscripción/(des)programación en lote
+// a esas funciones.
 import {
-  activarSincronizacionCalendario,
-  desactivarSincronizacionCalendario,
-  sincronizacionCalendarActiva,
+  activarNotificacionesPush,
+  desactivarNotificacionesPush,
+  notificacionesPushActivas,
   sincronizarResumenDiario,
-} from "../core/notificaciones-calendario.js";
+  soportaNotificacionesPush,
+} from "../core/notificaciones-push.js";
 
 /* ------------------------------ Ajustes ------------------------------ */
-
-function inicializarTamanoTextoAjustes() {
-  const cont = document.getElementById("ajuste-tamano-texto");
-  if (!cont || !estado.datos?.configuracion) return;
-  const valores = ["pequeno", "mediano", "grande"];
-  const actual = valores.includes(estado.datos.configuracion.tamano_texto) ? estado.datos.configuracion.tamano_texto : "mediano";
-  document.documentElement.dataset.textSize = actual;
-  cont.querySelectorAll("[data-tamano-texto]").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.tamanoTexto === actual);
-    if (btn.dataset.listenerTamanoTexto) return;
-    btn.dataset.listenerTamanoTexto = "1";
-    btn.addEventListener("click", () => {
-      const nuevo = btn.dataset.tamanoTexto;
-      if (!valores.includes(nuevo)) return;
-      // `estado.datos` puede ser reemplazado por una sincronización mientras
-      // Ajustes permanece abierto; siempre escribir sobre el objeto vigente.
-      estado.datos.configuracion.tamano_texto = nuevo;
-      document.documentElement.dataset.textSize = nuevo;
-      cont.querySelectorAll("[data-tamano-texto]").forEach((otro) => otro.classList.toggle("active", otro === btn));
-      marcarCambioPendiente();
-    });
-  });
-}
-
-function inicializarIconosNavAjustes() {
-  const cont = document.getElementById("ajuste-iconos-nav");
-  if (!cont || !estado.datos?.configuracion) return;
-  const valores = ["fijo", "logo", "paleta"];
-  const actual = valores.includes(estado.datos.configuracion.estilo_iconos_nav) ? estado.datos.configuracion.estilo_iconos_nav : "fijo";
-  document.documentElement.dataset.iconosNav = actual;
-  cont.querySelectorAll("[data-iconos-nav]").forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.iconosNav === actual);
-    if (btn.dataset.listenerIconosNav) return;
-    btn.dataset.listenerIconosNav = "1";
-    btn.addEventListener("click", () => {
-      const nuevo = btn.dataset.iconosNav;
-      if (!valores.includes(nuevo)) return;
-      // Igual que el tamaño de letra: escribir siempre sobre el objeto vigente.
-      estado.datos.configuracion.estilo_iconos_nav = nuevo;
-      document.documentElement.dataset.iconosNav = nuevo;
-      cont.querySelectorAll("[data-iconos-nav]").forEach((otro) => otro.classList.toggle("active", otro === btn));
-      sellarTimestamp(estado.datos.configuracion);
-      marcarCambioPendiente();
-    });
-  });
-}
-
-function inicializarBorradoCuentaApp() {
-  const btn = document.getElementById("btn-borrar-cuenta-app");
-  if (!btn || btn.dataset.inicializado === "1") return;
-  btn.dataset.inicializado = "1";
-  btn.addEventListener("click", abrirConfirmacionBorradoCuentaApp);
-}
-
-function abrirConfirmacionBorradoCuentaApp() {
-  document.getElementById("modal-borrar-cuenta-app")?.remove();
-  const overlay = document.createElement("div");
-  overlay.id = "modal-borrar-cuenta-app";
-  overlay.className = "modal-overlay";
-  overlay.style.zIndex = "900";
-  const caja = document.createElement("div");
-  caja.className = "glass-card modal-card stack";
-  caja.style.cssText = "width:min(100%,440px); gap:14px;";
-  caja.innerHTML = `
-    <h2 style="margin:0;">Borrar todos los datos de la app</h2>
-    <p class="muted" style="margin:0;">Se borrarán tus datos, archivos y calendario de App Académica, y se retirará tu participación de tus competencias. Si creaste una competencia con otras personas, su administración se transferirá a otro miembro. Tu cuenta Google, otros archivos y las competencias de los demás no se borran. Esta acción no se puede deshacer.</p>
-    <label class="stack" style="gap:6px;">
-      <span class="form-label">Escribe exactamente: <strong>BORRAR MI CUENTA</strong></span>
-      <input id="confirmar-borrar-cuenta-app-texto" class="form-input" type="text" autocomplete="off" spellcheck="false">
-    </label>
-    <p id="confirmar-borrar-cuenta-app-error" class="muted oculto" style="margin:0; color:var(--color-danger,#ef4444);"></p>
-    <div class="row" style="gap:10px;">
-      <button type="button" id="confirmar-borrar-cuenta-app-cancelar" class="btn btn-secondary" style="flex:1;">Cancelar</button>
-      <button type="button" id="confirmar-borrar-cuenta-app-final" class="btn btn-secondary" style="flex:1;" disabled>Borrar definitivamente</button>
-    </div>`;
-  overlay.appendChild(caja);
-  document.body.appendChild(overlay);
-  const input = caja.querySelector("#confirmar-borrar-cuenta-app-texto");
-  const final = caja.querySelector("#confirmar-borrar-cuenta-app-final");
-  const btnCancelar = caja.querySelector("#confirmar-borrar-cuenta-app-cancelar");
-  const cancelar = () => overlay.remove();
-  btnCancelar.addEventListener("click", cancelar);
-  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cancelar(); });
-  input.addEventListener("input", () => { final.disabled = input.value !== "BORRAR MI CUENTA"; });
-  input.addEventListener("keydown", (ev) => { if (ev.key === "Enter") ev.preventDefault(); });
-  final.addEventListener("click", async () => {
-    if (input.value !== "BORRAR MI CUENTA") return;
-    final.disabled = true;
-    btnCancelar.disabled = true;
-    final.textContent = "Borrando…";
-    try {
-      await borrarDatosCuentaApp();
-    } catch (error) {
-      console.error("No se pudo completar el borrado de cuenta:", error);
-      const msg = caja.querySelector("#confirmar-borrar-cuenta-app-error");
-      msg.textContent = error?.message || "No se pudo borrar todo. No cerré tu sesión para que puedas volver a intentarlo.";
-      msg.classList.remove("oculto");
-      final.disabled = false;
-      btnCancelar.disabled = false;
-      final.textContent = "Borrar definitivamente";
-    }
-  });
-  input.focus();
-}
 
 /**
  * Asistente IA (Gemini), revisado 2026-08-22: clave de API propia del
@@ -364,30 +256,24 @@ function dispararSyncConAntirrebote() {
 
 /**
  * Notificaciones — Recordatorios por tipo (2026-08-20, migrado a select
- * único 2026-08-24, REVERTIDO A CHIPS 2026-09-26 ronda 2, Y REVERTIDO DE
- * NUEVO A SELECT 2026-09-26 ronda 3 — esta vez un select de SELECCIÓN
- * MÚLTIPLE, a pedido explícito: "que se muestren como select, no como
- * botones porque se corta"): un `construirSelectMultipleAjustes` (ver más
- * abajo, mismo patrón visual/posicionamiento que construirSelectCustomAjustes
- * — botón + lista propia reparentada a document.body) por cada tipo de
- * evento de Agenda (tarea/examen/evento/feriado), en ese orden fijo. A
- * diferencia de construirSelectCustomAjustes (un solo valor a la vez), este
- * permite tildar más de un offset por tipo (ej. "1 día antes" Y "1 hora
- * antes" para exámenes) sin depender de una fila de botones que se corta
- * en pantallas angostas — el botón cerrado solo muestra un resumen corto,
- * la lista con las opciones vive en un popup vertical.
- *
+ * único 2026-08-24): un select estilizado (construirSelectCustomAjustes,
+ * mismo patrón que Backup y Rango de horas) por cada tipo de evento de
+ * Agenda (tarea/examen/evento/feriado), en ese orden fijo.
  * Cada select lee/escribe estado.datos.configuracion.notificaciones_recordatorios[tipo]
- * como un ARREGLO de ids de OFFSETS_RECORDATORIO_AGENDA (ver core/schema.js)
- * — mismo formato que ya espera migrarDatosAntiguos en schema.js, tolerante
- * además a un string suelto de un dato viejo a medio migrar (se normaliza a
- * arreglo de 1 antes de pasarlo al componente). Solo tiene sentido con el
- * switch general de sincronización con Google Calendar activo — si está
- * apagado, el bloque completo queda atenuado y sin interacción (mismo
- * criterio visual que el resto de bloques dependientes de un switch en
- * esta pantalla), pero los valores elegidos NO se pierden: siguen
+ * — un solo id de OFFSETS_RECORDATORIO_AGENDA (ver core/schema.js), como
+ * string plano; la migración a este formato (desde el arreglo viejo de
+ * cuando el selector era multi-chip) la hace migrarDatosAntiguos en
+ * schema.js. Solo tiene sentido con el switch general de notificaciones push activo —
+ * si está apagado, el bloque completo queda atenuado y sin interacción
+ * (mismo criterio visual que el resto de bloques dependientes de un switch
+ * en esta pantalla), pero los valores elegidos NO se pierden: siguen
  * guardados, listos para cuando el usuario vuelva a prender el switch
  * general.
+ *
+ * Reincorporada 2026-08-23 tras perderse (junto con
+ * renderizarNotificacionesResumenDiario) al fusionar esta ronda de fixes
+ * con la rama que traía el filtro anti-spam de arriba — ver
+ * MAPA_FUNCIONES.md para el detalle de por qué se había perdido antes.
  */
 const ETIQUETAS_TIPOS_RECORDATORIO_AGENDA = [
   { tipo: "tarea", etiqueta: "Tareas" },
@@ -402,10 +288,10 @@ function renderizarNotificacionesRecordatorios() {
 
   const cfg = estado.datos.configuracion;
   if (!cfg.notificaciones_recordatorios || typeof cfg.notificaciones_recordatorios !== "object") {
-    cfg.notificaciones_recordatorios = { tarea: ["1_dia"], examen: ["1_dia"], evento: ["1_dia"], feriado: ["1_dia"] };
+    cfg.notificaciones_recordatorios = { tarea: "1_dia", examen: "1_dia", evento: "1_dia", feriado: "1_dia" };
   }
 
-  const habilitado = sincronizacionCalendarActiva();
+  const habilitado = notificacionesPushActivas();
   contenedor.innerHTML = "";
   contenedor.style.opacity = habilitado ? "" : "0.5";
   contenedor.style.pointerEvents = habilitado ? "" : "none";
@@ -420,18 +306,12 @@ function renderizarNotificacionesRecordatorios() {
     titulo.textContent = etiqueta;
     fila.appendChild(titulo);
 
-    // Tolerante a un string suelto (dato a medio migrar de una versión
-    // vieja) además del arreglo esperado.
-    const valorGuardado = cfg.notificaciones_recordatorios[tipo];
-    const valoresIniciales = Array.isArray(valorGuardado)
-      ? valorGuardado
-      : [valorGuardado || "1_dia"];
-
-    const elemento = construirSelectMultipleAjustes({
-      opciones: OFFSETS_RECORDATORIO_AGENDA,
-      valoresIniciales,
-      onCambiar: (valoresActuales) => {
-        cfg.notificaciones_recordatorios[tipo] = valoresActuales;
+    const valorActual = cfg.notificaciones_recordatorios[tipo] || "1_dia";
+    const elemento = construirSelectCustomAjustes({
+      opciones: OFFSETS_RECORDATORIO_AGENDA.map((o) => ({ valor: o.id, etiqueta: o.etiqueta })),
+      valorInicial: valorActual,
+      onCambiar: (valor) => {
+        cfg.notificaciones_recordatorios[tipo] = valor;
         sellarTimestamp(cfg);
         marcarCambioPendiente();
       },
@@ -447,10 +327,10 @@ function renderizarNotificacionesRecordatorios() {
  * horas del Horario más arriba) para
  * estado.datos.configuracion.notificaciones_resumen_diario ({ activo,
  * hora }). Cada cambio (switch u hora) llama a sincronizarResumenDiario()
- * en core/notificaciones-calendario.js, que es quien realmente habla con
- * Google Calendar — acá solo se guarda localmente y se dispara esa
- * sincronización, siguiendo el mismo criterio best-effort del resto de la
- * integración (si Calendar no responde, no se revierte nada en la UI).
+ * en core/notificaciones-push.js, que es quien realmente avisa al Worker —
+ * acá solo se guarda localmente y se dispara esa sincronización, siguiendo
+ * el mismo criterio best-effort del resto de notificaciones push (si el
+ * Worker no responde, no se revierte nada en la UI).
  */
 function renderizarNotificacionesResumenDiario() {
   const chkResumen = document.getElementById("switch-notificaciones-resumen-diario");
@@ -464,7 +344,7 @@ function renderizarNotificacionesResumenDiario() {
   }
   const cfgResumen = cfg.notificaciones_resumen_diario;
 
-  const habilitado = sincronizacionCalendarActiva();
+  const habilitado = notificacionesPushActivas();
   chkResumen.disabled = !habilitado;
   chkResumen.checked = !!cfgResumen.activo;
   bloqueHora.classList.toggle("oculto", !cfgResumen.activo);
@@ -571,7 +451,6 @@ function renderizarConfigDiasHorario() {
 
       const input = document.createElement("input");
       input.type = "text";
-      input.autocomplete = "off";
       input.className = "form-input";
       input.maxLength = 3;
       input.placeholder = dia.abrevDefault;
@@ -726,154 +605,6 @@ function construirSelectCustomAjustes({ opciones, valorInicial, onCambiar }) {
   return dropdown;
 }
 
-/**
- * Notificaciones — Recordatorios por tipo (2026-09-26, ronda 3): variante
- * de selección MÚLTIPLE de construirSelectCustomAjustes de acá arriba —
- * mismo look & feel (botón .select-custom-boton + lista propia
- * reparentada a document.body con position:fixed, mismo mecanismo de
- * abrir/cerrar/posicionar) en vez de la fila de chips/botones
- * (construirSelectorChipsMultiple, ui/componentes.js) que se usó antes:
- * con 5 opciones por tipo, esa fila de botones se corta en pantallas
- * angostas — acá el botón cerrado solo muestra un resumen corto, sin
- * depender de que 5 etiquetas quepan una al lado de la otra.
- *
- * A diferencia del select de un solo valor, la lista NO se cierra al
- * tocar una opción (tiene sentido tildar varias antes de cerrar) y cada
- * `<li>` lleva su propio check visual (independiente de estilos de
- * `.activa` en design-system.css, para que se note incluso si esa clase
- * no trae ningún indicador propio en un contexto multi-selección).
- *
- * `opciones`: arreglo de { id, etiqueta } (OFFSETS_RECORDATORIO_AGENDA,
- * core/schema.js, mismo shape que ya usaba construirSelectorChipsMultiple
- * — sin mapeo). `valoresIniciales`: arreglo de ids ya activos.
- * `onCambiar(valoresActuales)`: arreglo completo actualizado en cada
- * toggle, mismo criterio de "aplicar al toque" que el resto de Ajustes.
- *
- * No permite dejar todo destildado (mismo criterio que
- * construirSelectorChipsMultiple): un tipo de evento sin ningún offset
- * activo se resuelve apagando el switch general, no vaciando este
- * selector — el último click sobre el único chip activo se ignora.
- */
-function construirSelectMultipleAjustes({ opciones, valoresIniciales, onCambiar }) {
-  let valoresActuales = Array.isArray(valoresIniciales) && valoresIniciales.length > 0
-    ? [...valoresIniciales]
-    : [opciones[0]?.id].filter(Boolean);
-
-  function opcionesSeleccionadas() {
-    return opciones.filter((o) => valoresActuales.includes(o.id));
-  }
-
-  const dropdown = document.createElement("div");
-  dropdown.className = "select-custom";
-  const boton = document.createElement("button");
-  boton.type = "button";
-  boton.className = "form-input select-custom-boton";
-  function pintarResumen() {
-    const seleccionadas = opcionesSeleccionadas();
-    boton.replaceChildren();
-    if (!seleccionadas.length) {
-      boton.textContent = traducirTextoInterfaz("Elegir");
-      return;
-    }
-    // Mantener cada etiqueta traducida en un nodo propio evita que el
-    // traductor automático trate toda la combinación como texto desconocido.
-    const etiquetas = seleccionadas.map((o) => traducirTextoInterfaz(o.etiqueta));
-    if (etiquetas.join(", ").length > 26) {
-      boton.textContent = traducirTextoInterfaz(`${etiquetas.length} seleccionados`);
-      return;
-    }
-    etiquetas.forEach((etiqueta, i) => {
-      if (i) boton.appendChild(document.createTextNode(", "));
-      const parte = document.createElement("span");
-      parte.textContent = etiqueta;
-      boton.appendChild(parte);
-    });
-  }
-  pintarResumen();
-  const lista = document.createElement("ul");
-  lista.className = "select-custom-lista oculto";
-
-  function posicionar() {
-    const r = boton.getBoundingClientRect();
-    lista.style.position = "fixed";
-    lista.style.top = `${r.bottom + 6}px`;
-    lista.style.left = `${r.left}px`;
-    lista.style.width = `${r.width}px`;
-  }
-  function cerrar() {
-    lista.classList.add("oculto");
-    boton.setAttribute("aria-expanded", "false");
-    if (lista.parentElement === document.body) dropdown.appendChild(lista);
-    window.removeEventListener("scroll", cerrarSiScrollExterno, true);
-    window.removeEventListener("resize", cerrar);
-  }
-  function cerrarSiScrollExterno(e) {
-    if (lista.contains(e.target)) return;
-    cerrar();
-  }
-  function abrir() {
-    document.querySelectorAll(".select-custom-lista").forEach((l) => {
-      if (l !== lista) {
-        l.classList.add("oculto");
-        if (l.parentElement === document.body && l._volverA) l._volverA.appendChild(l);
-      }
-    });
-    lista._volverA = dropdown;
-    document.body.appendChild(lista);
-    posicionar();
-    lista.classList.remove("oculto");
-    boton.setAttribute("aria-expanded", "true");
-    window.addEventListener("scroll", cerrarSiScrollExterno, true);
-    window.addEventListener("resize", cerrar);
-  }
-
-  function repintar() {
-    lista.querySelectorAll(".select-custom-opcion").forEach((li) => {
-      const activa = valoresActuales.includes(li.dataset.id);
-      li.classList.toggle("activa", activa);
-    });
-    pintarResumen();
-  }
-
-  opciones.forEach(({ id, etiqueta }) => {
-    const item = document.createElement("li");
-    item.className = "select-custom-opcion" + (valoresActuales.includes(id) ? " activa" : "");
-    item.dataset.id = id;
-
-
-    const texto = document.createElement("span");
-    texto.textContent = etiqueta;
-    item.appendChild(texto);
-    item.addEventListener("click", () => {
-      const yaActiva = valoresActuales.includes(id);
-      if (yaActiva && valoresActuales.length === 1) return; // no permite vaciar del todo, ver comentario arriba
-      valoresActuales = yaActiva
-        ? valoresActuales.filter((v) => v !== id)
-        : [...valoresActuales, id];
-      repintar();
-      onCambiar([...valoresActuales]);
-      // A propósito NO se cierra acá (a diferencia de
-      // construirSelectCustomAjustes): es selección múltiple, tiene
-      // sentido tildar más de una antes de cerrar.
-    });
-    lista.appendChild(item);
-  });
-
-  boton.setAttribute("aria-expanded", "false");
-  boton.addEventListener("click", (e) => {
-    e.stopPropagation();
-    if (lista.classList.contains("oculto")) abrir();
-    else cerrar();
-  });
-  document.addEventListener("click", (e) => {
-    if (!dropdown.contains(e.target) && !lista.contains(e.target)) cerrar();
-  });
-
-  dropdown.appendChild(boton);
-  dropdown.appendChild(lista);
-  return dropdown;
-}
-
 function renderizarConfigRangoHorasHorario() {
   const cfg = estado.datos.configuracion;
   // Mismos defaults que el fallback de obtenerRangoHorasHorario en
@@ -920,23 +651,13 @@ const SECCIONES_TOGGLEABLES = [
   { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" },
   { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
-  { id: "notas", etiqueta: "Notas rápidas", icono: "🗒️" },
   // 2026-09-09 (pedido explícito): Tiempo de Estudio entra al mismo
   // sistema de mostrar/ocultar/reordenar que el resto del nav — sin gate
   // de existencia como "asistente" (Gemini), ya existe siempre para
   // cualquier usuario. `id` confirmado contra main.js/index.html:
   // coincide exacto con el data-seccion real del botón de nav, y ya
   // estaba en DEFAULT_ORDEN_NAV de main.js.
-  //
-  // Rename 2026-09-12 (pedido explícito): la etiqueta pasa de "Tiempo de
-  // Estudio" a "Pomodoro" porque se cortaba en este listado — se cambia
-  // SOLO el texto mostrado, `id` se deja intacto ("tiempo-estudio") para
-  // no romper la coincidencia con main.js/index.html descrita arriba.
-  //
-  // Rename 2026-09-20 (pedido explícito): "Pomodoro" -> "Tiempo", para que
-  // coincida con el botón del sidebar (index.html) y con el título de la
-  // sección (tiempo-estudio.js). `id` intacto.
-  { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "⏱️" },
+  { id: "tiempo-estudio", etiqueta: "Tiempo de Estudio", icono: "⏱️" },
   { id: "asistente", etiqueta: "Asistente", icono: "✨" },
 ];
 
@@ -989,7 +710,7 @@ function renderizarNavegacionOculta() {
     izquierda.appendChild(icono);
 
     const texto = document.createElement("span");
-    texto.textContent = traducirTextoInterfaz(seccion.etiqueta);
+    texto.textContent = seccion.etiqueta;
     izquierda.appendChild(texto);
 
     fila.appendChild(izquierda);
@@ -1189,233 +910,6 @@ function habilitarArrastreNavegacion(contenedor) {
  * renderizarAjustes() se vuelve a llamar (cada cambio de pill, tema, etc.).
  * El dataset.accordionInit evita enganchar el delegado más de una vez.
  */
-function inicializarAccesoDocumentosLegales() {
-  document.querySelectorAll("[data-documento-legal]").forEach((boton) => {
-    if (boton.dataset.legalInit) return;
-    boton.dataset.legalInit = "1";
-    boton.addEventListener("click", async () => {
-      let modal = document.getElementById("modal-documento-legal");
-      if (!modal) {
-        modal = document.createElement("div");
-        modal.id = "modal-documento-legal";
-        modal.className = "modal-overlay";
-        modal.setAttribute("role", "presentation");
-        const tarjeta = document.createElement("section");
-        tarjeta.className = "glass-card stack modal-card";
-        tarjeta.style.width = "min(860px, calc(100vw - 28px))";
-        tarjeta.style.maxHeight = "90dvh";
-        tarjeta.style.overflow = "hidden";
-        tarjeta.setAttribute("role", "dialog");
-        tarjeta.setAttribute("aria-modal", "true");
-        tarjeta.setAttribute("aria-labelledby", "titulo-modal-documento-legal");
-        const encabezado = document.createElement("div");
-        encabezado.className = "row";
-        encabezado.style.justifyContent = "space-between";
-        encabezado.style.alignItems = "center";
-        const titulo = document.createElement("h2");
-        titulo.id = "titulo-modal-documento-legal";
-        titulo.style.margin = "0";
-        const cerrar = document.createElement("button");
-        cerrar.type = "button";
-        cerrar.className = "btn btn-secondary";
-        cerrar.textContent = traducirTextoInterfaz("Cerrar");
-        cerrar.setAttribute("aria-label", traducirTextoInterfaz("Cerrar"));
-        const contenido = document.createElement("div");
-        contenido.id = "contenido-modal-documento-legal";
-        contenido.style.textAlign = "left";
-        contenido.style.overflowY = "auto";
-        contenido.style.overscrollBehavior = "contain";
-        contenido.style.padding = "16px 18px";
-        contenido.style.borderRadius = "16px";
-        contenido.style.border = "1px solid var(--border-glass)";
-        contenido.style.lineHeight = "1.55";
-        contenido.style.background = "var(--bg-card, rgba(128,128,128,.08))";
-        contenido.style.maxHeight = "70vh";
-        encabezado.append(titulo, cerrar);
-        tarjeta.append(encabezado, contenido);
-        modal.append(tarjeta);
-        document.body.append(modal);
-        const cerrarModal = () => {
-          modal.classList.add("oculto");
-          window.removeEventListener("keydown", modal._alTeclaDocumentoLegal);
-          modal._botonRetornoDocumentoLegal?.focus();
-        };
-        modal._alTeclaDocumentoLegal = (ev) => { if (ev.key === "Escape") cerrarModal(); };
-        cerrar.addEventListener("click", cerrarModal);
-        modal.addEventListener("click", (ev) => { if (ev.target === modal) cerrarModal(); });
-        modal._cerrarDocumentoLegal = cerrarModal;
-        modal._tituloDocumentoLegal = titulo;
-        modal._contenidoDocumentoLegal = contenido;
-        modal._botonCerrarDocumentoLegal = cerrar;
-      }
-
-      const idioma = ({ en: "EN", it: "IT", fr: "FR" })[obtenerIdiomaActual()] || "ES";
-      const archivos = boton.dataset.documentoLegal === "privacidad"
-        ? { es: "PrivacyES", en: "PrivacyEN", it: "PrivacyIT", fr: "PrivacyFR" }
-        : { es: "TermsES", en: "TermsEN", it: "TermsIT", fr: "TermsFR" };
-      const clave = idioma.toLowerCase();
-      const esPrivacidad = boton.dataset.documentoLegal === "privacidad";
-      modal._botonRetornoDocumentoLegal = boton;
-      modal._solicitudDocumentoLegal = (modal._solicitudDocumentoLegal || 0) + 1;
-      const solicitud = modal._solicitudDocumentoLegal;
-      modal._tituloDocumentoLegal.textContent = traducirTextoInterfaz(esPrivacidad ? "Política de privacidad" : "Términos y condiciones");
-      modal._contenidoDocumentoLegal.textContent = traducirTextoInterfaz("Cargando…");
-      modal.classList.remove("oculto");
-      modal._botonCerrarDocumentoLegal.focus();
-      window.addEventListener("keydown", modal._alTeclaDocumentoLegal);
-      try {
-        const respuesta = await fetch(`${esPrivacidad ? "PrivacyPolicies" : "TermsOfUse"}/${archivos[clave]}.md`, { cache: "no-cache" });
-        if (!respuesta.ok) throw new Error(String(respuesta.status));
-        const texto = await respuesta.text();
-        if (solicitud === modal._solicitudDocumentoLegal) modal._contenidoDocumentoLegal.replaceChildren(renderizarMarkdownSimple(texto));
-      } catch (_) {
-        if (solicitud === modal._solicitudDocumentoLegal) modal._contenidoDocumentoLegal.textContent = traducirTextoInterfaz("No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.");
-      }
-    });
-  });
-}
-
-/**
- * Tarjeta de usuario (arriba de todo en Configuración, siempre abierta): foto, saludo "Hola, Nombre!",
- * correo y, a la derecha, "Cambiar datos" (2026-11-04, parche 6). La foto, el nombre y el botón de
- * cambiar correo viven en la ventana que abre ese botón (abrirModalCambiarDatos).
- */
-function renderizarUsuarioAjustes() {
-  const tarjeta = document.getElementById("ajuste-usuario");
-  if (!tarjeta || !estado.datos) return;
-  const perfil = estado.datos.perfil || {};
-  const foto = document.getElementById("ajuste-usuario-foto");
-  const inicial = document.getElementById("ajuste-usuario-inicial");
-  const nombreVisible = perfil.nombre_preferido || perfil.nombre || "";
-  pintarAvatarUsuario(foto, inicial, perfil, nombreVisible);
-  const saludo = document.getElementById("ajuste-usuario-saludo");
-  if (saludo) {
-    const primerNombre = nombreVisible.trim().split(/\s+/)[0] || "";
-    saludo.textContent = primerNombre
-      ? traducirTextoInterfaz("Hola, {nombre}!").replace("{nombre}", primerNombre)
-      : traducirTextoInterfaz("Tu perfil");
-  }
-  const correo = document.getElementById("ajuste-usuario-correo");
-  if (correo) correo.textContent = perfil.correo || "";
-}
-window.renderizarUsuarioAjustes = renderizarUsuarioAjustes;
-
-/** Pone la foto (la elegida o la de Google) o, si no hay o no carga, las iniciales. */
-function pintarAvatarUsuario(foto, inicial, perfil, nombreVisible) {
-  if (!foto || !inicial) return;
-  inicial.textContent = obtenerIniciales(nombreVisible || perfil.correo || "?");
-  const src = obtenerFotoPerfil(perfil);
-  foto.classList.add("oculto");
-  inicial.classList.remove("oculto");
-  if (!src) return;
-  foto.onload = () => { foto.classList.remove("oculto"); inicial.classList.add("oculto"); };
-  foto.onerror = () => { foto.classList.add("oculto"); inicial.classList.remove("oculto"); };
-  if (foto.getAttribute("src") !== src) foto.src = src;
-  else if (foto.complete && foto.naturalWidth) foto.onload();
-  foto.alt = nombreVisible || "Foto de perfil";
-}
-
-/**
- * Ventana "Cambiar datos": foto (cambiar / volver a la de Google), nombre editable, correo (solo
- * lectura) y el botón de cambiar correo. El cambio de correo real (migrar la cuenta) necesita
- * verificar el correo nuevo en el servidor y todavía no está disponible: el botón lo avisa.
- */
-function abrirModalCambiarDatos() {
-  if (!estado.datos) return;
-  document.getElementById("modal-cambiar-datos")?.remove();
-  const perfil = estado.datos.perfil || (estado.datos.perfil = {});
-  const overlay = document.createElement("div");
-  overlay.id = "modal-cambiar-datos";
-  overlay.className = "modal-overlay";
-  overlay.style.zIndex = "900";
-  const caja = document.createElement("div");
-  caja.className = "glass-card modal-card stack";
-  caja.style.cssText = "width:min(100%,440px); gap:14px;";
-  caja.setAttribute("role", "dialog");
-  caja.setAttribute("aria-modal", "true");
-  caja.innerHTML = `
-    <h2 style="margin:0;">Datos de tu cuenta</h2>
-    <div class="ajuste-usuario-foto-col" style="align-self:center;">
-      <button type="button" class="ajuste-usuario-avatar" id="cd-foto-btn" title="Cambiar foto" aria-label="Cambiar foto">
-        <img id="cd-foto" class="oculto" alt="" referrerpolicy="no-referrer">
-        <span id="cd-inicial" class="ajuste-usuario-inicial" aria-hidden="true"></span>
-        <span class="ajuste-usuario-camara" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
-      </button>
-      <button type="button" class="btn-discreto ajuste-usuario-quitar oculto" id="cd-foto-quitar">Usar la de Google</button>
-    </div>
-    <label class="stack" style="gap:6px;">
-      <span class="form-label">Nombre para saludarte</span>
-      <input id="cd-nombre" class="form-input" type="text" maxlength="60" autocomplete="given-name" placeholder="Tu nombre">
-    </label>
-    <div class="stack" style="gap:6px;">
-      <span class="form-label">Correo</span>
-      <input id="cd-correo" class="form-input" type="email" readonly tabindex="-1" aria-readonly="true">
-      <button type="button" class="btn btn-secondary" id="cd-cambiar-correo">Cambiar correo</button>
-    </div>
-    <div class="row" style="gap:10px;">
-      <button type="button" class="btn btn-secondary" id="cd-cancelar" style="flex:1;">Cancelar</button>
-      <button type="button" class="btn btn-primary" id="cd-guardar" style="flex:1;">Guardar</button>
-    </div>`;
-  overlay.appendChild(caja);
-  document.body.appendChild(overlay);
-
-  const inputNombre = caja.querySelector("#cd-nombre");
-  inputNombre.value = perfil.nombre_preferido || perfil.nombre || "";
-  caja.querySelector("#cd-correo").value = perfil.correo || "";
-  const btnQuitar = caja.querySelector("#cd-foto-quitar");
-  const pintar = () => {
-    const p = estado.datos?.perfil || {};
-    pintarAvatarUsuario(caja.querySelector("#cd-foto"), caja.querySelector("#cd-inicial"), p, inputNombre.value.trim() || p.nombre || "");
-    btnQuitar.classList.toggle("oculto", !p.foto_personalizada);
-  };
-  pintar();
-
-  const cerrar = () => { overlay.remove(); document.removeEventListener("keydown", alTecla); };
-  const alTecla = (ev) => { if (ev.key === "Escape") cerrar(); };
-  document.addEventListener("keydown", alTecla);
-  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
-  caja.querySelector("#cd-cancelar").addEventListener("click", cerrar);
-
-  caja.querySelector("#cd-foto-btn").addEventListener("click", () => {
-    elegirYGuardarFotoPerfil((ok, error) => {
-      if (ok) { mostrarToast(traducirTextoInterfaz("Foto actualizada")); pintar(); }
-      else mostrarToast(traducirTextoInterfaz(error?.message || "No se pudo cambiar la foto"));
-    });
-  });
-  btnQuitar.addEventListener("click", () => {
-    guardarFotoPersonalizada(null);
-    mostrarToast(traducirTextoInterfaz("Volvió la foto de tu cuenta de Google"));
-    pintar();
-  });
-  caja.querySelector("#cd-cambiar-correo").addEventListener("click", () => {
-    mostrarToast(traducirTextoInterfaz("Cambiar el correo requiere verificar el correo nuevo. Esta función llegará pronto."));
-  });
-  caja.querySelector("#cd-guardar").addEventListener("click", () => {
-    const nombre = inputNombre.value.trim().slice(0, 60);
-    if (!nombre) { inputNombre.focus(); return; }
-    if (nombre !== (estado.datos.perfil.nombre_preferido || "")) {
-      estado.datos.perfil.nombre_preferido = nombre;
-      sellarTimestamp(estado.datos.perfil);
-      marcarCambioPendiente();
-      window.renderizarPerfil?.();
-      renderizarUsuarioAjustes();
-      mostrarToast(traducirTextoInterfaz("Datos guardados"));
-    }
-    cerrar();
-  });
-  inputNombre.addEventListener("keydown", (ev) => { if (ev.key === "Enter") caja.querySelector("#cd-guardar").click(); });
-}
-
-function inicializarUsuarioAjustes() {
-  const tarjeta = document.getElementById("ajuste-usuario");
-  if (!tarjeta) return;
-  if (!tarjeta.dataset.listo) {
-    tarjeta.dataset.listo = "1";
-    document.getElementById("btn-ajuste-cambiar-datos")?.addEventListener("click", abrirModalCambiarDatos);
-  }
-  renderizarUsuarioAjustes();
-}
-
 function inicializarAccordionAjustes() {
   const contenedor = document.getElementById("seccion-configuracion");
   if (!contenedor || contenedor.dataset.accordionInit) return;
@@ -1427,177 +921,11 @@ function inicializarAccordionAjustes() {
   });
 }
 
-/**
- * Punto 4 (ronda visual, 2026-09-12): monta un pill switch (ver
- * construirPillSwitchBinario en ui/componentes.js) en el lugar donde hoy
- * vive un checkbox on/off estático de index.html, SIN tener que tocar
- * index.html — se ubica el checkbox viejo por id, se reemplaza su
- * envoltorio (el <label class="switch">...</label> que lo estiliza como
- * interruptor) por el pill switch nuevo la primera vez que corre.
- *
- * Es IDEMPOTENTE a propósito: renderizarAjustes() puede volver a llamarse
- * varias veces en la misma sesión (cambiar de paleta, editar otro campo,
- * etc.), y para ese momento el checkbox de `idViejo` ya no existe en el
- * DOM (se reemplazó la primera vez) — en vez de fallar silenciosamente o
- * reconstruir el pill switch de cero (perdiendo el listener/nodo y
- * parpadeando), en las llamadas siguientes solo se actualiza cuál opción
- * queda marcada .active, buscando el grupo ya montado por `dataAtributo`.
- */
-/**
- * Punto 4 (ronda visual, 2026-09-12): monta un pill switch (ver
- * construirPillSwitchBinario en ui/componentes.js) en el lugar donde hoy
- * vive un checkbox on/off estático de index.html, SIN tener que tocar
- * index.html.
- *
- * Ronda 2 (mismo día, feedback directo): "Modo"/"Calidad" ya no van al
- * lado del switch (fila "etiqueta ... switch chico a la derecha", que es
- * como venía el checkbox original) — van APILADOS arriba de un switch que
- * ocupa todo el ancho de la tarjeta ("Solo debe decir: Modo / switch").
- * Para lograr esto sin tocar index.html se sube un nivel más: en vez de
- * reemplazar solo el `<label class="switch">`, se reemplaza toda la FILA
- * que lo contiene (`.closest('.switch').parentElement`, asumiendo que esa
- * fila hoy tiene la etiqueta de texto vieja + el switch como únicos 2
- * hijos — es la estructura típica de estos checkboxes en el proyecto) por
- * una fila nueva (.fila-pill-switch, ver design-system.css) con un caption
- * chico arriba y el pill switch abajo, ancho completo.
- *
- * Sigue siendo IDEMPOTENTE: renderizarAjustes() puede volver a llamarse
- * varias veces en la misma sesión, y para ese momento el checkbox de
- * `idViejo` ya no existe (se reemplazó la primera vez) — en las llamadas
- * siguientes solo se actualiza cuál opción queda .active y la posición del
- * thumb, buscando el grupo ya montado por `dataAtributo`, en vez de
- * reconstruir todo de cero (que perdería el listener y parpadearía).
- */
-function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorActivo, onCambiar) {
-  const existente = document.querySelector(`[data-pill-switch="${dataAtributo}"]`);
-  if (existente) {
-    const filaExistente = existente.closest(".fila-pill-switch");
-    const tituloExistente = filaExistente?.querySelector(".fila-pill-switch-titulo");
-    if (tituloExistente) tituloExistente.textContent = traducirTextoInterfaz(tituloCorto);
-    existente.querySelectorAll(".pill-item").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.valor === valorActivo);
-      btn.setAttribute("aria-pressed", String(btn.dataset.valor === valorActivo));
-      const opcion = opciones.find((o) => o.valor === btn.dataset.valor);
-      if (opcion) btn.textContent = traducirTextoInterfaz(opcion.texto);
-    });
-    const indiceActivo = opciones.findIndex((o) => o.valor === valorActivo);
-    const thumb = existente.querySelector(".pill-switch-thumb");
-    thumb?.classList.toggle("pill-switch-thumb--derecha", indiceActivo === 1);
-    thumb?.classList.toggle("pill-switch-thumb--tercera", indiceActivo === 2);
-    return;
-  }
-  const chkViejo = document.getElementById(idViejo);
-  if (!chkViejo) return;
-  const switchViejo = chkViejo.closest(".switch") || chkViejo;
-  const fila = switchViejo.parentElement || switchViejo;
-
-  const filaNueva = document.createElement("div");
-  filaNueva.className = "fila-pill-switch";
-
-  const titulo = document.createElement("span");
-  titulo.className = "fila-pill-switch-titulo";
-  titulo.textContent = traducirTextoInterfaz(tituloCorto);
-
-  const pillSwitch = construirPillSwitchBinario(
-    opciones.map((opcion) => ({ ...opcion, texto: traducirTextoInterfaz(opcion.texto) })),
-    valorActivo,
-    onCambiar
-  );
-  pillSwitch.dataset.pillSwitch = dataAtributo;
-
-  filaNueva.appendChild(titulo);
-  filaNueva.appendChild(pillSwitch);
-  fila.replaceWith(filaNueva);
-}
-
-/**
- * Ajustes → Personalizar → "Animación de apertura": interruptor, 6 bolitas con
- * los colores de las pestañas del folder, "Usar colores de la paleta",
- * "Restablecer" y "Ver animación". Todo se guarda en configuracion (se sincroniza
- * con la cuenta) y se refleja en localStorage para que el arranque lo lea antes
- * de tener datos (ver core/intro-apertura.js). Idempotente: se llama en cada
- * renderizarAjustes().
- */
-function inicializarAjusteIntroApertura() {
-  const interruptor = document.getElementById("switch-intro-apertura");
-  const bloque = document.getElementById("intro-colores-bloque");
-  const bolitas = Array.from(document.querySelectorAll("#intro-colores input[data-intro-color]"));
-  const btnPaleta = document.getElementById("btn-intro-colores-paleta");
-  const btnOriginal = document.getElementById("btn-intro-colores-original");
-  const btnVer = document.getElementById("btn-intro-ver");
-  if (!interruptor || !bloque || bolitas.length !== 6 || !btnPaleta || !btnOriginal || !btnVer) return;
-  const cfg = estado.datos.configuracion;
-
-  // Lo que dice la cuenta manda sobre el espejo local (p. ej. si se cambió en otro dispositivo).
-  if (cfg.animacion_apertura !== undefined) espejarIntroAperturaLocal(cfg.animacion_apertura !== false);
-  if (cfg.intro_colores !== undefined) espejarColoresIntroLocal(cfg.intro_colores);
-
-  const guardarEnCuenta = () => {
-    sellarTimestamp(cfg);
-    marcarCambioPendiente();
-  };
-  const colorActual = () => bolitas.map((el) => el.value);
-  const pintar = () => {
-    const activa = introAperturaActivada(cfg);
-    interruptor.checked = activa;
-    bloque.classList.toggle("deshabilitado", !activa);
-    const colores = coloresIntroEfectivos(cfg);
-    bolitas.forEach((el, i) => {
-      if (document.activeElement !== el) el.value = colores[i];
-      el.parentElement.style.background = colores[i];
-    });
-    btnPaleta.setAttribute("aria-pressed", modoColoresIntro(cfg) === "paleta" ? "true" : "false");
-  };
-
-  interruptor.onchange = () => {
-    cfg.animacion_apertura = interruptor.checked;
-    espejarIntroAperturaLocal(interruptor.checked);
-    guardarEnCuenta();
-    pintar();
-  };
-  bolitas.forEach((el) => {
-    // Mientras se arrastra el selector solo se actualiza lo local; a la cuenta se sube al soltar.
-    el.oninput = () => {
-      cfg.intro_colores = { modo: "personalizado", colores: colorActual() };
-      espejarColoresIntroLocal(cfg.intro_colores);
-      el.parentElement.style.background = el.value;
-      btnPaleta.setAttribute("aria-pressed", "false");
-    };
-    el.onchange = () => {
-      guardarEnCuenta();
-      pintar();
-    };
-  });
-  btnPaleta.onclick = () => {
-    cfg.intro_colores = { modo: "paleta", colores: coloresDePaletaActual() };
-    espejarColoresIntroLocal(cfg.intro_colores);
-    guardarEnCuenta();
-    pintar();
-  };
-  btnOriginal.onclick = () => {
-    cfg.intro_colores = null;
-    espejarColoresIntroLocal(null);
-    guardarEnCuenta();
-    pintar();
-  };
-  btnVer.onclick = () => {
-    verAnimacionIntro(cfg, colorActual());
-  };
-  pintar();
-}
-
 function renderizarAjustes() {
-  inicializarAccesoDocumentosLegales();
-  inicializarTamanoTextoAjustes();
-  inicializarIconosNavAjustes();
-  inicializarBorradoCuentaApp();
   inicializarAccordionAjustes();
   inicializarAsistenteAjustes();
   inicializarBandejaVozAjustes();
-  inicializarSelectorLogo();
-  aplicarLogoApp();
-  inicializarAjusteIntroApertura();
-  inicializarUsuarioAjustes();
+
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
   grid.innerHTML = "";
@@ -1612,8 +940,7 @@ function renderizarAjustes() {
     sw.textContent = paleta;
     sw.addEventListener("click", () => {
       estado.datos.configuracion.paleta = paleta;
-      aplicarPaleta(paleta, obtenerModoTemaLocal());
-      aplicarLogoApp();
+      aplicarPaleta(paleta, estado.datos.configuracion.modo);
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
@@ -1639,8 +966,7 @@ function renderizarAjustes() {
       // cualquier otro cuadro del grid — para editarla de nuevo desde cero
       // se vuelve a entrar por el flujo completo con el botón de abajo.
       estado.datos.configuracion.paleta = "personalizada";
-      aplicarPaleta("personalizada", obtenerModoTemaLocal(), personalizada.colores);
-      aplicarLogoApp();
+      aplicarPaleta("personalizada", estado.datos.configuracion.modo, personalizada.colores);
       sellarTimestamp(estado.datos.configuracion);
       marcarCambioPendiente();
       renderizarAjustes();
@@ -1663,62 +989,59 @@ function renderizarAjustes() {
     grid.appendChild(btnEditar);
   }
 
-  // Modo de calidad visual: los nombres históricos del checkbox se
-  // conservan para localizar y reemplazar su fila en el HTML, pero el valor
-  // real vive en localStorage (ver obtenerModoDisenoLocal y schema.js).
-  // Leer el antiguo campo sincronizado hacía que un repintado tras cualquier
-  // sync devolviera el pill a la opción anterior.
-  montarPillSwitch(
-    "switch-rendimiento",
-    "pill-switch-diseno",
-    "Calidad",
-    [
-      { valor: "optimizado", texto: "Optimizado" },
-      { valor: "fancy", texto: "Fancy" },
-    ],
-    obtenerModoDisenoLocal(),
-    (valor) => {
-      // Calidad visual es una preferencia local del dispositivo. Si se
-      // guardaba en configuración sincronizada, el siguiente pull fusionaba
-      // el valor anterior y renderizarAjustes devolvía el pill a la opción
-      // opuesta, aunque el cambio visual ya se hubiera aplicado.
-      const modoDiseno = guardarModoDisenoLocal(valor);
-      aplicarModoRendimiento(modoDiseno === "optimizado");
-    }
-  );
+  // v1.14.1: Modo fancy (id del elemento sigue siendo "switch-rendimiento"
+  // por compatibilidad, pero el switch en pantalla se llama "Modo fancy" —
+  // el dato de fondo (modo_rendimiento) representa lo CONTRARIO de lo que
+  // dice la etiqueta: modo_rendimiento=true significa rendimiento activo,
+  // o sea fancy APAGADO. Fix v1.16.1 (2026-08-23): antes el checkbox
+  // reflejaba modo_rendimiento tal cual, así que el switch se veía
+  // "encendido" (ON) cuando en realidad lo fancy estaba apagado — quedaba
+  // invertido contra su propia etiqueta. Se invierte acá nomás (checked =
+  // fancy activo = !modo_rendimiento) para no tocar el nombre del campo en
+  // el modelo de datos ni la migración que ya corrió para las cuentas
+  // existentes (ver rendimiento_default_v2_aplicado en core/schema.js).
+  // Reaplicado 2026-08-23 sobre la rama del antirrebote — se había perdido
+  // en esa rama porque partió de una copia anterior al fix v1.16.1.
+  const chkRendimiento = document.getElementById("switch-rendimiento");
+  if (chkRendimiento) {
+    chkRendimiento.checked = !estado.datos.configuracion.modo_rendimiento;
+    chkRendimiento.onchange = () => {
+      // Estado en memoria + efecto visual: instantáneo, sin antirrebote (ver
+      // dispararSyncConAntirrebote más arriba para el porqué).
+      const fancyActivo = chkRendimiento.checked;
+      estado.datos.configuracion.modo_rendimiento = !fancyActivo;
+      aplicarModoRendimiento(!fancyActivo);
+      dispararSyncConAntirrebote();
+    };
+  }
 
-  // Switch general de sincronización con Google Calendar (Ajustes
-  // Avanzados). Se acepte o no en el onboarding (ver
-  // ofrecerActivarSincronizacionCalendario en main.js), queda disponible
-  // acá para prender/apagar en cualquier momento. Todo el trabajo real
-  // (crear/borrar el calendario secundario, (re)sincronizar Agenda +
-  // Resumen Diario en lote) vive en core/notificaciones-calendario.js;
+  // Notificaciones push reales — switch en Ajustes Avanzados. Se acepte o
+  // no en el onboarding (ver ofrecerActivarNotificacionesPush en main.js),
+  // queda disponible acá para prender/apagar en cualquier momento. Todo el
+  // trabajo real (permiso del navegador, suscripción, (des)programar cada
+  // recordatorio contra el Worker) vive en core/notificaciones-push.js;
   // este switch solo dispara esas funciones y refleja su resultado.
-  // FIX (2026-09-26, ronda 3): volvía a buscar el id viejo
-  // "switch-notificaciones-push" (ya no existe en index.html, el real es
-  // "switch-sync-calendario") y a llamar a las funciones de Web Push
-  // retiradas — mismo bug ya resuelto antes, que volvió a aparecer. Ya no
-  // aplica el chequeo de "el navegador no soporta notificaciones push":
-  // Calendar entrega el recordatorio nativo del propio calendario.
-  const chkNotificaciones = document.getElementById("switch-sync-calendario");
+  const chkNotificaciones = document.getElementById("switch-notificaciones-push");
+  const avisoSinSoporte = document.getElementById("aviso-notificaciones-sin-soporte");
   if (chkNotificaciones) {
-    chkNotificaciones.disabled = false;
-    chkNotificaciones.checked = sincronizacionCalendarActiva();
+    const soportado = soportaNotificacionesPush();
+    chkNotificaciones.disabled = !soportado;
+    avisoSinSoporte?.classList.toggle("oculto", soportado);
+    chkNotificaciones.checked = notificacionesPushActivas();
     chkNotificaciones.onchange = async () => {
-      // Se deshabilita mientras se resuelve la llamada a Google (crear el
-      // calendario secundario / borrar lo espejado puede tardar) — vuelve
-      // a habilitarse pase lo que pase.
+      // Se deshabilita mientras se resuelve el permiso/suscripción (puede
+      // tardar un instante y no tiene sentido dejar el switch clickeable a
+      // mitad de camino) — vuelve a habilitarse pase lo que pase.
       chkNotificaciones.disabled = true;
       if (chkNotificaciones.checked) {
-        const activado = await activarSincronizacionCalendario();
-        // Si falta el scope de Calendar, activarSincronizacionCalendario
-        // ya mostró el modal bloqueante correspondiente
-        // (avisarFaltaPermisoCalendar); si falló por otra razón, ya
-        // mostró un toast. Acá solo se destilda el switch para que la UI
-        // quede consistente con lo que realmente pasó.
+        const activado = await activarNotificacionesPush();
+        // Si el usuario rechazó el permiso del navegador (o algo falló),
+        // activarNotificacionesPush ya avisó con un toast — acá solo se
+        // destilda el switch para que la UI quede consistente con lo que
+        // realmente pasó.
         if (!activado) chkNotificaciones.checked = false;
       } else {
-        await desactivarSincronizacionCalendario();
+        await desactivarNotificacionesPush();
       }
       chkNotificaciones.disabled = false;
       // El switch general habilita/deshabilita los bloques de abajo — se
@@ -1739,23 +1062,18 @@ function renderizarAjustes() {
   // sección global. Los campos de configuracion siguen siendo los mismos,
   // solo cambió DÓNDE se editan.
 
-  // Tres apariencias: claro, oscuro cromático (el modo oscuro previo) y
-  // oscuro profundo. La preferencia se guarda solo en este dispositivo.
-  document.querySelectorAll("#selector-modos-apariencia [data-modo-tema]").forEach((btn) => {
-    const modo = obtenerModoTemaLocal();
-    btn.classList.toggle("active", btn.dataset.modoTema === modo);
-    btn.setAttribute("aria-pressed", String(btn.dataset.modoTema === modo));
-    btn.onclick = () => {
-      guardarModoTemaLocal(btn.dataset.modoTema);
-      aplicarPaleta(estado.datos.configuracion.paleta, btn.dataset.modoTema,
-        estado.datos.configuracion.paleta === "personalizada" ? personalizada?.colores : undefined);
-      aplicarLogoApp();
-      document.querySelectorAll("#selector-modos-apariencia [data-modo-tema]").forEach((b) => {
-        const activo = b === btn; b.classList.toggle("active", activo); b.setAttribute("aria-pressed", String(activo));
-      });
+  // Modo claro/oscuro
+  const chkModo = document.getElementById("switch-modo");
+  if (chkModo) {
+    chkModo.checked = estado.datos.configuracion.modo === "light";
+    chkModo.onchange = () => {
+      const nuevoModo = chkModo.checked ? "light" : "dark";
+      estado.datos.configuracion.modo = nuevoModo;
+      aplicarPaleta(estado.datos.configuracion.paleta, nuevoModo,
+        estado.datos.configuracion.paleta === "personalizada" ? personalizada.colores : undefined);
       dispararSyncConAntirrebote();
     };
-  });
+  }
 
   // Ajustes por Universidad (2026-08-08): el selector de escala global que
   // vivía acá (#pill-escala-notas, leyendo/escribiendo
@@ -1813,9 +1131,6 @@ function renderizarAjustes() {
 
   // Ajustes — ocultar botones de navegación principal
   renderizarNavegacionOculta();
-
-  // Ajustes — Finanzas: perfil + interruptores de los 4 módulos (0C)
-  renderizarModulosFinanzasAjustes();
 
   // Ajustes — backup de seguridad rotativo a Drive (frecuencia + estado)
   renderizarSeccionBackupDrive();
@@ -2045,9 +1360,7 @@ function formatearFechaArchivo(fecha) {
 }
 
 function exportarDatos() {
-  const datosExportados = JSON.parse(JSON.stringify(estado.datos));
-  if (datosExportados.configuracion) delete datosExportados.configuracion.gemini_api_key;
-  const json = JSON.stringify(datosExportados);
+  const json = JSON.stringify(estado.datos);
   const blob = new Blob([json], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -2177,8 +1490,6 @@ function renderizarSeccionDatos() {
   });
 
   contenedor.appendChild(panel);
-
-
 }
 
 /**
@@ -2636,7 +1947,6 @@ function renderizarNotasAprobacion() {
     labelAprobacion.style.cssText = "display:block; font-size:0.75rem; margin-bottom:4px;";
     const inputAprobacion = document.createElement("input");
     inputAprobacion.type = "number";
-    inputAprobacion.autocomplete = "off";
     inputAprobacion.className = "form-input";
     inputAprobacion.style.width = "100%";
 
@@ -2696,7 +2006,6 @@ function renderizarNotasAprobacion() {
     labelRaspando.textContent = "Pasás raspando con";
     const inputRaspando = document.createElement("input");
     inputRaspando.type = "number";
-    inputRaspando.autocomplete = "off";
     inputRaspando.className = "form-input";
     inputRaspando.style.width = "100%";
     bloqueRaspando.appendChild(labelRaspando);
@@ -2830,6 +2139,3 @@ export {
   aplicarModoRendimiento,
   DIAS_SEMANA_CONFIG,
 };
-
-
-
