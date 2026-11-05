@@ -43,7 +43,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.27.10"; // Wapper, reintentos de Gemini y mejoras de Tiempo de estudio.
+const VERSION = "v3.27.11"; // Wapper, reintentos de Gemini y mejoras de Tiempo de estudio.
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
