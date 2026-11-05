@@ -526,8 +526,11 @@
 
           <div id="ajuste-intro-apertura" class="stack">
             <span class="form-label">Animación de apertura</span>
-            <p class="muted ajuste-subtitulo">Un folder muestra sus pestañas mientras la app carga y se abre al terminar. Si la apagas, se usa el cargador de siempre.</p>
-            <div class="row-between"><span>Animación de apertura</span><label class="switch switch-tema"><input type="checkbox" id="switch-intro-apertura"><span class="track"><span class="thumb"></span></span></label></div>
+            <p class="muted ajuste-subtitulo">Muestra un folder que se abre mientras la app carga. Si eliges el cargador simple, se usa el de siempre.</p>
+            <div class="pill-group" id="pill-intro-apertura">
+              <button type="button" class="pill-item" data-valor="simple">Cargador simple</button>
+              <button type="button" class="pill-item" data-valor="folder">Folder animado</button>
+            </div>
             <div class="intro-ver-fila" style="display:flex;justify-content:center;"><button type="button" class="btn-discreto" id="btn-intro-ver">Ver animación</button></div>
             <!-- Ya no se usa: los colores de la animación son los del logo. Se deja oculto para no romper config-ajustes.js. -->
             <div id="intro-colores-bloque" class="stack" hidden style="display:none!important">
