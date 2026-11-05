@@ -2,6 +2,7 @@ import { estado } from "./storage/storage.js";
 import { marcarCambioPendiente } from "./storage/storage-sync.js";
 import { sellarTimestamp } from "./schema.js";
 import { mostrarToast } from "../ui/componentes.js";
+import { espejarColoresIntroLocal } from "./intro-apertura.js";
 
 // Un solo logo (la carpeta). El birrete y el logo subido desde archivo ya no existen: una cuenta que los tenga guardados
 // (logo_app = "birrete" / "personalizado", logo_app_url) vuelve a la carpeta, que es lo que se pinta aquí.
@@ -124,6 +125,8 @@ function aplicarLogoApp() {
   const estilo = estiloLogo(cfg);
   const colores = estilo === "personalizado" ? coloresLogoPersonalizados(cfg) : null;
   aplicarColoresLogoAIconos(colores);
+  // La animación de apertura usa los colores del logo; se espejan en local porque al arrancar aún no hay datos de la cuenta.
+  espejarColoresIntroLocal(estilo === "original" ? null : { modo: estilo, colores: colores || undefined });
   const ciclo = ++cicloColorLogo;
   // Colores originales (o paleta sin color hexadecimal simple, p. ej. degradados): logo tal cual.
   const acento = estilo === "paleta" ? colorTema() : null;
