@@ -37,7 +37,9 @@ const monedaInfo = (id) => MONEDAS_DISPONIBLES.find((m) => m.id === id) || { id,
 /** Monto en la divisa de una cuenta (símbolo propio, mismo formato local). El "-" va antes del símbolo, como en el resto de Finanzas. */
 function formatearEn(numero, monedaId) {
   const n = Number(numero) || 0;
-  return (n < 0 ? "-" : "") + monedaInfo(monedaId).simbolo + Math.abs(n).toLocaleString(obtenerLocaleInterfaz(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const centavos = Math.round(Math.abs(n) * 100);
+  const decimales = centavos % 100 === 0 ? 0 : 2; // decimales solo si existen
+  return (n < 0 && centavos !== 0 ? "-" : "") + monedaInfo(monedaId).simbolo + (centavos / 100).toLocaleString(obtenerLocaleInterfaz(), { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
 }
 const nombreCuenta = (c) => `${c.emoji || ICONO[c.tipo] || "👛"} ${c.nombre}`;
 

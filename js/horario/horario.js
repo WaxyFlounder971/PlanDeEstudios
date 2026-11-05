@@ -879,7 +879,7 @@ function anclarBotonSalirFSEnFila(fila) {
 function anclarBotonSalirFSEnBarraVacia(cont) {
   if (!document.fullscreenElement) return;
   const barra = document.createElement("div");
-  barra.style.cssText = "position:sticky; top:0; z-index:50; height:34px; background:var(--bg-header-solido);";
+  barra.style.cssText = "position:sticky; top:0; z-index:50; height:46px; background:var(--bg-header-solido);";
   cont.prepend(barra);
   anclarBotonSalirFSEnFila(barra);
 }
@@ -2411,7 +2411,7 @@ function inicializarHorario() {
       const btnSalirFS = document.createElement("button");
       btnSalirFS.type = "button";
       btnSalirFS.id = "btn-horario-salir-pantalla-completa";
-      btnSalirFS.className = "btn-icono-fantasma oculto";
+      btnSalirFS.className = "app-encabezado__icono horario-salir-fs oculto"; // mismo botón (38×38) que el ⛶ de entrar
       btnSalirFS.title = "Salir de pantalla completa";
       btnSalirFS.setAttribute("aria-label", "Salir de pantalla completa");
       // Ícono "contraer pantalla" (fullscreen_exit - cuatro flechas en L
@@ -2419,7 +2419,7 @@ function inicializarHorario() {
       // específicamente "el cuadradito de cerrar pantalla completa, no una
       // X", sin relación visual con el ⛶ (expandir) que ya existe.
       btnSalirFS.innerHTML =
-        '<svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
+        '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">' +
         '<path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z"/>' +
         "</svg>";
       // Discreto: translúcido hasta hacer hover/tap. Anclado con
@@ -2431,11 +2431,8 @@ function inicializarHorario() {
       // mantiene pegado al borde derecho visible, dentro del ancla que
       // arma anclarBotonSalirFSEnFila (pointer-events:auto porque el ancla
       // deja pasar los clicks).
-      btnSalirFS.style.cssText =
-        "position:sticky; right:6px; margin-right:6px; pointer-events:auto; " +
-        "padding:3px 5px; opacity:0.65; transition:opacity 0.15s;";
-      btnSalirFS.addEventListener("mouseenter", () => { btnSalirFS.style.opacity = "1"; });
-      btnSalirFS.addEventListener("mouseleave", () => { btnSalirFS.style.opacity = "0.65"; });
+      // 2026-11-05: ya no es chico ni translúcido: mismo tamaño que el botón de entrar (ver .horario-salir-fs en el CSS).
+      btnSalirFS.style.cssText = "position:sticky; right:6px; margin-right:6px; pointer-events:auto;";
       btnSalirFS.addEventListener("click", () => {
         if (document.fullscreenElement) document.exitFullscreen();
       });

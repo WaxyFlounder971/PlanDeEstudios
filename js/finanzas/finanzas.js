@@ -22,7 +22,7 @@ import { construirAnilloMeta, renderizarPestanaMetas } from "./finanzas-metas.js
 import { renderizarPestanaPlan } from "./finanzas-plan.js";
 import { construirSelectorPerfil } from "./finanzas-modulos-ui.js";
 import { INFO_SECCIONES_FINANZAS, configurarNavegacionFinanzas, ocultarNavegacionFinanzas } from "./finanzas-navegacion.js";
-import { construirBloquesInicio, hayProximos, montoVisible, privacidadActiva } from "./finanzas-inicio.js";
+import { construirBloquesInicio, construirBotonPrivacidad, hayProximos, montoVisible, privacidadActiva } from "./finanzas-inicio.js";
 import { construirBloqueSobresEnRiesgo, pestanaPresupuestoVisible, renderizarPestanaPresupuesto } from "./finanzas-presupuesto.js";
 import { abrirAjustarSaldo, abrirRegistroRapido, construirPasoSaldoInicial } from "./finanzas-registro-rapido.js";
 import { renderizarPestanaSemestresFinanzas, abrirSelectorSemestreParaFinanzas, iniciarEdicionMovimientoFinanzas } from "./finanzas-semestres.js";
@@ -104,8 +104,9 @@ function obtenerSimboloMonedaActual() {
 }
 
 /**
- * Formato de monto consistente en toda la sección — sin decimales
- * sueltos raros, siempre 2 decimales, separador de miles local. El
+ * Formato de monto consistente en toda la sección — los decimales solo
+ * aparecen si el monto los tiene (₡1 500 / ₡1 500,50, nunca ₡1 500,00),
+ * separador de miles local. El
  * símbolo ahora sale de obtenerSimboloMonedaActual() (ver fix del bug de
  * arriba) en vez de "₡" fijo.
  *
@@ -117,8 +118,10 @@ function obtenerSimboloMonedaActual() {
  */
 function formatearMonto(numero) {
   const n = Number(numero) || 0;
-  const signo = n < 0 ? "-" : "";
-  return signo + obtenerSimboloMonedaActual() + Math.abs(n).toLocaleString(obtenerLocaleInterfaz(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const centavos = Math.round(Math.abs(n) * 100); // se redondea a centavos primero: 0.1 + 0.2 no deja decimales fantasma
+  const decimales = centavos % 100 === 0 ? 0 : 2;
+  const signo = n < 0 && centavos !== 0 ? "-" : ""; // «-₡0» no existe
+  return signo + obtenerSimboloMonedaActual() + (centavos / 100).toLocaleString(obtenerLocaleInterfaz(), { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
 }
 
 /**
@@ -150,20 +153,33 @@ function pestanasVisiblesConPresupuesto(modulos) {
 }
 
 /**
- * Título de la pantalla + una frase de qué se hace ahí. La navegación (sub-barra en escritorio,
+ * Encabezado de la pantalla, con el MISMO lenguaje que Resumen, Agenda, Horario, Tiempo, Comunidad y Notas
+ * (`.app-encabezado`: panel, título centrado, acciones a los costados). Debajo del título, una frase de qué se hace ahí.
+ * Acciones: solo el ojo de «Ocultar importes», y solo en Inicio. La navegación (sub-barra en escritorio,
  * barra inferior en teléfono) vive en finanzas-navegacion.js; aquí solo se le dice qué mostrar.
  */
 function construirEncabezadoFinanzas() {
   const info = INFO_SECCIONES_FINANZAS[estado.finanzasVistaActiva] || INFO_SECCIONES_FINANZAS.resumen;
   const cab = document.createElement("header");
-  cab.className = "finanzas-encabezado";
+  cab.className = "app-encabezado finanzas-cab";
+  const fila = document.createElement("div");
+  fila.className = "app-encabezado__fila";
+  const izq = document.createElement("div");
+  izq.className = "app-encabezado__izq"; // vacío a propósito: mantiene el título centrado
+  const centro = document.createElement("div");
+  centro.className = "app-encabezado__centro";
   const h = document.createElement("h2");
-  h.className = "finanzas-encabezado-titulo texto-encabezado-seccion";
+  h.className = "app-encabezado__titulo texto-encabezado-seccion";
   h.textContent = traducirTextoInterfaz(info.etiqueta);
   const p = document.createElement("p");
-  p.className = "finanzas-encabezado-ayuda muted";
+  p.className = "app-encabezado__sub";
   p.textContent = traducirTextoInterfaz(info.ayuda);
-  cab.append(h, p);
+  centro.append(h, p);
+  const der = document.createElement("div");
+  der.className = "app-encabezado__der";
+  if (estado.finanzasVistaActiva === "resumen") der.appendChild(construirBotonPrivacidad());
+  fila.append(izq, centro, der);
+  cab.appendChild(fila);
   return cab;
 }
 

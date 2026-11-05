@@ -229,14 +229,88 @@ async function detectarBloqueoPopup() {
  * escrito esperando exactamente estos 4 nombres — si storage-sync.js
  * resulta estar usando otros nombres distintos, avisar para ajustar.
  */
+/* 2026-11-05 (fix urgente: «cada que entro en el teléfono se cerró la sesión»): en teléfono el navegador puede
+   borrar localStorage (poco espacio, limpieza de datos de sitios) sin tocar IndexedDB, o al revés. Por eso el
+   refresh_token ahora vive en DOS lugares (localStorage + una copia en IndexedDB) y al abrir la app se restaura el
+   que falte. Además se pide almacenamiento persistente para que el navegador no lo limpie por su cuenta. */
+const IDB_SESION = "app_academica_sesion";
+const IDB_TIENDA = "kv";
+const CLAVE_MOTIVO_SESION = "sesion_ultimo_evento_v1";
+
+function abrirIdbSesion() {
+  return new Promise((resolver, rechazar) => {
+    if (typeof indexedDB === "undefined") { rechazar(new Error("sin IndexedDB")); return; }
+    const peticion = indexedDB.open(IDB_SESION, 1);
+    peticion.onupgradeneeded = () => peticion.result.createObjectStore(IDB_TIENDA);
+    peticion.onsuccess = () => resolver(peticion.result);
+    peticion.onerror = () => rechazar(peticion.error);
+  });
+}
+async function idbRefresh(valor) {
+  // valor === undefined → leer; null → borrar; string → guardar. Nunca lanza: es solo un respaldo.
+  try {
+    const db = await abrirIdbSesion();
+    const resultado = await new Promise((resolver, rechazar) => {
+      const tx = db.transaction(IDB_TIENDA, valor === undefined ? "readonly" : "readwrite");
+      const tienda = tx.objectStore(IDB_TIENDA);
+      let leido = null;
+      if (valor === undefined) { const g = tienda.get("rt"); g.onsuccess = () => { leido = g.result || null; }; }
+      else if (valor === null) tienda.delete("rt");
+      else tienda.put(valor, "rt");
+      tx.oncomplete = () => resolver(leido);
+      tx.onerror = tx.onabort = () => rechazar(tx.error);
+    });
+    db.close();
+    return resultado;
+  } catch (e) {
+    return null;
+  }
+}
+function pedirAlmacenamientoPersistente() {
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {}); } catch (e) { /* sin API */ }
+}
+
 function guardarRefreshTokenGoogle(refreshToken) {
-  localStorage.setItem(CLAVE_REFRESH_TOKEN, refreshToken);
+  try { localStorage.setItem(CLAVE_REFRESH_TOKEN, refreshToken); } catch (e) { console.warn("No se pudo guardar el refresh_token en localStorage:", e); }
+  idbRefresh(refreshToken);
+  pedirAlmacenamientoPersistente();
 }
 function leerRefreshTokenGoogle() {
-  return localStorage.getItem(CLAVE_REFRESH_TOKEN);
+  try { return localStorage.getItem(CLAVE_REFRESH_TOKEN); } catch (e) { return null; }
 }
 function borrarRefreshTokenGoogle() {
-  localStorage.removeItem(CLAVE_REFRESH_TOKEN);
+  try { localStorage.removeItem(CLAVE_REFRESH_TOKEN); } catch (e) { /* sin almacenamiento */ }
+  idbRefresh(null);
+}
+
+/** Al abrir la app: si localStorage perdió el refresh_token pero la copia sigue, se restaura (y viceversa).
+ *  Devuelve true si se restauró algo. */
+async function restaurarRefreshTokenDeRespaldo() {
+  pedirAlmacenamientoPersistente();
+  const local = leerRefreshTokenGoogle();
+  const copia = await idbRefresh(undefined);
+  if (local) {
+    if (copia !== local) idbRefresh(local);
+    return false;
+  }
+  if (copia && typeof copia === "string") {
+    try { localStorage.setItem(CLAVE_REFRESH_TOKEN, copia); } catch (e) { return false; }
+    registrarMotivoSesion("restaurado_desde_respaldo");
+    return true;
+  }
+  return false;
+}
+
+/** Anota POR QUÉ se perdió o se cerró la sesión, para mostrarlo en la pantalla de login (así se sabe la causa real). */
+function registrarMotivoSesion(motivo) {
+  lsSet(CLAVE_MOTIVO_SESION, JSON.stringify({ motivo, t: Date.now() }));
+}
+function leerMotivoSesion() {
+  try { return JSON.parse(lsGet(CLAVE_MOTIVO_SESION) || "null"); } catch (e) { return null; }
+}
+/** ¿Este dispositivo ya había iniciado sesión alguna vez? (para distinguir «sesión perdida» de «primera vez») */
+function habiaIniciadoSesionAntes() {
+  return lsGet(CLAVE_YA_AUTORIZADO) === "1";
 }
 
 let codeClient = null;
@@ -490,7 +564,9 @@ function pedirCodeConFallback(prompt) {
  * criterio para el botón de login en sí.
  */
 function iniciarSesionConGoogle() {
-  const yaAutorizado = localStorage.getItem(CLAVE_YA_AUTORIZADO) === "1";
+  // Sin refresh_token guardado hay que pedir el consentimiento completo: con prompt "" Google NO entrega un
+  // refresh_token nuevo y la sesión duraba solo 1 hora (mismo criterio que ya usa el login por redirección).
+  const yaAutorizado = localStorage.getItem(CLAVE_YA_AUTORIZADO) === "1" && Boolean(leerRefreshTokenGoogle());
   pedirCodeConFallback(yaAutorizado ? "" : "consent");
 }
 
@@ -1414,6 +1490,10 @@ export {
   guardarRefreshTokenGoogle,
   leerRefreshTokenGoogle,
   borrarRefreshTokenGoogle,
+  restaurarRefreshTokenDeRespaldo,
+  registrarMotivoSesion,
+  leerMotivoSesion,
+  habiaIniciadoSesionAntes,
   subirArchivoBinarioADrive,
   tieneScopeCalendarOtorgado,
   crearCalendarioSecundario,

@@ -367,10 +367,18 @@ function construirBarraFiltroEstadosAgenda() {
     const limite = barra.getBoundingClientRect().right;
     if (menuEstado.getBoundingClientRect().right > limite + 1) menuEstado.classList.add("agenda-filtro-estado-popover--en-flujo");
   };
+  // Con los estados individuales a la vista, la palabra «Estado» desaparece y los chips ocupan su lugar (CSS: .estados-visibles).
+  // Si con eso la barra queda en 2 líneas, el bloque Clase | Estado puede correrse a la izquierda (solo en ese caso).
+  const marcarEstadosVisibles = (abierto) => {
+    grupoEstado.classList.toggle("estados-visibles", abierto);
+    barra.classList.toggle("agenda-filtro-estados--estados-abiertos", abierto);
+    requestAnimationFrame(() => barra.actualizarLayoutMultilinea?.());
+  };
   const cerrarMenu = () => {
     if (FILTRO_ESTADO_EXTENDIDO) {
       filtroEstadoExtendidoAbierto = false;
       menuEstado.classList.remove("abierto");
+      marcarEstadosVisibles(false);
     } else {
       menuEstado.classList.add("oculto");
     }
@@ -382,6 +390,8 @@ function construirBarraFiltroEstadosAgenda() {
       // El filtro vuelve a pintarse tras cada toque: se conserva abierto, sin repetir la animación.
       menuEstado.classList.add("abierto", "agenda-filtro-estado-popover--sin-anim");
       botonEstado.setAttribute("aria-expanded", "true");
+      grupoEstado.classList.add("estados-visibles");
+      barra.classList.add("agenda-filtro-estados--estados-abiertos");
       requestAnimationFrame(ajustarEnFlujo);
     }
   }
@@ -393,6 +403,7 @@ function construirBarraFiltroEstadosAgenda() {
       if (abrir) ajustarEnFlujo();
       menuEstado.classList.toggle("abierto", abrir);
       botonEstado.setAttribute("aria-expanded", String(abrir));
+      marcarEstadosVisibles(abrir);
       return;
     }
     const abrir = menuEstado.classList.contains("oculto");

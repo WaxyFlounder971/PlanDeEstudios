@@ -1498,9 +1498,10 @@ function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorAct
   const filaNueva = document.createElement("div");
   filaNueva.className = "fila-pill-switch";
 
+  // Con título vacío no se pinta caption: el bloque ya trae su propia etiqueta en el HTML (evita "Calidad" repetido).
   const titulo = document.createElement("span");
   titulo.className = "fila-pill-switch-titulo";
-  titulo.textContent = traducirTextoInterfaz(tituloCorto);
+  titulo.textContent = tituloCorto ? traducirTextoInterfaz(tituloCorto) : "";
 
   const pillSwitch = construirPillSwitchBinario(
     opciones.map((opcion) => ({ ...opcion, texto: traducirTextoInterfaz(opcion.texto) })),
@@ -1509,7 +1510,7 @@ function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorAct
   );
   pillSwitch.dataset.pillSwitch = dataAtributo;
 
-  filaNueva.appendChild(titulo);
+  if (tituloCorto) filaNueva.appendChild(titulo);
   filaNueva.appendChild(pillSwitch);
   fila.replaceWith(filaNueva);
 }
@@ -1700,7 +1701,7 @@ function renderizarAjustes() {
   montarPillSwitch(
     "switch-rendimiento",
     "pill-switch-diseno",
-    "Calidad",
+    "",
     [
       { valor: "optimizado", texto: "Optimizado" },
       { valor: "fancy", texto: "Fancy" },
@@ -1717,11 +1718,18 @@ function renderizarAjustes() {
   );
 
   // Menú lateral: «No contraer» (preferencia local del dispositivo) impide que la barra principal se contraiga nunca.
-  const chkNoContraer = document.getElementById("switch-no-contraer-menu");
-  if (chkNoContraer) {
-    chkNoContraer.checked = menuLateralNoContraer();
-    chkNoContraer.onchange = () => fijarMenuLateralNoContraer(chkNoContraer.checked);
-  }
+  // Mismo selector de píldoras que «Calidad», para que se vea igual que el resto de Personalizar.
+  montarPillSwitch(
+    "switch-no-contraer-menu",
+    "pill-switch-menu-lateral",
+    "",
+    [
+      { valor: "auto", texto: "Automático" },
+      { valor: "fijo", texto: "No contraer" },
+    ],
+    menuLateralNoContraer() ? "fijo" : "auto",
+    (valor) => fijarMenuLateralNoContraer(valor === "fijo")
+  );
 
   // Switch general de sincronización con Google Calendar (Ajustes
   // Avanzados). Se acepte o no en el onboarding (ver

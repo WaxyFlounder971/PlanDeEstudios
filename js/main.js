@@ -6,7 +6,7 @@
 
 import { aplicarModoRendimiento, renderizarAjustes } from "./config/config-ajustes.js";
 import { inicializarModalEnlace, renderizarEnlacesRapidos } from "./config/config-enlaces.js";
-import { buscarOCrearArchivoDatos, cerrarSesionGoogle, hayRetornoRedireccion, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
+import { buscarOCrearArchivoDatos, habiaIniciadoSesionAntes, leerMotivoSesion, registrarMotivoSesion, restaurarRefreshTokenDeRespaldo, cerrarSesionGoogle, hayRetornoRedireccion, inicializarGoogleAuth, iniciarSesionConGoogle, obtenerMetadatosArchivo, obtenerPerfilGoogle } from "./core/auth.js";
 import { migrarDatosAntiguos, sellarTimestamp } from "./core/schema.js";
 import { fusionarDatos } from "./core/storage/storage-merge.js";
 import { actualizarIndicadorSync, asegurarTokenValido, avisarCierreSesionAOtrasPestanas, forzarSincronizacion, haySesionGuardada, recuperarConexionEscalonada, inicializarCanalEntrePestanas, inicializarPullToRefresh, inicializarReconexionAlVolverOnline, inicializarSondeoAlVolver, intentarSincronizar, marcarCambioPendiente, mostrarAvisoReconexion, programarRefrescoProactivo, sincronizarAlIniciar, sondearCambiosRemotos, temporizadorRefrescoProactivo } from "./core/storage/storage-sync.js";
@@ -311,7 +311,10 @@ window.addEventListener("DOMContentLoaded", () => {
 
   inicializarGoogleAuth({
     alObtenerToken: onLoginExitoso,
-    alListo: () => {
+    alListo: async () => {
+      // Fix urgente de sesión: si localStorage perdió el refresh_token pero queda su copia, se restaura ANTES de decidir
+      // si hay sesión (así no se cae al login). También se pide almacenamiento persistente en cada arranque.
+      try { await restaurarRefreshTokenDeRespaldo(); } catch (e) { /* el respaldo nunca debe impedir el arranque */ }
       btnLogin.disabled = false;
       btnLogin.textContent = textoOriginalBtnLogin;
       if (hayRetornoRedireccion()) return; // auth.js ya está canjeando el code
@@ -365,6 +368,7 @@ window.addEventListener("DOMContentLoaded", () => {
                 setTimeout(recuperarSesionGuardada, 15000);
               } else {
                 ocultarPantallaCargaSesion();
+                avisarMotivoSesionPerdida();
                 document.getElementById("pantalla-login").classList.remove("oculto");
               }
             }
@@ -1503,7 +1507,26 @@ function mostrarAvisoActualizacionObligatoria(registro) {
   overlay.querySelector("#btn-aplicar-actualizacion")?.focus();
 }
 
+/** Si este dispositivo YA había iniciado sesión y aun así se llega al login, dice por qué (queda en el aviso del login). */
+function avisarMotivoSesionPerdida() {
+  if (!habiaIniciadoSesionAntes()) return;
+  const evento = leerMotivoSesion();
+  const reciente = evento && Date.now() - Number(evento.t) < 3 * 24 * 3600 * 1000;
+  let texto;
+  if (reciente && evento.motivo === "google_invalid_grant") {
+    texto = "Google ya no aceptó la sesión guardada en este dispositivo (venció o se revocó el permiso). Vuelve a iniciar sesión; tus datos siguen en tu Drive.";
+  } else if (reciente && evento.motivo === "cierre_manual") {
+    return; // la persona cerró sesión a propósito: no hace falta explicar nada
+  } else {
+    texto = "El navegador borró los datos de sesión de este dispositivo (suele pasar en el teléfono con poco espacio o al limpiar datos del sitio). Vuelve a iniciar sesión; tus datos siguen en tu Drive.";
+    registrarMotivoSesion("datos_de_sesion_borrados_por_el_navegador");
+  }
+  const aviso = document.getElementById("aviso-login-bloqueado");
+  if (aviso) { aviso.textContent = texto; aviso.classList.remove("oculto"); }
+}
+
 function cerrarSesion() {
+  registrarMotivoSesion("cierre_manual");
   clearTimeout(temporizadorRefrescoProactivo);
   // Punto 3.4: antes de borrar nada, avisar a las demás pestañas de este
   // navegador para que dejen de sincronizar con un token que ya está muerto
