@@ -3,6 +3,10 @@
   "nombre": "English",
   "locale": "en",
   "traducciones": {
+    "Semana del semestre": "Semester week",
+    "Semana del año": "Week of the year",
+    "Semana del semestre (columna izquierda)": "Semester week (left column)",
+    "Semana del año (columna derecha)": "Week of the year (right column)",
     "Hola, {nombre}!": "Hi, {nombre}!",
     "Cambiar datos": "Edit details",
     "Datos de tu cuenta": "Your account details",

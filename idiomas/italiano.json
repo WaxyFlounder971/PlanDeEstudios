@@ -3,6 +3,10 @@
   "nombre": "Italiano",
   "locale": "it",
   "traducciones": {
+    "Semana del semestre": "Settimana del semestre",
+    "Semana del año": "Settimana dell’anno",
+    "Semana del semestre (columna izquierda)": "Settimana del semestre (colonna sinistra)",
+    "Semana del año (columna derecha)": "Settimana dell’anno (colonna destra)",
     "Hola, {nombre}!": "Ciao, {nombre}!",
     "Cambiar datos": "Modifica dati",
     "Datos de tu cuenta": "Dati del tuo account",

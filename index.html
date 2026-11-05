@@ -812,11 +812,11 @@
           <div class="app-encabezado__fila">
             <div class="app-encabezado__izq">
               <button type="button" class="app-encabezado__icono app-encabezado__descargar" id="btn-horario-descargar" title="Descargar horario como imagen" aria-label="Descargar horario como imagen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg></button>
+              <button type="button" class="app-encabezado__icono app-encabezado__salir oculto" id="btn-salir-modo-conjunto" title="Salir" aria-label="Salir"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>
               <button type="button" class="btn btn-primary app-encabezado__lado" id="btn-horario-amigos" title="Amigos" aria-label="Amigos"><span class="app-encabezado__lado-icono" aria-hidden="true">👥</span><span class="app-encabezado__lado-texto">Amigos</span></button>
-              <button type="button" class="btn btn-secondary app-encabezado__salir oculto" id="btn-salir-modo-conjunto">Salir</button>
             </div>
             <div class="app-encabezado__centro">
-              <div class="row app-encabezado__titulofila">
+              <div class="row app-encabezado__titulofila" style="align-items:center; justify-content:center; gap:6px;">
                 <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;">‹</button>
                 <span id="horario-semana-actual" class="texto-encabezado-seccion"></span>
                 <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;">›</button>
@@ -1523,6 +1523,22 @@
       <span>Repetir puntito en calendario</span>
       <label class="switch switch-tema">
         <input type="checkbox" id="chk-agenda-calendario-repetir-puntos" checked>
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+
+    <!-- 2026-11-04 (parche 7): columnas de semana en el calendario mensual, cada una se apaga por separado. -->
+    <div class="row-between">
+      <span>Semana del semestre (columna izquierda)</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="chk-agenda-calendario-semana-semestre" checked>
+        <span class="track"><span class="thumb"></span></span>
+      </label>
+    </div>
+    <div class="row-between">
+      <span>Semana del año (columna derecha)</span>
+      <label class="switch switch-tema">
+        <input type="checkbox" id="chk-agenda-calendario-semana-anio" checked>
         <span class="track"><span class="thumb"></span></span>
       </label>
     </div>

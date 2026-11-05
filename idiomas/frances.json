@@ -3,6 +3,10 @@
   "nombre": "Français",
   "locale": "fr",
   "traducciones": {
+    "Semana del semestre": "Semaine du semestre",
+    "Semana del año": "Semaine de l’année",
+    "Semana del semestre (columna izquierda)": "Semaine du semestre (colonne gauche)",
+    "Semana del año (columna derecha)": "Semaine de l’année (colonne droite)",
     "Hola, {nombre}!": "Bonjour, {nombre} !",
     "Cambiar datos": "Modifier mes données",
     "Datos de tu cuenta": "Données de votre compte",

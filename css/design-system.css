@@ -6494,11 +6494,9 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
 #horario-header .app-encabezado__der { flex-wrap: nowrap; }
 /* "Salir" / "← Cerrar horario" (modo conjunto / horario de un amigo): mismo alto que los demás botones,
    y el texto baja a dos líneas en vez de cortarse. Con él visible se oculta Descargar para dar espacio. */
-.app-encabezado__salir {
-  box-sizing: border-box; height: 38px; max-width: 132px; padding: 0 10px;
-  font-size: 0.78rem; line-height: 1.1; white-space: normal; text-align: center;
-}
-#horario-header .app-encabezado__izq:has(.app-encabezado__salir:not(.oculto)) #btn-horario-descargar { display: none; }
+/* Salir: ahora es un botón de símbolo (.app-encabezado__icono), sin texto. */
+.app-encabezado__salir { color: var(--text-secondary); }
+#horario-header .app-encabezado__izq:has(#btn-salir-modo-conjunto:not(.oculto)) #btn-horario-descargar { display: none; }
 /* fila de días (L2 K3 M4…): un poco de aire respecto a la fila de arriba, ya que el gap del encabezado es de 2px */
 #horario-header #horario-dias-semana { margin-top: 4px; }
 
@@ -6688,3 +6686,12 @@ html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado {
 }
 html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__mas { width: var(--enc-alto-boton); }
 html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado { white-space: nowrap; }
+
+/* Parche 7 — calendario mensual: columnas de semana (semestre a la izquierda, año a la derecha), letra pequeña. */
+.agenda-cal-grid { --cal-ancho-semana: 1.4rem; }
+.agenda-cal-semana {
+  display: flex; align-items: center; justify-content: center; min-width: 0;
+  font-size: 0.62rem; font-weight: 600; line-height: 1; opacity: 0.8;
+}
+/* Botón de salir (modo conjunto / horario de un amigo): símbolo SVG, ya no el texto "Salir". */
+#btn-salir-modo-conjunto.oculto { display: none; }
