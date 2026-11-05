@@ -2,6 +2,7 @@ import { estado } from "./storage/storage.js";
 import { marcarCambioPendiente } from "./storage/storage-sync.js";
 import { sellarTimestamp } from "./schema.js";
 import { mostrarToast } from "../ui/componentes.js";
+import { espejarColoresIntroLocal } from "./intro-apertura.js";
 
 // Un solo logo (la carpeta). El birrete y el logo subido desde archivo ya no existen: una cuenta que los tenga guardados
 // (logo_app = "birrete" / "personalizado", logo_app_url) vuelve a la carpeta, que es lo que se pinta aquí.
@@ -124,6 +125,8 @@ function aplicarLogoApp() {
   const estilo = estiloLogo(cfg);
   const colores = estilo === "personalizado" ? coloresLogoPersonalizados(cfg) : null;
   aplicarColoresLogoAIconos(colores);
+  // La animación de apertura usa los colores del logo; se espejan en local porque al arrancar aún no hay datos de la cuenta.
+  espejarColoresIntroLocal(estilo === "original" ? null : { modo: estilo, colores: colores || undefined });
   const ciclo = ++cicloColorLogo;
   // Colores originales (o paleta sin color hexadecimal simple, p. ej. degradados): logo tal cual.
   const acento = estilo === "paleta" ? colorTema() : null;
@@ -173,16 +176,23 @@ async function prepararImagenLogo(archivo) {
 // Se llama en cada renderizarAjustes(): repinta el estado y registra los eventos una sola vez.
 function inicializarSelectorLogo() {
   const cont = document.getElementById("ajuste-logo-app");
-  const cfg = estado.datos?.configuracion;
-  if (!cont || !cfg) return;
+  if (!cont || !estado.datos?.configuracion) return;
   const botones = Array.from(cont.querySelectorAll("[data-estilo-logo]"));
   const bloque = document.getElementById("logo-colores-bloque");
   const bolitas = Array.from(cont.querySelectorAll("input[data-logo-color]"));
   const btnRestablecer = document.getElementById("btn-logo-colores-original");
   if (!bloque || bolitas.length !== 6) return;
 
-  const guardarEnCuenta = () => { sellarTimestamp(cfg); marcarCambioPendiente(); };
+  const configuracionActual = () => estado.datos?.configuracion;
+  const guardarEnCuenta = () => {
+    const cfg = configuracionActual();
+    if (!cfg) return;
+    sellarTimestamp(cfg);
+    marcarCambioPendiente();
+  };
   const pintar = () => {
+    const cfg = configuracionActual();
+    if (!cfg) return;
     const estilo = estiloLogo(cfg);
     botones.forEach((b) => b.classList.toggle("active", b.dataset.estiloLogo === estilo));
     bloque.classList.toggle("oculto", estilo !== "personalizado");
@@ -198,12 +208,16 @@ function inicializarSelectorLogo() {
 
   botones.forEach((btn) => btn.addEventListener("click", () => {
     if (!ESTILOS_LOGO.includes(btn.dataset.estiloLogo)) return;
+    const cfg = configuracionActual();
+    if (!cfg) return;
     cfg.estilo_logo = btn.dataset.estiloLogo;
     guardarEnCuenta(); pintar(); aplicarLogoApp();
   }));
   bolitas.forEach((el) => {
     // Mientras se arrastra el selector solo se repinta en pantalla; a la cuenta se sube al soltar.
     el.addEventListener("input", () => {
+      const cfg = configuracionActual();
+      if (!cfg) return;
       cfg.logo_colores_personalizados = bolitas.map((b) => b.value);
       cfg.estilo_logo = "personalizado";
       el.parentElement.style.background = el.value;
@@ -212,10 +226,45 @@ function inicializarSelectorLogo() {
     el.addEventListener("change", () => { guardarEnCuenta(); pintar(); });
   });
   btnRestablecer?.addEventListener("click", () => {
+    const cfg = configuracionActual();
+    if (!cfg) return;
     cfg.logo_colores_personalizados = COLORES_LOGO_ORIGINALES.slice();
+    // Volver al archivo original exacto, no a una versión recoloreada aproximada.
+    cfg.estilo_logo = "original";
     guardarEnCuenta(); pintar(); aplicarLogoApp();
   });
 }
 
 window.aplicarLogoApp = aplicarLogoApp;
 export { aplicarLogoApp, inicializarSelectorLogo, prepararImagenLogo, COLORES_LOGO_ORIGINALES };
+
+// Ajustes > Personalizar iconos: vista previa. Copia los iconos de las secciones visibles del menú (mismo orden) y el
+// CSS los pinta según el estilo elegido (html[data-iconos-nav]), así que cambia al instante al tocar una opción.
+function pintarVistaIconosNav() {
+  const cont = document.getElementById("iconos-nav-vista");
+  if (!cont) return;
+  cont.replaceChildren();
+  document.querySelectorAll("#app-sidebar .btn-nav:not(.oculto)").forEach((btn) => {
+    const svg = btn.querySelector("svg");
+    if (!svg || !btn.dataset.seccion) return;
+    const caja = document.createElement("span");
+    caja.className = "ajuste-icono-vista";
+    caja.dataset.seccion = btn.dataset.seccion;
+    caja.appendChild(svg.cloneNode(true));
+    cont.appendChild(caja);
+  });
+}
+(function iniciarVistaIconosNav() {
+  const arrancar = () => {
+    pintarVistaIconosNav();
+    const barra = document.getElementById("app-sidebar");
+    if (!barra) return;
+    let pendiente = false;
+    new MutationObserver(() => {
+      if (pendiente) return;
+      pendiente = true;
+      requestAnimationFrame(() => { pendiente = false; pintarVistaIconosNav(); });
+    }).observe(barra, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", arrancar); else arrancar();
+})();

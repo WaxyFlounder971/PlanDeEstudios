@@ -17,11 +17,25 @@ const PROPIEDADES_COLOR_ICONO = ["--ni-a", "--ni-b", "--ni-k", "--ni-logo", "--n
 
 function copiarColoresCalculados(origen, destino) {
   const estilos = getComputedStyle(origen);
+  const raiz = document.documentElement;
+  const estilo = raiz.dataset.iconosNav || "fijo";
   destino.style.color = estilos.color;
   PROPIEDADES_COLOR_ICONO.forEach((propiedad) => {
     const valor = estilos.getPropertyValue(propiedad).trim();
     if (valor) destino.style.setProperty(propiedad, valor);
   });
+  // El color activo de Configuración se fuerza a blanco en el menú; la muestra debe enseñar
+  // el color propio de su sección, igual que si estuviera inactiva.
+  if (estilo === "paleta") {
+    destino.style.setProperty("--nav-c1", "var(--accent-2)");
+    destino.style.setProperty("--nav-c2", "color-mix(in srgb, var(--accent-1) 55%, var(--accent-2))");
+  } else if (estilo === "logo") {
+    destino.style.setProperty("--nav-c1", "color-mix(in srgb, var(--ni-logo) var(--ni-k), black)");
+    destino.style.setProperty("--nav-c2", "color-mix(in srgb, color-mix(in srgb, var(--ni-logo) 70%, white) var(--ni-k), black)");
+  } else {
+    destino.style.setProperty("--nav-c1", "color-mix(in srgb, var(--ni-a) var(--ni-k), black)");
+    destino.style.setProperty("--nav-c2", "color-mix(in srgb, var(--ni-b) var(--ni-k), black)");
+  }
 }
 
 function pintarVistaIconos() {
