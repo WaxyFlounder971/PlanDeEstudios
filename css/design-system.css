@@ -6695,3 +6695,8 @@ html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado { white-
 }
 /* Botón de salir (modo conjunto / horario de un amigo): símbolo SVG, ya no el texto "Salir". */
 #btn-salir-modo-conjunto.oculto { display: none; }
+
+/* Parche 8 — "Semana N" queda en el mismo sitio con o sin flechas ‹ ›: las flechas no aportan alto a la fila
+   (antes su padding de 6px la hacía 4px más alta y bajaba el texto 2px en Horario). */
+.app-encabezado__titulofila .btn-icono-fantasma { padding-block: 0; line-height: 1; }
+#horario-header .app-encabezado__titulofila { gap: 4px; }
