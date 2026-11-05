@@ -6952,10 +6952,7 @@ html[data-iconos-nav="paleta"] .ajuste-icono-vista { color: var(--accent-1); }
 .finanzas-nav-texto { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .finanzas-nav-atajo { font-size: .85rem; font-weight: 500; }
 
-/* ---- Encabezado de cada pantalla: título + una frase de qué se hace ahí ---- */
-.finanzas-encabezado { display: flex; flex-direction: column; gap: 2px; padding: 2px 2px 0; }
-.finanzas-encabezado-titulo { margin: 0; }
-.finanzas-encabezado-ayuda { margin: 0; }
+/* ---- Encabezado de cada pantalla: ahora es el .app-encabezado de toda la app (ver «Finanzas: parche 6» al final) ---- */
 
 /* ---- Teléfono: barra inferior + hoja «Más» ---- */
 .finanzas-bottombar, .finanzas-hoja, .finanzas-hoja-overlay { display: none; }
@@ -7079,3 +7076,82 @@ body[data-enlaces-lateral="riel"] #lista-enlaces-lateral > .glass-panel:hover { 
 body[data-enlaces-lateral="riel"] #lista-enlaces-lateral > .glass-panel > a { flex: none !important; justify-content: center; }
 body[data-enlaces-lateral="riel"] .enlace-rapido-icono { min-width: 24px; font-size: 1.25rem; }
 body[data-enlaces-lateral="riel"] .enlace-rapido-icono img { width: 24px; height: 24px; }
+
+/* =========================================================================
+   Finanzas: parche 6 — mismo encabezado que el resto de la app, ojo de privacidad y cifras que no se rompen
+   ========================================================================= */
+/* Encabezado: usa .app-encabezado (panel, título centrado, acciones a los costados). Solo se ajusta la frase de ayuda. */
+.finanzas-cab .app-encabezado__sub { max-width: 46ch; overflow-wrap: anywhere; }
+
+/* Ojo de «Ocultar importes»: botón redondo del alto de los demás botones del encabezado, con el trazo del texto. */
+.finanzas-ojo {
+  width: var(--enc-alto-boton, 38px); height: var(--enc-alto-boton, 38px); flex: none; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border-glass); border-radius: 50%; background: transparent;
+  color: var(--text-muted); cursor: pointer;
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .18s ease;
+}
+.finanzas-ojo:hover { background: color-mix(in srgb, var(--text-primary) 8%, transparent); color: var(--text-primary); }
+.finanzas-ojo:active { transform: scale(.94); }
+.finanzas-ojo:focus-visible { outline: 2px solid var(--accent-1); outline-offset: 2px; }
+.finanzas-ojo[aria-pressed="true"] { color: var(--accent-1); border-color: color-mix(in srgb, var(--accent-1) 55%, var(--border-glass)); }
+.finanzas-ojo-ico { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* Cifras largas o negativas no rompen la tarjeta: el contenido puede encoger y nada se parte en dos líneas. */
+#seccion-finanzas, #finanzas-contenido { min-width: 0; }
+#finanzas-contenido > * { min-width: 0; max-width: 100%; }
+.resumen-hero-cifra, .disponible-cifra { max-width: 100%; overflow-wrap: anywhere; }
+.resumen-hero-desglose .badge { max-width: 100%; white-space: normal; text-align: center; }
+.resumen-leyenda-fila { grid-template-columns: auto minmax(0, 1fr) auto; }
+.resumen-leyenda-fila strong { white-space: nowrap; }
+/* Dentro del anillo (unos 112px útiles) la letra se achica según el largo de la cifra; --largo lo pone finanzas-graficas.js. */
+.resumen-donut-centro { padding: 0 22px; box-sizing: border-box; }
+.resumen-donut-centro strong { font-size: min(1.25rem, calc(104px / (var(--largo, 8) * 0.6))); white-space: nowrap; }
+.resumen-donut-centro span { max-width: 100%; }
+
+
+/* =========================================================================
+   Parche 7 — Agenda (deslizar entre vistas, filtros) y Horario (Amigos, salir de pantalla completa)
+   ========================================================================= */
+/* Cronograma / Calendario / Lista: los gestos escuchan sobre #seccion-agenda. Si la vista está vacía la sección
+   medía casi 0 de alto y el dedo caía fuera de ella: no deslizaba. En pantallas táctiles ocupa, como mínimo, la pantalla. */
+@media (pointer: coarse) {
+  #seccion-agenda { min-height: calc(100dvh - 150px); }
+}
+
+/* Filtros de la lista, cuando se parten en 2 líneas: la línea divisora queda EXACTAMENTE al centro,
+   «Clase» pegada a ella por la izquierda y «Estado» pegado a ella por la derecha. */
+.agenda-filtro-estados--multilinea {
+  grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
+  grid-template-areas: "clase separador estado" "categorias categorias categorias";
+  justify-content: stretch;
+  column-gap: 10px;
+}
+.agenda-filtro-estados--multilinea .agenda-filtro-clase { justify-self: end; justify-content: flex-end; }
+.agenda-filtro-estados--multilinea .agenda-filtro-estado { justify-self: start; justify-content: flex-start; }
+.agenda-filtro-estados--multilinea .agenda-filtro-separador-principal { margin: 0; }
+/* Con los estados individuales a la vista desaparece la palabra «Estado» y los chips ocupan su lugar. */
+.agenda-filtro-estados--ext .agenda-filtro-estado-menu.estados-visibles .agenda-filtro-estado-trigger { display: none; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-menu.estados-visibles .agenda-filtro-estado-popover {
+  position: static; transform: none; opacity: 1; visibility: visible; pointer-events: auto;
+  order: 0; flex: 0 1 auto; margin: 0; flex-wrap: wrap; justify-content: flex-start; white-space: normal;
+}
+/* Solo si ya hay 2 líneas: el bloque «Clase | Estado» deja de ir centrado en la mitad y se corre a la izquierda
+   lo que haga falta para que los chips quepan. En 1 sola línea nada se mueve. */
+.agenda-filtro-estados--multilinea.agenda-filtro-estados--estados-abiertos {
+  grid-template-columns: auto 1px auto;
+  justify-content: center;
+}
+
+/* Horario › Amigos: el emoji va blanco puro (en azul no se distinguía). */
+.app-encabezado__lado-icono { filter: brightness(0) invert(1); }
+
+/* Horario › pantalla completa: «Salir» del mismo tamaño que el botón de entrar (38×38), bien visible. */
+.horario-salir-fs {
+  width: 38px; height: 38px; opacity: 1;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--text-primary) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-primary) 22%, transparent);
+}
+.horario-salir-fs:hover { background: color-mix(in srgb, var(--text-primary) 22%, transparent); }
+.horario-salir-fs svg { width: 22px; height: 22px; }
