@@ -20,6 +20,7 @@ import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoTemaLocal, guardarModoDisenoLocal } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
+import { crearIconoSeccion } from "../ui/icono-seccion.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import {
   eliminarAdjuntosDeCronogramaDeSemestre,
@@ -914,13 +915,13 @@ function renderizarConfigRangoHorasHorario() {
 }
 
 const SECCIONES_TOGGLEABLES = [
-  { id: "agenda", etiqueta: "Agenda", icono: "📖" },
-  { id: "horario", etiqueta: "Horario", icono: "🗓️" },
-  { id: "semestres", etiqueta: "Semestres", icono: "📅" },
-  { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
-  { id: "finanzas", etiqueta: "Finanzas", icono: "💰" },
-  { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
-  { id: "notas", etiqueta: "Notas rápidas", icono: "🗒️" },
+  { id: "agenda", etiqueta: "Agenda", icono: "ni-agenda" },
+  { id: "horario", etiqueta: "Horario", icono: "ni-horario" },
+  { id: "semestres", etiqueta: "Semestres", icono: "ni-libro" },
+  { id: "comunidad", etiqueta: "Comunidad", icono: "ni-comunidad" },
+  { id: "finanzas", etiqueta: "Finanzas", icono: "ni-finanzas" },
+  { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "ni-birrete" },
+  { id: "notas", etiqueta: "Notas rápidas", icono: "ni-notas" },
   // 2026-09-09 (pedido explícito): Tiempo de Estudio entra al mismo
   // sistema de mostrar/ocultar/reordenar que el resto del nav — sin gate
   // de existencia como "asistente" (Gemini), ya existe siempre para
@@ -936,8 +937,8 @@ const SECCIONES_TOGGLEABLES = [
   // Rename 2026-09-20 (pedido explícito): "Pomodoro" -> "Tiempo", para que
   // coincida con el botón del sidebar (index.html) y con el título de la
   // sección (tiempo-estudio.js). `id` intacto.
-  { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "⏱️" },
-  { id: "asistente", etiqueta: "Asistente", icono: "✨" },
+  { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "ni-tiempo" },
+  { id: "asistente", etiqueta: "Asistente", icono: "ni-asistente" },
 ];
 
 function renderizarNavegacionOculta() {
@@ -983,10 +984,9 @@ function renderizarNavegacionOculta() {
     handle.title = "Arrastrá para reordenar";
     izquierda.appendChild(handle);
 
-    const icono = document.createElement("span");
-    icono.textContent = seccion.icono;
-    icono.style.cssText = "font-size:1.05rem; flex-shrink:0;";
-    izquierda.appendChild(icono);
+    // SVG real con el mismo icono del menú lateral (con innerHTML en un <span> el <use> no se dibuja).
+    const icono = crearIconoSeccion(id);
+    if (icono) izquierda.appendChild(icono);
 
     const texto = document.createElement("span");
     texto.textContent = traducirTextoInterfaz(seccion.etiqueta);
@@ -1095,6 +1095,9 @@ function habilitarArrastreNavegacion(contenedor) {
       const rectInicial = fila.getBoundingClientRect();
       const anchoItem = rectInicial.width;
       const alturaItem = rectInicial.height;
+      // Mantener el punto exacto de agarre dentro de la fila; no centrarla bajo el puntero.
+      const agarreX = evDown.clientX - rectInicial.left;
+      const agarreY = evDown.clientY - rectInicial.top;
 
       const placeholder = document.createElement("div");
       placeholder.className = "arrastre-placeholder";
@@ -1119,8 +1122,8 @@ function habilitarArrastreNavegacion(contenedor) {
       }
 
       const mover = (x, y) => {
-        fila.style.left = x - anchoItem / 2 + "px";
-        fila.style.top = y - alturaItem / 2 + "px";
+        fila.style.left = x - agarreX + "px";
+        fila.style.top = y - agarreY + "px";
 
         fila.style.display = "none";
         const elDebajo = document.elementFromPoint(x, y);
@@ -1510,15 +1513,40 @@ function montarPillSwitch(idViejo, dataAtributo, tituloCorto, opciones, valorAct
   fila.replaceWith(filaNueva);
 }
 
-/**
- * Ajustes → Personalizar → "Animación de apertura": interruptor, 6 bolitas con
- * los colores de las pestañas del folder, "Usar colores de la paleta",
- * "Restablecer" y "Ver animación". Todo se guarda en configuracion (se sincroniza
- * con la cuenta) y se refleja en localStorage para que el arranque lo lea antes
- * de tener datos (ver core/intro-apertura.js). Idempotente: se llama en cada
- * renderizarAjustes().
- */
+/** Ajustes → Animación de apertura: selector entre cargador simple y folder animado. */
 function inicializarAjusteIntroApertura() {
+  const grupoIntro = document.getElementById("pill-intro-apertura");
+  const btnVerNuevo = document.getElementById("btn-intro-ver");
+  const cfgActual = estado.datos.configuracion;
+
+  if (grupoIntro) {
+    if (cfgActual.animacion_apertura !== undefined) espejarIntroAperturaLocal(cfgActual.animacion_apertura !== false);
+    const pintarIntro = () => {
+      const activa = introAperturaActivada(cfgActual);
+      grupoIntro.querySelectorAll('[data-valor="simple"], [data-valor="folder"]').forEach((btn) => {
+        btn.classList.toggle("active", (btn.dataset.valor === "folder") === activa);
+      });
+    };
+    grupoIntro.querySelectorAll('[data-valor="simple"], [data-valor="folder"]').forEach((btn) => {
+      btn.onclick = () => {
+        const activar = btn.dataset.valor === "folder";
+        cfgActual.animacion_apertura = activar;
+        espejarIntroAperturaLocal(activar);
+        sellarTimestamp(cfgActual);
+        marcarCambioPendiente();
+        pintarIntro();
+      };
+    });
+    if (btnVerNuevo) {
+      btnVerNuevo.onclick = async () => {
+        const ok = await verAnimacionIntro(cfgActual);
+        if (!ok) mostrarToast("No se puede reproducir ahora (movimiento reducido o carga en curso).");
+      };
+    }
+    pintarIntro();
+    return;
+  }
+
   const interruptor = document.getElementById("switch-intro-apertura");
   const bloque = document.getElementById("intro-colores-bloque");
   const bolitas = Array.from(document.querySelectorAll("#intro-colores input[data-intro-color]"));

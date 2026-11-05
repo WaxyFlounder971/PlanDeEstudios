@@ -6741,17 +6741,17 @@ html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado { white-
 /* Colores por sección. --ni-a / --ni-b = tonos del estilo "Multicolor"; --ni-logo = tono del estilo "Color según logo"
    (una de las seis pestañas del logo: --logo-1…--logo-6, ver Parche 10).
    Van por sección (no por posición): reordenar u ocultar secciones en Ajustes no cambia el color de cada una. */
-#app-sidebar .btn-nav[data-seccion="resumen"], .ajuste-icono-vista[data-seccion="resumen"]        { --ni-a: #E0352F; --ni-b: #2F86DC; --ni-logo: var(--logo-1); }
-#app-sidebar .btn-nav[data-seccion="asistente"], .ajuste-icono-vista[data-seccion="asistente"]      { --ni-a: #8A48DE; --ni-b: #2F86DC; --ni-logo: var(--logo-2); }
-#app-sidebar .btn-nav[data-seccion="agenda"], .ajuste-icono-vista[data-seccion="agenda"]         { --ni-a: #35A878; --ni-b: #2F86DC; --ni-logo: var(--logo-3); }
-#app-sidebar .btn-nav[data-seccion="horario"], .ajuste-icono-vista[data-seccion="horario"]        { --ni-a: #2F86DC; --ni-b: #E0352F; --ni-logo: var(--logo-4); }
-#app-sidebar .btn-nav[data-seccion="tiempo-estudio"], .ajuste-icono-vista[data-seccion="tiempo-estudio"] { --ni-a: #E0352F; --ni-b: #E3BC38; --ni-logo: var(--logo-5); }
-#app-sidebar .btn-nav[data-seccion="semestres"], .ajuste-icono-vista[data-seccion="semestres"]      { --ni-a: #2F86DC; --ni-b: #35A878; --ni-logo: var(--logo-6); }
-#app-sidebar .btn-nav[data-seccion="comunidad"], .ajuste-icono-vista[data-seccion="comunidad"]      { --ni-a: #E8632F; --ni-b: #2F86DC; --ni-logo: var(--logo-1); }
-#app-sidebar .btn-nav[data-seccion="finanzas"], .ajuste-icono-vista[data-seccion="finanzas"]       { --ni-a: #35A878; --ni-b: #E3BC38; --ni-logo: var(--logo-2); }
-#app-sidebar .btn-nav[data-seccion="plan-estudios"], .ajuste-icono-vista[data-seccion="plan-estudios"]  { --ni-a: #8A48DE; --ni-b: #E3BC38; --ni-logo: var(--logo-3); }
-#app-sidebar .btn-nav[data-seccion="notas"], .ajuste-icono-vista[data-seccion="notas"]          { --ni-a: #E3BC38; --ni-b: #F2D66B; --ni-logo: var(--logo-4); }
-#app-sidebar .btn-nav[data-seccion="configuracion"], .ajuste-icono-vista[data-seccion="configuracion"]  { --ni-a: #8E9AB8; --ni-b: #2F86DC; --ni-logo: var(--logo-5); }
+#app-sidebar .btn-nav[data-seccion="resumen"], .ajuste-icono-vista[data-seccion="resumen"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="resumen"]        { --ni-a: #E0352F; --ni-b: #2F86DC; --ni-logo: var(--logo-1); }
+#app-sidebar .btn-nav[data-seccion="asistente"], .ajuste-icono-vista[data-seccion="asistente"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="asistente"]      { --ni-a: #8A48DE; --ni-b: #2F86DC; --ni-logo: var(--logo-2); }
+#app-sidebar .btn-nav[data-seccion="agenda"], .ajuste-icono-vista[data-seccion="agenda"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="agenda"]         { --ni-a: #35A878; --ni-b: #2F86DC; --ni-logo: var(--logo-3); }
+#app-sidebar .btn-nav[data-seccion="horario"], .ajuste-icono-vista[data-seccion="horario"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="horario"]        { --ni-a: #2F86DC; --ni-b: #E0352F; --ni-logo: var(--logo-4); }
+#app-sidebar .btn-nav[data-seccion="tiempo-estudio"], .ajuste-icono-vista[data-seccion="tiempo-estudio"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="tiempo-estudio"] { --ni-a: #E0352F; --ni-b: #E3BC38; --ni-logo: var(--logo-5); }
+#app-sidebar .btn-nav[data-seccion="semestres"], .ajuste-icono-vista[data-seccion="semestres"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="semestres"]      { --ni-a: #2F86DC; --ni-b: #35A878; --ni-logo: var(--logo-6); }
+#app-sidebar .btn-nav[data-seccion="comunidad"], .ajuste-icono-vista[data-seccion="comunidad"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="comunidad"]      { --ni-a: #E8632F; --ni-b: #2F86DC; --ni-logo: var(--logo-1); }
+#app-sidebar .btn-nav[data-seccion="finanzas"], .ajuste-icono-vista[data-seccion="finanzas"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="finanzas"]       { --ni-a: #35A878; --ni-b: #E3BC38; --ni-logo: var(--logo-2); }
+#app-sidebar .btn-nav[data-seccion="plan-estudios"], .ajuste-icono-vista[data-seccion="plan-estudios"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="plan-estudios"]  { --ni-a: #8A48DE; --ni-b: #E3BC38; --ni-logo: var(--logo-3); }
+#app-sidebar .btn-nav[data-seccion="notas"], .ajuste-icono-vista[data-seccion="notas"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="notas"]          { --ni-a: #E3BC38; --ni-b: #F2D66B; --ni-logo: var(--logo-4); }
+#app-sidebar .btn-nav[data-seccion="configuracion"], .ajuste-icono-vista[data-seccion="configuracion"], :is(.fila-nav-orden .nav-orden-icono, .icono-seccion)[data-seccion="configuracion"]  { --ni-a: #8E9AB8; --ni-b: #2F86DC; --ni-logo: var(--logo-5); }
 
 /* Estilo "Multicolor" (por defecto). --ni-k = cuánto del color se conserva: 100% en oscuro, 72% en claro (más oscuro para
    que se lea sobre fondo claro; la casa de Resumen es la excepción porque lleva su propia pared). */
@@ -6760,7 +6760,14 @@ html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado { white-
   --nav-c1: color-mix(in srgb, var(--ni-a) var(--ni-k), black);
   --nav-c2: color-mix(in srgb, var(--ni-b) var(--ni-k), black);
 }
+:is(.fila-nav-orden .nav-orden-icono, .icono-seccion) {
+  width: 22px; height: 22px; flex: none; display: block;
+  --ni-k: 100%;
+  --nav-c1: color-mix(in srgb, var(--ni-a) var(--ni-k), black);
+  --nav-c2: color-mix(in srgb, var(--ni-b) var(--ni-k), black);
+}
 html[data-mode="light"] #app-sidebar .btn-nav { --ni-k: 72%; }
+html[data-mode="light"] :is(.fila-nav-orden .nav-orden-icono, .icono-seccion) { --ni-k: 72%; }
 html[data-mode="light"]:not([data-iconos-nav="logo"]):not([data-iconos-nav="paleta"]) #app-sidebar .btn-nav[data-seccion="resumen"] { --ni-k: 100%; }
 
 /* Casa de Resumen en "Multicolor", sin seleccionar: techo rojo, pared blanca translúcida, zócalo azul y puerta café. */
@@ -6781,10 +6788,18 @@ html[data-iconos-nav="logo"] #app-sidebar .btn-nav {
   --ni-a: var(--ni-logo);
   --ni-b: color-mix(in srgb, var(--ni-logo) 70%, white);
 }
+html[data-iconos-nav="logo"] :is(.fila-nav-orden .nav-orden-icono, .icono-seccion) {
+  --ni-a: var(--ni-logo);
+  --ni-b: color-mix(in srgb, var(--ni-logo) 70%, white);
+}
 
 /* Estilo "Sigue la paleta": dos tonos de --accent-1 / --accent-2, así que cambia solo con cualquier paleta
    (también la personalizada, que ya escribe esas mismas variables). */
 html[data-iconos-nav="paleta"] #app-sidebar .btn-nav {
+  --nav-c1: var(--accent-2);
+  --nav-c2: color-mix(in srgb, var(--accent-1) 55%, var(--accent-2));
+}
+html[data-iconos-nav="paleta"] :is(.fila-nav-orden .nav-orden-icono, .icono-seccion) {
   --nav-c1: var(--accent-2);
   --nav-c2: color-mix(in srgb, var(--accent-1) 55%, var(--accent-2));
 }
@@ -6841,3 +6856,8 @@ html #app-sidebar .btn-nav.btn-primary {
 .ajuste-icono-vista svg { width: 18px; height: 18px; }
 html[data-iconos-nav="logo"] .ajuste-icono-vista { color: var(--ni-logo); }
 html[data-iconos-nav="paleta"] .ajuste-icono-vista { color: var(--accent-1); }
+
+/* Iconos de sección fuera del menú (onboarding, Ajustes…): mismo SVG y colores que el menú lateral. */
+.icono-seccion { display: block; flex: none; }
+.onb-flujo-nodo .icono-seccion { width: 1.45em; height: 1.45em; }
+.onb-nav-fila .icono-seccion { width: 22px; height: 22px; }

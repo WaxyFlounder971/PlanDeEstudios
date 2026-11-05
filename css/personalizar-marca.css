@@ -8,4 +8,4 @@
 
 .pm-iconos { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 12px; }
 .pm-icono { width: var(--pm-bolita); height: var(--pm-bolita); flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; border: 1px solid var(--border-glass); }
-.pm-icono svg { width: 20px; height: 20px; flex: none; }
+.pm-icono svg { width: 30px; height: 30px; flex: none; }

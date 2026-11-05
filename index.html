@@ -501,9 +501,9 @@
             <div class="ajuste-logo-fila">
               <img class="ajuste-logo-vista" src="imagenes/LogoAppFolder-512.png" alt="Logo de la app" data-app-logo>
               <div class="pill-group" role="group" aria-label="Personalizar logo">
-                <button type="button" class="pill-item" data-estilo-logo="original">Colores originales</button>
-                <button type="button" class="pill-item" data-estilo-logo="paleta">Colores de la paleta</button>
-                <button type="button" class="pill-item" data-estilo-logo="personalizado">Colores personalizados</button>
+                <button type="button" class="pill-item" data-estilo-logo="original">Originales</button>
+                <button type="button" class="pill-item" data-estilo-logo="paleta">Paleta</button>
+                <button type="button" class="pill-item" data-estilo-logo="personalizado">Personalizados</button>
               </div>
             </div>
             <div id="logo-colores-bloque" class="stack oculto">
@@ -517,8 +517,8 @@
             <p class="muted ajuste-subtitulo">Cómo se colorean los iconos del menú lateral. "Color según logo" usa los colores de tu logo; si el logo sigue la paleta, usa los del logo original.</p>
             <div class="pill-group" role="group" aria-label="Personalizar iconos">
               <button type="button" class="pill-item" data-iconos-nav="fijo">Multicolor</button>
-              <button type="button" class="pill-item" data-iconos-nav="logo">Color según logo</button>
-              <button type="button" class="pill-item" data-iconos-nav="paleta">Color según paleta</button>
+              <button type="button" class="pill-item" data-iconos-nav="paleta">Paleta</button>
+              <button type="button" class="pill-item" data-iconos-nav="logo">Según logo</button>
             </div>
             <div class="pm-iconos" id="pm-iconos-vista" aria-hidden="true"></div>
           </div>
@@ -526,8 +526,11 @@
 
           <div id="ajuste-intro-apertura" class="stack">
             <span class="form-label">Animación de apertura</span>
-            <p class="muted ajuste-subtitulo">Un folder muestra sus pestañas mientras la app carga y se abre al terminar. Si la apagas, se usa el cargador de siempre.</p>
-            <div class="row-between"><span>Animación de apertura</span><label class="switch switch-tema"><input type="checkbox" id="switch-intro-apertura"><span class="track"><span class="thumb"></span></span></label></div>
+            <p class="muted ajuste-subtitulo">Muestra un folder que se abre mientras la app carga. Si eliges el cargador simple, se usa el de siempre.</p>
+            <div class="pill-group" id="pill-intro-apertura">
+              <button type="button" class="pill-item" data-valor="simple">Cargador simple</button>
+              <button type="button" class="pill-item" data-valor="folder">Folder animado</button>
+            </div>
             <div class="intro-ver-fila" style="display:flex;justify-content:center;"><button type="button" class="btn-discreto" id="btn-intro-ver">Ver animación</button></div>
             <!-- Ya no se usa: los colores de la animación son los del logo. Se deja oculto para no romper config-ajustes.js. -->
             <div id="intro-colores-bloque" class="stack" hidden style="display:none!important">

@@ -9,6 +9,7 @@ import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { aplicarLogoApp, prepararImagenLogo } from "./marca.js";
 import { MODO_DEMO, PREVIEW_DEMO } from "./demo-mode.js";
 import { elegirYGuardarFotoPerfil } from "./foto-perfil.js";
+import { crearIconoSeccion } from "../ui/icono-seccion.js";
 
 /* Emojis de «Todo conectado, paso a paso». Cámbialos aquí (o pon un <img>/texto corto) si haces logos personalizados. */
 const ICONOS_FLUJO = {
@@ -1441,15 +1442,15 @@ function construirFlujo() {
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const raiz = el("div", "onb-flujo"), fila = el("div", "onb-flujo-pasos");
   const PASOS = [
-    [ICONOS_FLUJO.plan, "Plan de estudios", "Agrega tu plan de estudios.", false],
-    [ICONOS_FLUJO.semestres, "Semestres", "Crea un semestre y matricula tus materias.", false],
-    [ICONOS_FLUJO.horario, "Horario, Agenda y Tiempo", "Usa esas materias en Horario, Agenda y Tiempo.", false],
-    [ICONOS_FLUJO.wapper, "Wapper", "Tu asistente trabaja sobre la Agenda y además conoce tu Horario. Necesita una clave de Gemini.", true],
+    ["plan-estudios", "Plan de estudios", "Agrega tu plan de estudios.", false],
+    ["semestres", "Semestres", "Crea un semestre y matricula tus materias.", false],
+    ["tiempo-estudio", "Horario, Agenda y Tiempo", "Usa esas materias en Horario, Agenda y Tiempo.", false],
+    ["asistente", "Wapper", "Tu asistente trabaja sobre la Agenda y además conoce tu Horario. Necesita una clave de Gemini.", true],
   ];
   fila.style.setProperty("--onb-pasos", String(PASOS.length));
   PASOS.forEach(([ico, t, d, opcional], i) => {
     const paso = el("div", "onb-flujo-paso" + (opcional ? " opcional" : "")); paso.style.setProperty("--i", String(i));
-    const nodo = el("div", "onb-flujo-nodo", ico); nodo.append(el("span", "onb-flujo-num", String(i + 1)));
+    const nodo = el("div", "onb-flujo-nodo"); nodo.append(crearIconoSeccion(ico) || el("span", "", ico), el("span", "onb-flujo-num", String(i + 1)));
     const card = el("div", "onb-flujo-card");
     if (opcional) card.append(el("span", "onb-flujo-opc", T("Opcional")));
     card.append(el("b", "", T(t)), el("span", "", T(d)));
@@ -2148,7 +2149,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
         const sec=SECCIONES_NAV.find((x)=>x.id===id);if(!sec)return;
         if(id==="asistente"&&!cfg.gemini_api_key)return;
         const fila=document.createElement("div");fila.className="onb-nav-fila";fila.draggable=true;fila.dataset.seccion=id;fila.setAttribute("aria-label",traducirTextoInterfaz("Arrastra para cambiar el orden"));
-        const izq=document.createElement("span");const asa=texto("span","onb-nav-arrastre","⠿");asa.setAttribute("aria-hidden","true");izq.append(asa,texto("span","",sec.icono),texto("span","",sec.etiqueta));
+        const izq=document.createElement("span");const asa=texto("span","onb-nav-arrastre","⠿");asa.setAttribute("aria-hidden","true");izq.append(asa,crearIconoSeccion(sec.id)||texto("span","",sec.icono),texto("span","",sec.etiqueta));
         const sw=construirInterruptor(!borrador.ocultas.has(id),(activa)=>{if(activa)borrador.ocultas.delete(id);else borrador.ocultas.add(id);borrador.tocado=true;borrador.navTocada=true;},`${sec.etiqueta}`);
         fila.addEventListener("dragstart",(ev)=>{arrastrada=fila;fila.classList.add("arrastrando");ev.dataTransfer.effectAllowed="move";});
         fila.addEventListener("dragend",()=>{fila.classList.remove("arrastrando");arrastrada=null;});
