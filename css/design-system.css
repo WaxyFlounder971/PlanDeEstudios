@@ -1585,15 +1585,19 @@ body.scroll-bloqueado {
 .app-sidebar.colapsada .perfil-datos {
   display: none;
 }
-/* Botón ⟨⟨: a la derecha al expandir, bajo los iconos al colapsar (margen en calc() para que también se anime). */
+/* Símbolo ⟨⟨ sin botón (sin fondo ni borde). Expandida: a la derecha, a la altura del título. Colapsada: centrado sobre
+   el logo (x = 40px, el mismo eje que los iconos). Fuera del flujo: el título conserva su altura de siempre. */
 .app-sidebar .btn-colapsar {
+  position: absolute; z-index: 2;
   display: grid; place-items: center;
-  width: 34px;
-  align-self: flex-start;
-  margin-left: calc(100% - 34px);
-  transition: margin-left var(--transition-med), transform var(--transition-med);
+  width: 24px; height: 24px; padding: 0; margin: 0;
+  background: transparent; border: 0; border-radius: 6px;
+  color: var(--text-muted); font-size: 1rem; line-height: 1; cursor: pointer;
+  top: 67px; left: calc(100% - 38px);
+  transition: left .38s cubic-bezier(.22, 1, .36, 1), top .38s cubic-bezier(.22, 1, .36, 1), transform var(--transition-med), color var(--transition-fast);
 }
-.app-sidebar.colapsada .btn-colapsar { margin-left: 9px; transform: rotate(180deg); }
+.app-sidebar .btn-colapsar:hover { color: var(--text-primary); }
+.app-sidebar.colapsada .btn-colapsar { top: 22px; left: 28px; transform: rotate(180deg); }
 
 /* ---- Zona de perfil, fija abajo (sin scroll), punto 6 ---- */
 .perfil-sidebar {
@@ -6827,9 +6831,20 @@ html #app-sidebar .btn-nav.btn-primary {
 }
 
 /* Sidebar colapsada (escritorio): solo el icono, centrado. En móvil el texto vuelve (ver el bloque < 900px). */
-.app-sidebar.colapsada .btn-nav:not(.oculto) { justify-content: center; padding-inline: 0; }
+/* Colapsada: el resaltado es un círculo perfecto de 36px (el alto de cada fila) con el icono centrado. Margen + relleno
+   suman lo mismo que expandida (14px), así que el icono no se mueve: x = 29px. Va con #app-sidebar para ganarle al
+   relleno de "Forma" de arriba, y con transición para que el óvalo se cierre en círculo mientras la barra se contrae. */
+#app-sidebar .btn-nav:not(.oculto) {
+  transition: width .38s cubic-bezier(.22, 1, .36, 1), margin-left .38s cubic-bezier(.22, 1, .36, 1),
+              padding .38s cubic-bezier(.22, 1, .36, 1), border-radius .38s cubic-bezier(.22, 1, .36, 1),
+              background-color .18s ease, color .18s ease, box-shadow .18s ease, transform var(--transition-fast);
+}
+#app-sidebar.colapsada .btn-nav:not(.oculto) {
+  width: 36px; height: 36px; margin-left: 8px; padding-left: 6px; padding-right: 6px;
+  justify-content: flex-start; border-radius: 50%;
+}
 @media (max-width: 899.98px) {
-  .app-sidebar.colapsada .btn-nav:not(.oculto) { justify-content: flex-start; padding-inline: 14px; }
+  #app-sidebar.colapsada .btn-nav:not(.oculto) { width: 100%; height: auto; margin-left: 0; padding-left: 14px; padding-right: 14px; border-radius: 14px; }
 }
 
 /* Parche 10 — Personalizar logo / iconos, select de idioma, sidebar más compacta y con ancho suficiente. */
@@ -7019,5 +7034,6 @@ html:root #app-sidebar.app-sidebar {
 }
 
 /* 3) Logo del menú alineado con los iconos de sección: mismo tamaño (22px) y mismo eje (x = 40px, igual que en colapsada). */
-.app-sidebar .sidebar-titulo { padding-left: 15px; gap: 12px; min-height: 22px; }
+.app-sidebar .sidebar-titulo { padding-left: 15px; gap: 12px; min-height: 22px; margin-top: 48px; }
+@media (max-width: 899.98px) { .app-sidebar .sidebar-titulo { margin-top: 0; } }
 .app-sidebar .sidebar-titulo img { width: 22px; height: 22px; object-fit: contain; flex: none; }
