@@ -425,8 +425,11 @@
           <button type="button" class="btn btn-secondary btn-block" id="btn-repetir-tutorial">Ver bienvenida y mini tutorial</button>
 
           <div class="ajuste-idioma-app">
-            <label class="form-label" for="selector-idioma-app">Idioma</label>
-            <select id="selector-idioma-app" class="form-input" aria-label="Idioma"></select>
+            <span class="form-label" id="label-selector-idioma-app">Idioma</span>
+            <div class="select-custom" id="selector-idioma-app">
+              <button type="button" id="selector-idioma-app-boton" class="form-input select-custom-boton" aria-haspopup="listbox" aria-expanded="false" aria-labelledby="label-selector-idioma-app selector-idioma-app-valor"><span id="selector-idioma-app-valor" data-i18n-keep>Español</span></button>
+              <ul id="selector-idioma-app-lista" class="select-custom-lista oculto" role="listbox"></ul>
+            </div>
           </div>
 
           <div>
@@ -484,30 +487,37 @@
             <div class="palette-grid" id="grid-paletas"></div>
           </div>
 
-          <div id="ajuste-iconos-nav">
-            <span class="form-label">Color de los iconos del menú</span>
-            <p class="muted ajuste-subtitulo">Cómo se colorean los iconos del menú lateral. "Sigue la paleta" cambia solo con tu paleta, incluida la personalizada.</p>
-            <div class="pill-group" role="group" aria-label="Color de los iconos del menú">
-              <button type="button" class="pill-item" data-iconos-nav="fijo">Multicolor</button>
-              <button type="button" class="pill-item" data-iconos-nav="logo">Colores del logo</button>
-              <button type="button" class="pill-item" data-iconos-nav="paleta">Sigue la paleta</button>
-            </div>
-          </div>
-
           <div>
             <span class="form-label">Navegación</span>
             <p class="muted ajuste-subtitulo">Elegí qué secciones mostrar en el menú y arrastrá <span class="handle-mover" style="display:inline; padding:0 2px; cursor:default;">⋮⋮</span> para cambiar el orden. "Resumen" y "Configuración" siempre quedan visibles y fijos arriba/abajo.</p>
             <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
           </div>
 
-          <div id="selector-logo-app" class="stack">
-            <div class="logo-selector-encabezado"><span class="form-label">Logo de la app</span><label class="logo-selector-personalizado" for="input-logo-app-archivo">Personalizado</label></div>
-            <div class="onboarding-logos">
-              <button type="button" data-logo-app="folder" aria-label="Logo carpeta"><img src="imagenes/LogoAppFolder-512.png" alt="Logo con carpeta"></button>
-              <button type="button" data-logo-app="birrete" aria-label="Logo birrete"><img src="imagenes/LogoAppBirrete.png" alt="Logo con birrete"></button>
+          <div id="ajuste-logo-app" class="stack">
+            <span class="form-label">Personalizar logo</span>
+            <p class="muted ajuste-subtitulo">Elige cómo se colorea el logo de la app. Con colores personalizados puedes cambiar cada una de las seis pestañas.</p>
+            <div class="ajuste-logo-fila">
+              <img class="ajuste-logo-vista" src="imagenes/LogoAppFolder-512.png" alt="Logo de la app" data-app-logo>
+              <div class="pill-group" role="group" aria-label="Personalizar logo">
+                <button type="button" class="pill-item" data-estilo-logo="original">Colores originales</button>
+                <button type="button" class="pill-item" data-estilo-logo="paleta">Colores de la paleta</button>
+                <button type="button" class="pill-item" data-estilo-logo="personalizado">Colores personalizados</button>
+              </div>
             </div>
-            <input id="input-logo-app-archivo" class="oculto" type="file" accept="image/png,image/jpeg,image/webp">
-            <small class="muted ajuste-subtitulo">Por seguridad, el navegador solo permite leer un archivo si lo eliges aquí.</small>
+            <div id="logo-colores-bloque" class="stack oculto">
+              <div class="intro-colores" id="logo-colores" role="group" aria-label="Colores de las pestañas del logo"><label class="intro-color-bolita"><input type="color" data-logo-color="0" aria-label="Color de la pestaña 1"></label><label class="intro-color-bolita"><input type="color" data-logo-color="1" aria-label="Color de la pestaña 2"></label><label class="intro-color-bolita"><input type="color" data-logo-color="2" aria-label="Color de la pestaña 3"></label><label class="intro-color-bolita"><input type="color" data-logo-color="3" aria-label="Color de la pestaña 4"></label><label class="intro-color-bolita"><input type="color" data-logo-color="4" aria-label="Color de la pestaña 5"></label><label class="intro-color-bolita"><input type="color" data-logo-color="5" aria-label="Color de la pestaña 6"></label></div>
+              <div class="intro-colores-acciones"><button type="button" class="btn-discreto" id="btn-logo-colores-original">Restablecer</button></div>
+            </div>
+          </div>
+
+          <div id="ajuste-iconos-nav">
+            <span class="form-label">Personalizar iconos</span>
+            <p class="muted ajuste-subtitulo">Cómo se colorean los iconos del menú lateral. "Color según logo" usa los colores de tu logo; si el logo sigue la paleta, usa los del logo original.</p>
+            <div class="pill-group" role="group" aria-label="Personalizar iconos">
+              <button type="button" class="pill-item" data-iconos-nav="fijo">Multicolor</button>
+              <button type="button" class="pill-item" data-iconos-nav="logo">Color según logo</button>
+              <button type="button" class="pill-item" data-iconos-nav="paleta">Color según paleta</button>
+            </div>
           </div>
 
           <div id="ajuste-intro-apertura" class="stack">

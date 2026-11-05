@@ -3143,7 +3143,6 @@ img, svg { max-width: 100%; }
 .guia-plan-resaltado { position:relative; z-index:200011!important; outline:3px solid var(--accent-1)!important; outline-offset:5px!important; box-shadow:0 0 0 9999px rgba(0,0,0,.45)!important; }
 .onboarding-logo img { object-fit:contain; }
 .onboarding-logos button[data-logo-app] img { width:40px; height:40px; object-fit:contain; }
-#selector-logo-app .onboarding-logos { display:flex; gap:10px; }
 .agenda-barra-seleccion { z-index:10050; bottom:calc(14px + env(safe-area-inset-bottom)); }
 .agenda-btn-eliminar-seleccion:disabled { opacity:.45; cursor:not-allowed; }
 @media (min-width:601px) { .onboarding-panel:not(.onboarding-con-tour) .onboarding-layout { max-width:900px; grid-template-columns:1fr; } }
@@ -5786,10 +5785,6 @@ select option, select optgroup { background-color: var(--bg-card); color: var(--
 html:has(.onboarding-overlay), body:has(.onboarding-overlay) { overflow:hidden!important; }
 .onboarding-logo-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .onboarding-logo-heading h3 { margin:0; }
-.logo-selector-encabezado { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.logo-selector-personalizado { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:6px 12px; border:1px solid var(--border-glass); border-radius:999px; color:var(--text-primary); background:var(--bg-panel); cursor:pointer; }
-#selector-logo-app .onboarding-logos button[data-logo-app] { width:92px; height:92px; border-color:transparent; background:transparent; }
-#selector-logo-app .onboarding-logos button[data-logo-app] img { width:76px; height:76px; background:transparent; object-fit:contain; }
 .onboarding-file-picker { width:auto; min-height:36px; padding:6px 12px; }
 .onboarding-logo { width:96px; height:96px; background:transparent!important; border-color:transparent!important; }
 .onboarding-logo img { width:76px!important; height:76px!important; background:transparent!important; object-fit:contain; }
@@ -6743,19 +6738,20 @@ html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado { white-
   color: var(--text-primary);
 }
 
-/* Colores por sección. --ni-a / --ni-b = tonos del estilo "Multicolor"; --ni-logo = tono del estilo "Colores del logo".
+/* Colores por sección. --ni-a / --ni-b = tonos del estilo "Multicolor"; --ni-logo = tono del estilo "Color según logo"
+   (una de las seis pestañas del logo: --logo-1…--logo-6, ver Parche 10).
    Van por sección (no por posición): reordenar u ocultar secciones en Ajustes no cambia el color de cada una. */
-#app-sidebar .btn-nav[data-seccion="resumen"]        { --ni-a: #E0352F; --ni-b: #2F86DC; --ni-logo: #E0352F; }
-#app-sidebar .btn-nav[data-seccion="asistente"]      { --ni-a: #8A48DE; --ni-b: #2F86DC; --ni-logo: #E8632F; }
-#app-sidebar .btn-nav[data-seccion="agenda"]         { --ni-a: #35A878; --ni-b: #2F86DC; --ni-logo: #E3BC38; }
-#app-sidebar .btn-nav[data-seccion="horario"]        { --ni-a: #2F86DC; --ni-b: #E0352F; --ni-logo: #35A878; }
-#app-sidebar .btn-nav[data-seccion="tiempo-estudio"] { --ni-a: #E0352F; --ni-b: #E3BC38; --ni-logo: #2F86DC; }
-#app-sidebar .btn-nav[data-seccion="semestres"]      { --ni-a: #2F86DC; --ni-b: #35A878; --ni-logo: #8A48DE; }
-#app-sidebar .btn-nav[data-seccion="comunidad"]      { --ni-a: #E8632F; --ni-b: #2F86DC; --ni-logo: #E0352F; }
-#app-sidebar .btn-nav[data-seccion="finanzas"]       { --ni-a: #35A878; --ni-b: #E3BC38; --ni-logo: #E8632F; }
-#app-sidebar .btn-nav[data-seccion="plan-estudios"]  { --ni-a: #8A48DE; --ni-b: #E3BC38; --ni-logo: #E3BC38; }
-#app-sidebar .btn-nav[data-seccion="notas"]          { --ni-a: #E3BC38; --ni-b: #F2D66B; --ni-logo: #35A878; }
-#app-sidebar .btn-nav[data-seccion="configuracion"]  { --ni-a: #8E9AB8; --ni-b: #2F86DC; --ni-logo: #2F86DC; }
+#app-sidebar .btn-nav[data-seccion="resumen"]        { --ni-a: #E0352F; --ni-b: #2F86DC; --ni-logo: var(--logo-1); }
+#app-sidebar .btn-nav[data-seccion="asistente"]      { --ni-a: #8A48DE; --ni-b: #2F86DC; --ni-logo: var(--logo-2); }
+#app-sidebar .btn-nav[data-seccion="agenda"]         { --ni-a: #35A878; --ni-b: #2F86DC; --ni-logo: var(--logo-3); }
+#app-sidebar .btn-nav[data-seccion="horario"]        { --ni-a: #2F86DC; --ni-b: #E0352F; --ni-logo: var(--logo-4); }
+#app-sidebar .btn-nav[data-seccion="tiempo-estudio"] { --ni-a: #E0352F; --ni-b: #E3BC38; --ni-logo: var(--logo-5); }
+#app-sidebar .btn-nav[data-seccion="semestres"]      { --ni-a: #2F86DC; --ni-b: #35A878; --ni-logo: var(--logo-6); }
+#app-sidebar .btn-nav[data-seccion="comunidad"]      { --ni-a: #E8632F; --ni-b: #2F86DC; --ni-logo: var(--logo-1); }
+#app-sidebar .btn-nav[data-seccion="finanzas"]       { --ni-a: #35A878; --ni-b: #E3BC38; --ni-logo: var(--logo-2); }
+#app-sidebar .btn-nav[data-seccion="plan-estudios"]  { --ni-a: #8A48DE; --ni-b: #E3BC38; --ni-logo: var(--logo-3); }
+#app-sidebar .btn-nav[data-seccion="notas"]          { --ni-a: #E3BC38; --ni-b: #F2D66B; --ni-logo: var(--logo-4); }
+#app-sidebar .btn-nav[data-seccion="configuracion"]  { --ni-a: #8E9AB8; --ni-b: #2F86DC; --ni-logo: var(--logo-5); }
 
 /* Estilo "Multicolor" (por defecto). --ni-k = cuánto del color se conserva: 100% en oscuro, 72% en claro (más oscuro para
    que se lea sobre fondo claro; la casa de Resumen es la excepción porque lleva su propia pared). */
@@ -6803,4 +6799,35 @@ html #app-sidebar .btn-nav.btn-primary {
 .app-sidebar.colapsada .btn-nav:not(.oculto) { justify-content: center; padding-inline: 0; }
 @media (max-width: 899.98px) {
   .app-sidebar.colapsada .btn-nav:not(.oculto) { justify-content: flex-start; padding-inline: 14px; }
+}
+
+/* Parche 10 — Personalizar logo / iconos, select de idioma, sidebar más compacta y con ancho suficiente. */
+
+/* Colores de las seis pestañas del logo original (de arriba abajo). Con "Colores personalizados" marca.js los pisa en
+   <html style>; con "Colores originales" o "Colores de la paleta" valen estos, que son los que usan los iconos
+   en "Color según logo". */
+:root {
+  --logo-1: #E0352F; --logo-2: #E8632F; --logo-3: #E3BC38;
+  --logo-4: #35A878; --logo-5: #2F86DC; --logo-6: #8A48DE;
+}
+
+/* Ajustes > Personalizar logo: vista previa del logo (refleja el estilo elegido) junto a las opciones. */
+.ajuste-logo-fila { display: flex; align-items: center; gap: 14px; }
+.ajuste-logo-fila .pill-group { flex: 1; min-width: 0; }
+.ajuste-logo-vista { width: 64px; height: 64px; flex: none; object-fit: contain; }
+@media (max-width: 520px) {
+  .ajuste-logo-fila { flex-direction: column; align-items: stretch; }
+  .ajuste-logo-vista { align-self: center; }
+}
+
+/* Sidebar: 20% menos de distancia entre filas (antes 44px de caja + 6px de hueco = 50px; ahora 36px + 4px = 40px).
+   Letra e iconos no cambian. */
+#app-sidebar .sidebar-scroll { gap: 4px; }
+#app-sidebar .btn-nav:not(.oculto) { min-height: 36px; padding-block: 4px; }
+#app-sidebar .sidebar-scroll { scrollbar-width: thin; }
+
+/* Ancho de la sidebar (escritorio): sigue al texto más largo del menú para que nada se corte (p. ej. "Plan de Estudios" en
+   letra grande o en francés). main.js (ajustarAnchoSidebar) escribe --sidebar-ancho; 230px es el mínimo de siempre. */
+@media (min-width: 900px) {
+  .app-sidebar:not(.colapsada) { width: var(--sidebar-ancho, 230px); max-width: var(--sidebar-ancho, 230px); }
 }
