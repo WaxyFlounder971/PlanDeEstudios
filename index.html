@@ -493,8 +493,9 @@
             <div id="lista-nav-oculta" class="stack" style="gap:8px;"></div>
           </div>
 
+          <div id="ajuste-personalizar-marca" class="ajuste-grupo">
           <div id="ajuste-logo-app" class="stack">
-            <span class="form-label">Personalizar logo</span>
+            <span class="form-label ajuste-titulo">Personalizar logo</span>
             <p class="muted ajuste-subtitulo">Elige cómo se colorea el logo de la app. Con colores personalizados puedes cambiar cada una de las seis pestañas.</p>
             <div class="ajuste-logo-fila">
               <img class="ajuste-logo-vista" src="imagenes/LogoAppFolder-512.png" alt="Logo de la app" data-app-logo>
@@ -511,13 +512,15 @@
           </div>
 
           <div id="ajuste-iconos-nav">
-            <span class="form-label">Personalizar iconos</span>
+            <span class="form-label ajuste-titulo">Personalizar iconos</span>
             <p class="muted ajuste-subtitulo">Cómo se colorean los iconos del menú lateral. "Color según logo" usa los colores de tu logo; si el logo sigue la paleta, usa los del logo original.</p>
             <div class="pill-group" role="group" aria-label="Personalizar iconos">
               <button type="button" class="pill-item" data-iconos-nav="fijo">Multicolor</button>
               <button type="button" class="pill-item" data-iconos-nav="logo">Color según logo</button>
               <button type="button" class="pill-item" data-iconos-nav="paleta">Color según paleta</button>
             </div>
+            <div class="ajuste-iconos-vista" id="iconos-nav-vista" aria-hidden="true"></div>
+          </div>
           </div>
 
           <div id="ajuste-intro-apertura" class="stack">
