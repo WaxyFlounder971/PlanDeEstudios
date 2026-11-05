@@ -20,6 +20,7 @@ import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { abrirConfirmacion, construirPillSwitchBinario, mostrarToast } from "../ui/componentes.js";
 import { COLORES_PREVIEW_PALETA, FONDO_PREVIEW_AZUCARADO, TEXTO_PREVIEW_PALETA, aplicarPaleta, obtenerModoDisenoLocal, obtenerModoTemaLocal, guardarModoTemaLocal, guardarModoDisenoLocal } from "../ui/tema.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
+import { crearIconoSeccion } from "../ui/icono-seccion.js";
 import { obtenerSemestresOrdenCronologico } from "../semestres/semestres.js";
 import {
   eliminarAdjuntosDeCronogramaDeSemestre,
@@ -983,12 +984,9 @@ function renderizarNavegacionOculta() {
     handle.title = "Arrastrá para reordenar";
     izquierda.appendChild(handle);
 
-    const icono = document.createElement("span");
-    icono.className = "nav-orden-icono";
-    icono.dataset.seccion = id;
-    icono.setAttribute("aria-hidden", "true");
-    icono.innerHTML = `<use href="#${seccion.icono}"></use>`;
-    izquierda.appendChild(icono);
+    // SVG real con el mismo icono del menú lateral (con innerHTML en un <span> el <use> no se dibuja).
+    const icono = crearIconoSeccion(id);
+    if (icono) izquierda.appendChild(icono);
 
     const texto = document.createElement("span");
     texto.textContent = traducirTextoInterfaz(seccion.etiqueta);

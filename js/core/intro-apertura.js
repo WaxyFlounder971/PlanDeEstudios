@@ -343,8 +343,10 @@ export function verAnimacionIntro(configuracion, colores) {
     const raiz = document.querySelector(".fi-root");
     if (!raiz || l.state === "none") return Promise.resolve(false);
     raiz.setAttribute("aria-hidden", "true");
-    raiz.addEventListener("pointerdown", () => l.cancel());
-    return l.open().catch(() => false);
+    let cerradaPorToque = false;
+    raiz.addEventListener("pointerdown", () => { cerradaPorToque = true; l.cancel(); });
+    // Si la persona la cierra tocándola no es un fallo: se devuelve true para que Ajustes no avise.
+    return l.open().then((ok) => ok || cerradaPorToque).catch(() => cerradaPorToque);
   } catch (error) {
     return Promise.resolve(false);
   }
