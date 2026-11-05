@@ -433,7 +433,15 @@ function construirEncabezado(cont, botonSemestre = null) {
   const encabezado = document.createElement("div");
   encabezado.className = "app-encabezado";
 
-  if (botonSemestre && !enCompetencias) {
+  if (botonSemestre && enCompetencias) {
+    // 2026-11-04: Competencias también muestra el botón del semestre (mismo diseño y mismo alto que
+    // en Materias/Estadísticas), pero sin función: cloneNode descarta el listener que abre la ventana.
+    const inerte = botonSemestre.cloneNode(true);
+    inerte.classList.add("app-encabezado__semestre--inerte");
+    inerte.setAttribute("aria-disabled", "true");
+    inerte.tabIndex = -1;
+    encabezado.appendChild(inerte);
+  } else if (botonSemestre) {
     encabezado.appendChild(botonSemestre);
   } else {
     const hueco = document.createElement("span");
@@ -467,7 +475,7 @@ function construirEncabezado(cont, botonSemestre = null) {
   filaRango.className = "row app-encabezado__rango";
   const rango = document.createElement("span");
   rango.className = "muted";
-  rango.style.fontSize = "0.78rem";
+  rango.style.fontSize = "var(--enc-fs-sub)";
   const finSemana = new Date(inicioSemana);
   finSemana.setDate(finSemana.getDate() + 6);
   rango.textContent = formatearRangoSemanaAgenda([{ fecha: inicioSemana }, { fecha: finSemana }]);
@@ -485,8 +493,11 @@ function construirEncabezado(cont, botonSemestre = null) {
 
     const btnCrear = document.createElement("button");
     btnCrear.type = "button";
-    btnCrear.className = "btn btn-primary app-encabezado__lado";
-    btnCrear.textContent = traducirTextoInterfaz("+ Crear");
+    // 2026-11-04: solo "+" (igual que en Materias y Estadísticas), con su propia función: crear competencia.
+    btnCrear.className = "btn btn-primary app-encabezado__mas";
+    btnCrear.title = traducirTextoInterfaz("Crear competencia");
+    btnCrear.setAttribute("aria-label", traducirTextoInterfaz("Crear competencia"));
+    btnCrear.textContent = "+";
     btnCrear.addEventListener("click", () => acciones.alCrear());
     derecha.appendChild(btnCrear);
   } else {
@@ -702,7 +713,9 @@ function sincronizarPillVistaSeccion(grupo) {
 }
 
 const indicesVistaTE = { materias: 0, estadisticas: 1, competencias: 2 };
-const GAP_PANE_VISTA_TE = 12;
+// 2026-11-04 (parche 6): 0 = los paneles van pegados y al deslizar no asoma la franja oscura entre
+// Materias, Estadísticas y Competencias. Todo el cálculo de la pista deriva de este valor.
+const GAP_PANE_VISTA_TE = 0;
 let panelesVistaTE = null;
 let pistaVistaTE = null;
 function desplazamientoVistaTE(indice) {
@@ -729,7 +742,7 @@ function pintarEncabezadoTE() {
   const host = panelesVistaTE?.encabezado;
   if (!host) return;
   host.replaceChildren();
-  construirEncabezado(host, vistaSeccionTE === "competencias" ? null : construirBotonSemestreTiempo());
+  construirEncabezado(host, construirBotonSemestreTiempo());
 }
 
 /** Durante un arrastre, las pestañas vecinas deben estar ya armadas (si no, se ve un hueco o un corte). */

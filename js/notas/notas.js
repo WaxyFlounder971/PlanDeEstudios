@@ -647,12 +647,13 @@ function renderizarNotas() {
   const derCab = el("div", "app-encabezado__der notas-cab-acciones");
   const add = el("button", "btn btn-primary nt-btn-circulo"); add.innerHTML = '<svg class="nt-ico nt-add-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
   add.title = tr("Nueva nota"); add.setAttribute("aria-label", add.title); add.onclick = () => abrirEditorNota(null, renderizarNotas);
-  const settings = el("button", "btn btn-secondary nt-btn-circulo");
+  // 2026-11-04: ⋮ a la izquierda y SIN fondo de botón (solo el símbolo); "+" a la derecha.
+  const settings = el("button", "nt-btn-circulo nt-btn-circulo--fantasma");
   settings.innerHTML = ICONO_PUNTOS;
   settings.title = tr("Ajustes de Notas"); settings.setAttribute("aria-label", settings.title);
   settings.onclick = () => mostrarAjustesNotas(renderizarNotas, () => mostrarPapelera(root, renderizarNotas));
-  izqCab.append(add);
-  derCab.append(settings);
+  izqCab.append(settings);
+  derCab.append(add);
   const tituloCab = el("h2", "texto-encabezado-seccion app-encabezado__titulo", tr("Notas rápidas"));
   centroCab.append(tituloCab);
   filaCab.append(izqCab, centroCab, derCab);

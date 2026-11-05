@@ -371,7 +371,7 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-sh-head > div:nth-child(2){flex:1;min-width:0}
   .cp-x{width:34px;height:34px;border-radius:50%;border:1px solid var(--cp-line);background:rgba(255,255,255,.06);display:grid;place-items:center;flex:none}
   .cp-x svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.4;stroke-linecap:round;fill:none}
-  .cp-sh-body{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:4px 14px 18px;display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-content:start;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;touch-action:pan-y}
+  .cp-sh-body{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:4px 14px 18px;display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;gap:8px;align-content:start;overscroll-behavior:contain;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch;touch-action:pan-y}
   .cp-sh-body::-webkit-scrollbar{display:none;width:0;height:0}
   .cp-grp{font-size:12px;font-weight:700;color:var(--cp-muted);padding:10px 6px 2px}
   .cp-grp:first-child{padding-top:2px}

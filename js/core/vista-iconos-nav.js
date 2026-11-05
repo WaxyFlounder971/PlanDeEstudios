@@ -11,34 +11,17 @@
       después (onboarding, menú, pantallas que se montan tarde) tengan el mismo logo que ya se ve en Ajustes.
    ========================================================================= */
 
-const RE_REGLA_ICONO = /--ni-|nav-ico|\.ni-/;
+// Copiar las variables ya calculadas del botón real hace que la muestra coincida con el menú
+// incluso cuando cambian la paleta, el modo claro/oscuro o el estilo de color de los iconos.
+const PROPIEDADES_COLOR_ICONO = ["--ni-a", "--ni-b", "--ni-k", "--ni-logo", "--nav-c1", "--nav-c2", "--nav-wall", "--nav-wallst", "--nav-base", "--nav-door"];
 
-function adaptar(texto) {
-  return texto.replace(/#app-sidebar\s+\.btn-nav/g, ".pm-icono").replace(/#app-sidebar/g, ".pm-iconos");
-}
-
-function copiarReglas(reglas, envolver, salida) {
-  for (const r of reglas) {
-    if (r.cssRules && (r.media || r.conditionText !== undefined) && !r.selectorText) {
-      const cond = r.media ? `@media ${r.media.mediaText}` : `@supports ${r.conditionText}`;
-      copiarReglas(r.cssRules, (t) => envolver(`${cond} { ${t} }`), salida);
-      continue;
-    }
-    if (!r.selectorText || !r.selectorText.includes("#app-sidebar") || !RE_REGLA_ICONO.test(r.cssText)) continue;
-    salida.push(envolver(adaptar(r.cssText)));
-  }
-}
-
-function inyectarReglasVista() {
-  if (document.getElementById("estilo-pm-iconos")) return;
-  const salida = [];
-  for (const hoja of Array.from(document.styleSheets)) {
-    try { copiarReglas(hoja.cssRules, (t) => t, salida); } catch (e) { /* hoja de otro origen: no se puede leer */ }
-  }
-  const estilo = document.createElement("style");
-  estilo.id = "estilo-pm-iconos";
-  estilo.textContent = salida.join("\n");
-  document.head.appendChild(estilo);
+function copiarColoresCalculados(origen, destino) {
+  const estilos = getComputedStyle(origen);
+  destino.style.color = estilos.color;
+  PROPIEDADES_COLOR_ICONO.forEach((propiedad) => {
+    const valor = estilos.getPropertyValue(propiedad).trim();
+    if (valor) destino.style.setProperty(propiedad, valor);
+  });
 }
 
 function pintarVistaIconos() {
@@ -51,6 +34,7 @@ function pintarVistaIconos() {
     const caja = document.createElement("span");
     caja.className = "pm-icono";
     caja.dataset.seccion = btn.dataset.seccion;
+    copiarColoresCalculados(btn, caja);
     caja.appendChild(svg.cloneNode(true));
     nuevos.push(caja);
   });
@@ -67,7 +51,6 @@ function sincronizarLogos() {
 }
 
 function arrancar() {
-  inyectarReglasVista();
   pintarVistaIconos();
   sincronizarLogos();
   let pendiente = false;
@@ -78,6 +61,7 @@ function arrancar() {
   };
   const barra = document.getElementById("app-sidebar");
   if (barra) new MutationObserver(reprogramar).observe(barra, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
+  new MutationObserver(reprogramar).observe(document.documentElement, { attributes: true, attributeFilter: ["data-iconos-nav", "data-mode", "style"] });
   // Logos que se montan después (onboarding, etc.) o cuyo src cambia.
   new MutationObserver(reprogramar).observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ["src"] });
 }

@@ -207,6 +207,11 @@ body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grab
 
 /* ===== Cabecera: botones circulares perfectos ===== */
 .notas-cab-acciones .nt-btn-circulo{display:inline-grid;place-items:center;flex:none;width:46px;height:46px;min-width:46px;min-height:46px;padding:0;border-radius:50%;line-height:1}
+.notas-cab-acciones .nt-btn-circulo.nt-btn-circulo--fantasma{background:none;border:0;box-shadow:none;color:var(--text-secondary);cursor:pointer;transition:background var(--transition-fast),transform var(--transition-fast)}
+.notas-cab-acciones .nt-btn-circulo.nt-btn-circulo--fantasma:hover{background:rgba(255,255,255,.08)}
+[data-mode="light"] .notas-cab-acciones .nt-btn-circulo.nt-btn-circulo--fantasma:hover{background:rgba(0,0,0,.06)}
+.notas-cab-acciones .nt-btn-circulo.nt-btn-circulo--fantasma:active{transform:scale(.94)}
+.notas-cab-acciones .nt-btn-circulo.nt-btn-circulo--fantasma:focus-visible{outline:2px solid var(--accent-2);outline-offset:2px}
 .nt-btn-circulo .nt-ico{width:20px;height:20px}
 
 /* ===== Orden y grupos: fijadas · línea · demás ===== */

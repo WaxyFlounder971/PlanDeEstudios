@@ -281,13 +281,21 @@ function alternarFiltroEstadoAgenda(id) {
  * "Clase" lleva su propia clase (rosa, ver estilo inyectado en
  * inicializarAgenda) porque no comparte color con ningún tipo existente.
  */
+/**
+ * PRUEBA (2026-11-04): "Estado" se extiende a su derecha, en la misma fila, con una animación
+ * ligera, y los demás filtros NO se mueven (ni se recentran) salvo que ya no quepa. Para volver al
+ * menú desplegable de antes basta poner esta constante en `false`.
+ */
+const FILTRO_ESTADO_EXTENDIDO = true;
+let filtroEstadoExtendidoAbierto = false;
+
 function construirBarraFiltroEstadosAgenda() {
   controladorPopoverEstadoAgenda?.abort();
   observadorAnchoFiltroAgenda?.disconnect();
   controladorPopoverEstadoAgenda = new AbortController();
   const activos = obtenerEstadosFiltroActivos();
   const barra = document.createElement("div");
-  barra.className = "agenda-filtro-estados";
+  barra.className = "agenda-filtro-estados" + (FILTRO_ESTADO_EXTENDIDO ? " agenda-filtro-estados--ext" : "");
   const opciones = obtenerOpcionesFiltroAgenda();
   const opcionesClase = opciones.filter((o) => o.id === "clase");
   const opcionesEstado = opciones.filter((o) => ["completado", "perdida", "pendiente"].includes(o.id));
@@ -352,16 +360,47 @@ function construirBarraFiltroEstadosAgenda() {
   menuEstado.setAttribute("role", "group");
   menuEstado.setAttribute("aria-label", traducirTextoInterfaz("Filtrar por estado"));
   opcionesEstado.forEach((op) => crearChip(op, menuEstado));
+  // Modo extendido: el panel nunca usa `oculto`; se abre/cierra con `abierto` (transición CSS).
+  // Si a su derecha no hay sitio, pasa a `--en-flujo` y la barra se reacomoda como antes.
+  const ajustarEnFlujo = () => {
+    menuEstado.classList.remove("agenda-filtro-estado-popover--en-flujo");
+    const limite = barra.getBoundingClientRect().right;
+    if (menuEstado.getBoundingClientRect().right > limite + 1) menuEstado.classList.add("agenda-filtro-estado-popover--en-flujo");
+  };
   const cerrarMenu = () => {
-    menuEstado.classList.add("oculto");
+    if (FILTRO_ESTADO_EXTENDIDO) {
+      filtroEstadoExtendidoAbierto = false;
+      menuEstado.classList.remove("abierto");
+    } else {
+      menuEstado.classList.add("oculto");
+    }
     botonEstado.setAttribute("aria-expanded", "false");
   };
+  if (FILTRO_ESTADO_EXTENDIDO) {
+    menuEstado.classList.remove("oculto");
+    if (filtroEstadoExtendidoAbierto) {
+      // El filtro vuelve a pintarse tras cada toque: se conserva abierto, sin repetir la animación.
+      menuEstado.classList.add("abierto", "agenda-filtro-estado-popover--sin-anim");
+      botonEstado.setAttribute("aria-expanded", "true");
+      requestAnimationFrame(ajustarEnFlujo);
+    }
+  }
   botonEstado.addEventListener("click", () => {
+    if (FILTRO_ESTADO_EXTENDIDO) {
+      const abrir = !menuEstado.classList.contains("abierto");
+      filtroEstadoExtendidoAbierto = abrir;
+      menuEstado.classList.remove("agenda-filtro-estado-popover--sin-anim");
+      if (abrir) ajustarEnFlujo();
+      menuEstado.classList.toggle("abierto", abrir);
+      botonEstado.setAttribute("aria-expanded", String(abrir));
+      return;
+    }
     const abrir = menuEstado.classList.contains("oculto");
     menuEstado.classList.toggle("oculto", !abrir);
     botonEstado.setAttribute("aria-expanded", String(abrir));
   });
-  menuEstado.querySelectorAll(".agenda-filtro-estado-btn").forEach((btn) => btn.addEventListener("click", cerrarMenu, { once: true }));
+  // En modo extendido los chips de estado no cierran el panel: así se pueden combinar sin reabrirlo.
+  if (!FILTRO_ESTADO_EXTENDIDO) menuEstado.querySelectorAll(".agenda-filtro-estado-btn").forEach((btn) => btn.addEventListener("click", cerrarMenu, { once: true }));
   document.addEventListener("pointerdown", (ev) => { if (!grupoEstado.contains(ev.target)) cerrarMenu(); }, { signal: controladorPopoverEstadoAgenda.signal });
   document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrarMenu(); }, { signal: controladorPopoverEstadoAgenda.signal });
   grupoEstado.append(botonEstado, menuEstado);
@@ -376,6 +415,8 @@ function construirBarraFiltroEstadosAgenda() {
     const seParte = barra.scrollWidth > barra.clientWidth + 1;
     barra.classList.remove("agenda-filtro-estados--midiendo");
     barra.classList.toggle("agenda-filtro-estados--multilinea", seParte);
+    // 2026-11-04 (parche 6): con el panel de Estado abierto, también se reevalúa si cabe a la derecha.
+    if (FILTRO_ESTADO_EXTENDIDO && menuEstado.classList.contains("abierto")) requestAnimationFrame(ajustarEnFlujo);
   };
   observadorAnchoFiltroAgenda = new ResizeObserver(medirMultilinea);
   observadorAnchoFiltroAgenda.observe(barra);
@@ -1258,7 +1299,7 @@ function irAHoyAgenda() {
 function construirEnlaceHoyAgenda() {
   const hoy = document.createElement("span");
   hoy.className = "muted";
-  hoy.style.cssText = "font-size:0.74rem; text-decoration:underline; cursor:pointer;";
+  hoy.style.cssText = "font-size:var(--enc-fs-sub); text-decoration:underline; cursor:pointer;";
   hoy.textContent = "Hoy";
   hoy.addEventListener("click", irAHoyAgenda);
   return hoy;
@@ -1334,7 +1375,7 @@ function construirSubheaderSemanal(dias, semestreActivo, { navegable = true, off
 
   const rango = document.createElement("span");
   rango.className = "muted";
-  rango.style.fontSize = "0.78rem";
+  rango.style.fontSize = "var(--enc-fs-sub)";
   rango.textContent = formatearRangoSemanaAgenda(dias);
 
   filaRango.appendChild(rango);
@@ -2046,6 +2087,10 @@ function inicializarFiltrosAgenda() {
     // que el resto de persistentes de este modal.
     const chkRepetirPuntos = document.getElementById("chk-agenda-calendario-repetir-puntos");
     if (chkRepetirPuntos) chkRepetirPuntos.checked = cfg.agenda_calendario_repetir_puntos !== false;
+    const chkSemSem = document.getElementById("chk-agenda-calendario-semana-semestre");
+    if (chkSemSem) chkSemSem.checked = cfg.agenda_calendario_semana_semestre !== false;
+    const chkSemAnio = document.getElementById("chk-agenda-calendario-semana-anio");
+    if (chkSemAnio) chkSemAnio.checked = cfg.agenda_calendario_semana_anio !== false;
     sincronizarSwitchesVenceHoy();
     modal.classList.remove("oculto");
   });
@@ -2119,6 +2164,16 @@ function inicializarFiltrosAgenda() {
     sellarTimestamp(estado.datos.configuracion);
     marcarCambioPendiente();
     renderizarAgenda();
+  });
+
+  // Parche 7: columnas de semana del calendario mensual (semestre / año), cada una por separado.
+  [["chk-agenda-calendario-semana-semestre", "agenda_calendario_semana_semestre"], ["chk-agenda-calendario-semana-anio", "agenda_calendario_semana_anio"]].forEach(([id, clave]) => {
+    document.getElementById(id)?.addEventListener("change", (ev) => {
+      estado.datos.configuracion[clave] = ev.target.checked;
+      sellarTimestamp(estado.datos.configuracion);
+      marcarCambioPendiente();
+      renderizarAgenda();
+    });
   });
 
   modal.addEventListener("click", (ev) => {

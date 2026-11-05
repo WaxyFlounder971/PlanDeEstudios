@@ -33,10 +33,10 @@
 
    Preferencias (Ajustes → Personalizar → Animación de apertura):
      configuracion.animacion_apertura  true/undefined = activa, false = apagada
-     configuracion.intro_colores       null = colores originales, o
-                                       { modo: "paleta" | "personalizado", colores: [6 hex] }
-   Ambas se reflejan en localStorage porque al arrancar todavía no hay datos
-   de la cuenta: aquí se lee primero el espejo local.
+   Los colores de las pestañas ya NO se eligen aparte: son los del logo
+   (Ajustes → Personalizar logo: estilo_logo + logo_colores_personalizados).
+   Ambas cosas se reflejan en localStorage porque al arrancar todavía no hay
+   datos de la cuenta: aquí se lee primero el espejo local (lo escribe marca.js).
    ========================================================================= */
 
 import "./folder-intro.js"; // define window.FolderIntro (sin dependencias)
@@ -60,7 +60,7 @@ function cargadorViejoOculto(oculto) {
 }
 
 /** Colores originales de las 6 pestañas (los del logo). */
-export const COLORES_INTRO_ORIGINALES = ["#e8452a", "#f28a2b", "#e6c52c", "#2fa86b", "#3a7de2", "#8b4ae0"];
+export const COLORES_INTRO_ORIGINALES = ["#ce1d19", "#de502b", "#dcb72d", "#2c9b73", "#277ecc", "#7c39d3"];
 
 /* ------------------------------- Colores -------------------------------- */
 
@@ -100,11 +100,14 @@ function normalizarConfigColores(cfg) {
   return null;
 }
 
-/** Lee la elección: primero la cuenta (si ya hay datos), luego el espejo local. */
+/** Lee la elección: primero el logo de la cuenta (si ya hay datos), luego el espejo local. */
 function leerConfigColores(configuracion) {
-  const deCuenta = normalizarConfigColores(configuracion && configuracion.intro_colores);
-  if (deCuenta) return deCuenta;
-  if (configuracion && configuracion.intro_colores === null) return null; // la cuenta dice "originales"
+  const estilo = configuracion && configuracion.estilo_logo;
+  if (estilo === "original") return null;
+  if (estilo === "paleta") return { modo: "paleta", colores: coloresDePaletaActual() };
+  if (estilo === "personalizado") {
+    return normalizarConfigColores({ modo: "personalizado", colores: configuracion.logo_colores_personalizados });
+  }
   try {
     return normalizarConfigColores(JSON.parse(localStorage.getItem(CLAVE_INTRO_COLORES_LOCAL) || "null"));
   } catch (e) {
@@ -329,13 +332,14 @@ export function cancelarIntroCarga() {
 
 /**
  * Botón "Ver animación" de Ajustes: la reproduce de punta a punta ahora mismo,
- * con los colores indicados (o los guardados). Respeta "reducir movimiento".
+ * con los colores del logo (el segundo parámetro se ignora, queda por compatibilidad).
+ * Respeta "reducir movimiento".
  */
 export function verAnimacionIntro(configuracion, colores) {
   try {
     if (!window.FolderIntro || prefiereMenosMovimiento()) return Promise.resolve(false);
     if (carga && carga.state === "loading") return Promise.resolve(false); // la real está en curso
-    const l = window.FolderIntro.load({ app: "#app-shell", colors: colores || coloresIntroEfectivos(configuracion) });
+    const l = window.FolderIntro.load({ app: "#app-shell", colors: coloresIntroEfectivos(configuracion) });
     const raiz = document.querySelector(".fi-root");
     if (!raiz || l.state === "none") return Promise.resolve(false);
     raiz.setAttribute("aria-hidden", "true");

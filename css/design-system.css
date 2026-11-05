@@ -2653,7 +2653,8 @@ img, svg { max-width: 100%; }
    vez de repetir el font-size suelto en cada lugar, para que sea un único
    punto de ajuste si el tamaño vuelve a cambiar. ---- */
 .texto-encabezado-seccion {
-  font-size: 19.5px;
+  /* 19.5px = 1.21875rem a 16px: en rem para que cambie con "Tamaño de letra" (parche 6). */
+  font-size: var(--enc-fs-titulo, 1.21875rem);
   font-weight: 600;
 }
 .ajuste-seccion-chevron {
@@ -3090,7 +3091,7 @@ img, svg { max-width: 100%; }
 .login-contenido { width:min(100%, 520px); margin:auto; text-align:center; gap:clamp(12px,2.4vh,20px); }
 .login-contenido > p { max-width:44ch; margin-inline:auto; }
 .login-contenido > h1 { flex-wrap:wrap; }
-.ajuste-idioma-app { display:grid; gap:5px; max-width:360px; }
+.ajuste-idioma-app { display:grid; gap:5px; width:100%; max-width:none; }
 #selector-idioma-app { width:100%; }
 .onboarding-overlay {
   position:fixed; inset:0; z-index:200000; display:flex; align-items:stretch; justify-content:stretch;
@@ -3142,7 +3143,6 @@ img, svg { max-width: 100%; }
 .guia-plan-resaltado { position:relative; z-index:200011!important; outline:3px solid var(--accent-1)!important; outline-offset:5px!important; box-shadow:0 0 0 9999px rgba(0,0,0,.45)!important; }
 .onboarding-logo img { object-fit:contain; }
 .onboarding-logos button[data-logo-app] img { width:40px; height:40px; object-fit:contain; }
-#selector-logo-app .onboarding-logos { display:flex; gap:10px; }
 .agenda-barra-seleccion { z-index:10050; bottom:calc(14px + env(safe-area-inset-bottom)); }
 .agenda-btn-eliminar-seleccion:disabled { opacity:.45; cursor:not-allowed; }
 @media (min-width:601px) { .onboarding-panel:not(.onboarding-con-tour) .onboarding-layout { max-width:900px; grid-template-columns:1fr; } }
@@ -5785,10 +5785,6 @@ select option, select optgroup { background-color: var(--bg-card); color: var(--
 html:has(.onboarding-overlay), body:has(.onboarding-overlay) { overflow:hidden!important; }
 .onboarding-logo-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; }
 .onboarding-logo-heading h3 { margin:0; }
-.logo-selector-encabezado { display:flex; align-items:center; justify-content:space-between; gap:12px; }
-.logo-selector-personalizado { display:inline-flex; align-items:center; justify-content:center; min-height:36px; padding:6px 12px; border:1px solid var(--border-glass); border-radius:999px; color:var(--text-primary); background:var(--bg-panel); cursor:pointer; }
-#selector-logo-app .onboarding-logos button[data-logo-app] { width:92px; height:92px; border-color:transparent; background:transparent; }
-#selector-logo-app .onboarding-logos button[data-logo-app] img { width:76px; height:76px; background:transparent; object-fit:contain; }
 .onboarding-file-picker { width:auto; min-height:36px; padding:6px 12px; }
 .onboarding-logo { width:96px; height:96px; background:transparent!important; border-color:transparent!important; }
 .onboarding-logo img { width:76px!important; height:76px!important; background:transparent!important; object-fit:contain; }
@@ -6493,11 +6489,9 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
 #horario-header .app-encabezado__der { flex-wrap: nowrap; }
 /* "Salir" / "← Cerrar horario" (modo conjunto / horario de un amigo): mismo alto que los demás botones,
    y el texto baja a dos líneas en vez de cortarse. Con él visible se oculta Descargar para dar espacio. */
-.app-encabezado__salir {
-  box-sizing: border-box; height: 38px; max-width: 132px; padding: 0 10px;
-  font-size: 0.78rem; line-height: 1.1; white-space: normal; text-align: center;
-}
-#horario-header .app-encabezado__izq:has(.app-encabezado__salir:not(.oculto)) #btn-horario-descargar { display: none; }
+/* Salir: ahora es un botón de símbolo (.app-encabezado__icono), sin texto. */
+.app-encabezado__salir { color: var(--text-secondary); }
+#horario-header .app-encabezado__izq:has(#btn-salir-modo-conjunto:not(.oculto)) #btn-horario-descargar { display: none; }
 /* fila de días (L2 K3 M4…): un poco de aire respecto a la fila de arriba, ya que el gap del encabezado es de 2px */
 #horario-header #horario-dias-semana { margin-top: 4px; }
 
@@ -6508,3 +6502,342 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
 }
 .app-encabezado .te-racha-chip .te-llama--chip { height: 24px; flex: none; align-self: center; }
 .app-encabezado .te-racha-chip .te-racha-num { align-items: center; line-height: 1; height: 100%; }
+
+/* =========================================================================
+   2026-11-04 (parche 5) — Encabezado centrado, filtro Estado extendido, Configuración con usuario,
+   píldora de horas y botones de símbolo
+   ========================================================================= */
+/* Encabezado: el botón del semestre (arriba) y la fila de la fecha (abajo) miden lo mismo, así
+   "Semana N" queda centrada verticalmente en el panel y el espacio de arriba es igual al de abajo.
+   Un solo valor (--enc-alto-semestre) gobierna ambos. */
+:root { --enc-alto-semestre: 22px; }
+.app-encabezado__semestre { height: var(--enc-alto-semestre); padding-block: 0; }
+.app-encabezado__rango { box-sizing: border-box; min-height: var(--enc-alto-semestre); align-items: center; }
+/* Competencias: mismo botón de semestre, sin función. */
+.app-encabezado__semestre--inerte { cursor: default; pointer-events: none; }
+
+/* Botón de solo símbolo en color de acento (Asistente: nueva conversación). */
+.app-encabezado__icono--acento { color: var(--accent-1); }
+.app-encabezado__icono--acento:hover { background: color-mix(in srgb, var(--accent-1) 16%, transparent); }
+.app-encabezado__icono svg { display: block; flex: none; }
+
+/* Horario: descargar como botón redondo con SVG, del mismo tamaño que el "+". */
+.app-encabezado__descargar { color: var(--text-secondary); }
+.app-encabezado__descargar svg { display: block; flex: none; }
+
+/* Agenda — filtro "Estado" extendido (PRUEBA). Se activa con FILTRO_ESTADO_EXTENDIDO en agenda.js.
+   Los filtros no se mueven: el panel sale a la derecha de "Estado", fuera del flujo. Si no cabe,
+   JS añade --en-flujo y la barra se reacomoda como antes. Para volver al menú de antes basta
+   poner esa constante en false (estas reglas dejan de aplicar). */
+.agenda-filtro-estados--ext .agenda-filtro-estado-menu { position: relative; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover {
+  position: absolute; left: calc(100% + 6px); right: auto; top: 50%; z-index: 5;
+  display: flex; flex-direction: row; align-items: center; gap: 6px;
+  min-width: 0; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; white-space: nowrap;
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translate(-10px, -50%);
+  transition: opacity .2s ease, transform .2s ease, visibility 0s linear .2s;
+}
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover.abierto {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: translate(0, -50%);
+  transition-delay: 0s;
+}
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover--sin-anim { transition: none; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover .agenda-filtro-estado-btn { min-height: 24px; justify-content: center; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover--en-flujo { position: static; transform: none; margin-left: 2px; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover--en-flujo:not(.abierto) { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .agenda-filtro-estados--ext .agenda-filtro-estado-popover { transition: none; }
+}
+
+/* Tiempo › Estadísticas: pequeño espacio entre tarjetas. */
+.te-estadisticas-lista { display: flex; flex-direction: column; gap: 12px; }
+
+/* Competencias: aviso de horas por enviar. Píldora flotante, fuera del flujo (no mueve nada). */
+.te-horas-pendientes {
+  position: fixed; left: 50%; bottom: calc(16px + env(safe-area-inset-bottom, 0px)); z-index: 400;
+  display: flex; align-items: center; gap: 10px; padding: 6px 6px 6px 14px;
+  border: 1px solid var(--border-glass); border-radius: 999px;
+  background: var(--bg-card, var(--bg-panel)); box-shadow: var(--shadow-float, 0 8px 20px rgba(0, 0, 0, 0.4));
+  font-size: 0.82rem; color: var(--text-secondary); white-space: nowrap; max-width: calc(100vw - 24px);
+  opacity: 0; visibility: hidden; pointer-events: none; transform: translate(-50%, 8px);
+  transition: opacity .2s ease, transform .2s ease, visibility 0s linear .2s;
+}
+.te-horas-pendientes--visible {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: translate(-50%, 0); transition-delay: 0s;
+}
+.te-horas-pendientes__btn {
+  border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; font: inherit; font-weight: 700;
+  color: var(--accent-1); background: color-mix(in srgb, var(--accent-1) 16%, transparent);
+}
+.te-horas-pendientes__btn:disabled { opacity: .6; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .te-horas-pendientes { transition: none; } }
+
+/* Configuración — tarjeta de usuario (siempre abierta, sin título): foto · saludo + correo · "Cambiar datos". */
+.ajuste-usuario {
+  display: flex; align-items: center; gap: 16px; padding: 16px 18px;
+  background-image: linear-gradient(135deg, color-mix(in srgb, var(--accent-1) 14%, transparent), transparent 62%);
+}
+.ajuste-usuario-foto-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
+.ajuste-usuario-avatar {
+  position: relative; display: block; width: 92px; height: 92px; padding: 3px; border: 0; border-radius: 50%; cursor: pointer;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent-1) 35%, transparent);
+  transition: transform var(--transition-fast), box-shadow var(--transition-fast);
+  -webkit-tap-highlight-color: transparent; flex: none;
+}
+.ajuste-usuario-avatar:hover { transform: scale(1.03); }
+.ajuste-usuario-avatar:active { transform: scale(0.97); }
+.ajuste-usuario-avatar:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 3px; }
+.ajuste-usuario-avatar > img,
+.ajuste-usuario-inicial {
+  display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; box-sizing: border-box;
+  border: 3px solid var(--bg-card, var(--bg-panel));
+}
+.ajuste-usuario-inicial {
+  display: grid; place-items: center; font-size: 1.9rem; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
+}
+.ajuste-usuario-inicial.oculto, .ajuste-usuario-avatar > img.oculto { display: none; }
+.ajuste-usuario-camara {
+  position: absolute; right: -2px; bottom: -2px; width: 30px; height: 30px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; background: var(--accent-1);
+  border: 2px solid var(--bg-card, var(--bg-panel)); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.ajuste-usuario-quitar { font-size: 0.75rem; padding: 2px 8px; }
+/* En la tarjeta la foto es solo una imagen (no se toca): se cambia desde "Cambiar datos". */
+.ajuste-usuario > .ajuste-usuario-avatar { width: 72px; height: 72px; cursor: default; }
+.ajuste-usuario > .ajuste-usuario-avatar:hover,
+.ajuste-usuario > .ajuste-usuario-avatar:active { transform: none; }
+.ajuste-usuario > .ajuste-usuario-avatar .ajuste-usuario-inicial { font-size: 1.5rem; }
+.ajuste-usuario-datos { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.ajuste-usuario-saludo { margin: 0; font-size: calc(var(--enc-fs-titulo, 1.21875rem) * 1.15); font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+/* Correo en letras llamativas: degradado de los dos colores de acento. */
+.ajuste-usuario-correo {
+  margin: 0; font-size: 0.92rem; font-weight: 800; letter-spacing: 0.02em; overflow-wrap: anywhere;
+  color: var(--accent-1);
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
+.ajuste-usuario-correo:empty { display: none; }
+.ajuste-usuario-editar { flex: none; white-space: nowrap; }
+@media (max-width: 480px) {
+  .ajuste-usuario { flex-wrap: wrap; padding: 14px 14px; gap: 12px; }
+  .ajuste-usuario-datos { flex-basis: calc(100% - 100px); }
+  .ajuste-usuario-editar { width: 100%; }
+}
+
+/* Onboarding: "Cambiar foto" bajo el avatar de bienvenida. */
+.onb-bienvenida-cambiar-foto { display: block; margin: 2px auto 10px; font-size: 0.85rem; }
+/* =========================================================================
+   2026-11-04 (parche 6) — Encabezados: -30% de aire vertical, tipografía unificada, botones y filtro
+   ========================================================================= */
+/* Un solo sitio para los tamaños de texto de los encabezados. Todo en rem: cambia con "Tamaño de letra". */
+:root {
+  --enc-fs-titulo: 1.21875rem;   /* Semana N, Comunidad, Notas rápidas, Asistente, títulos de Ajustes */
+  --enc-fs-sub: 0.78rem;         /* fecha/rango, conteos, "Hoy" */
+  --enc-fs-semestre: 0.85rem;    /* botón del semestre */
+  --enc-alto-boton: 38px;        /* +, ⋮, descargar, Unirse, Amigos... */
+  --enc-gap: 1.4px;              /* antes 2px */
+  /* alto del botón del semestre = una línea de su texto + 4px (antes 22px fijos): no corta el texto en "Grande". */
+  --enc-alto-semestre: calc(var(--enc-fs-semestre) * 1.2 + 4px);
+}
+/* Aire vertical: -30% (padding 10→7, separación 6→4, holgura de la fila de título 12→8, fila de días 4→3). */
+.app-encabezado { padding-block: 7px; }
+.app-encabezado:not(.app-encabezado--fila) { gap: 4px; }
+.app-encabezado__titulofila { min-height: calc(1.3rem + 8px); }
+#horario-header #horario-dias-semana { margin-top: 3px; }
+
+/* Mismo tipo de letra, tamaño y peso para el título de TODOS los encabezados (h2 o span). */
+.app-encabezado .texto-encabezado-seccion {
+  font-family: var(--font-display); font-size: var(--enc-fs-titulo); font-weight: 600; line-height: 1.2; margin: 0;
+}
+.app-encabezado__semestre { font-size: var(--enc-fs-semestre); }
+.app-encabezado__sub,
+.app-encabezado__rango,
+.app-encabezado__rango .muted { font-size: var(--enc-fs-sub); }
+
+/* Botones de los costados: todos con el mismo alto que el "+" (Unirse de Competencias incluido). */
+.app-encabezado__mas { width: var(--enc-alto-boton); height: var(--enc-alto-boton); }
+.app-encabezado__icono { width: var(--enc-alto-boton); height: var(--enc-alto-boton); }
+.app-encabezado__lado {
+  box-sizing: border-box; height: var(--enc-alto-boton); min-height: var(--enc-alto-boton);
+  padding-block: 0; line-height: 1;
+}
+
+/* Filtro "Estado" (extendido): el botón nunca desaparece. Si el panel no cabe a la derecha, los chips
+   bajan a una línea propia DEBAJO del botón en vez de empujarlo fuera. */
+.agenda-filtro-estados--ext .agenda-filtro-estado-menu { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-trigger { flex: none; order: 1; position: relative; z-index: 6; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover--en-flujo {
+  order: 2; flex: 0 0 100%; flex-wrap: wrap; justify-content: center; margin: 6px 0 0;
+}
+
+/* "Grande" hace height:auto en todos los .btn (más especificidad que las reglas de arriba): se devuelve
+   el alto fijo a los botones del encabezado para que "+", Amigos y Unirse midan lo mismo. */
+html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__mas,
+html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado {
+  height: var(--enc-alto-boton); min-height: var(--enc-alto-boton); line-height: 1; padding-block: 0;
+}
+html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__mas { width: var(--enc-alto-boton); }
+html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado { white-space: nowrap; }
+
+/* Parche 7 — calendario mensual: columnas de semana (semestre a la izquierda, año a la derecha), letra pequeña. */
+.agenda-cal-grid { --cal-ancho-semana: 1.4rem; }
+.agenda-cal-semana {
+  display: flex; align-items: center; justify-content: center; min-width: 0;
+  font-size: 0.62rem; font-weight: 600; line-height: 1; opacity: 0.8;
+}
+/* Botón de salir (modo conjunto / horario de un amigo): símbolo SVG, ya no el texto "Salir". */
+#btn-salir-modo-conjunto.oculto { display: none; }
+
+/* Parche 8 — "Semana N" queda en el mismo sitio con o sin flechas ‹ ›: las flechas no aportan alto a la fila
+   (antes su padding de 6px la hacía 4px más alta y bajaba el texto 2px en Horario). */
+.app-encabezado__titulofila .btn-icono-fantasma { padding-block: 0; line-height: 1; }
+#horario-header .app-encabezado__titulofila { gap: 4px; }
+
+/* Parche 9 — Sidebar sin "botones". Solo la sección activa va rellena (sigue siendo .btn-primary: mostrarSeccion()
+   alterna btn-primary/btn-secondary como siempre, el JS no cambia); las demás quedan planas, sin fondo ni borde.
+   Los emojis pasan a iconos SVG propios (sprite inline en index.html, sin red). Color por variables:
+   --nav-c1 = trazo principal, --nav-c2 = relleno y detalles. Estilo elegido en Ajustes > Personalizar y guardado en
+   <html data-iconos-nav="fijo|logo|paleta"> (sin atributo = "fijo"). */
+
+/* Clases del sprite (los <symbol> viven en index.html; heredan las variables del botón que los usa). */
+.ni-s1, .ni-s2 { fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ni-s1 { stroke: var(--nav-c1); }
+.ni-s2 { stroke: var(--nav-c2); }
+.ni-fl { fill: color-mix(in srgb, var(--nav-c2) 32%, transparent); }
+.ni-d1 { fill: var(--nav-c1); }
+.ni-d2 { fill: var(--nav-c2); }
+/* Casa: pared, zócalo y puerta con color propio solo en "Multicolor" (más abajo); en el resto vuelve al duotono. */
+.ni-hw { fill: var(--nav-wall, color-mix(in srgb, var(--nav-c2) 32%, transparent)); stroke: var(--nav-wallst, none); stroke-width: 1; }
+.ni-hb { fill: var(--nav-base, none); }
+.ni-hd { fill: var(--nav-door, none); }
+
+/* Forma: fila plana con icono + texto. :not(.oculto) para no pisar el display:none de siempre. */
+#app-sidebar .btn-nav:not(.oculto) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 14px;
+  border-radius: 14px;
+}
+#app-sidebar .btn-nav .nav-ico { width: 22px; height: 22px; flex: none; display: block; }
+#app-sidebar .btn-nav .texto-nav { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Inactivas: sin fondo ni borde (mismo alto de caja que antes: el borde de 1px queda transparente). */
+#app-sidebar .btn-nav.btn-secondary {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: color-mix(in srgb, var(--text-primary) 84%, transparent);
+}
+#app-sidebar .btn-nav.btn-secondary:hover {
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  color: var(--text-primary);
+}
+
+/* Colores por sección. --ni-a / --ni-b = tonos del estilo "Multicolor"; --ni-logo = tono del estilo "Color según logo"
+   (una de las seis pestañas del logo: --logo-1…--logo-6, ver Parche 10).
+   Van por sección (no por posición): reordenar u ocultar secciones en Ajustes no cambia el color de cada una. */
+#app-sidebar .btn-nav[data-seccion="resumen"], .ajuste-icono-vista[data-seccion="resumen"]        { --ni-a: #E0352F; --ni-b: #2F86DC; --ni-logo: var(--logo-1); }
+#app-sidebar .btn-nav[data-seccion="asistente"], .ajuste-icono-vista[data-seccion="asistente"]      { --ni-a: #8A48DE; --ni-b: #2F86DC; --ni-logo: var(--logo-2); }
+#app-sidebar .btn-nav[data-seccion="agenda"], .ajuste-icono-vista[data-seccion="agenda"]         { --ni-a: #35A878; --ni-b: #2F86DC; --ni-logo: var(--logo-3); }
+#app-sidebar .btn-nav[data-seccion="horario"], .ajuste-icono-vista[data-seccion="horario"]        { --ni-a: #2F86DC; --ni-b: #E0352F; --ni-logo: var(--logo-4); }
+#app-sidebar .btn-nav[data-seccion="tiempo-estudio"], .ajuste-icono-vista[data-seccion="tiempo-estudio"] { --ni-a: #E0352F; --ni-b: #E3BC38; --ni-logo: var(--logo-5); }
+#app-sidebar .btn-nav[data-seccion="semestres"], .ajuste-icono-vista[data-seccion="semestres"]      { --ni-a: #2F86DC; --ni-b: #35A878; --ni-logo: var(--logo-6); }
+#app-sidebar .btn-nav[data-seccion="comunidad"], .ajuste-icono-vista[data-seccion="comunidad"]      { --ni-a: #E8632F; --ni-b: #2F86DC; --ni-logo: var(--logo-1); }
+#app-sidebar .btn-nav[data-seccion="finanzas"], .ajuste-icono-vista[data-seccion="finanzas"]       { --ni-a: #35A878; --ni-b: #E3BC38; --ni-logo: var(--logo-2); }
+#app-sidebar .btn-nav[data-seccion="plan-estudios"], .ajuste-icono-vista[data-seccion="plan-estudios"]  { --ni-a: #8A48DE; --ni-b: #E3BC38; --ni-logo: var(--logo-3); }
+#app-sidebar .btn-nav[data-seccion="notas"], .ajuste-icono-vista[data-seccion="notas"]          { --ni-a: #E3BC38; --ni-b: #F2D66B; --ni-logo: var(--logo-4); }
+#app-sidebar .btn-nav[data-seccion="configuracion"], .ajuste-icono-vista[data-seccion="configuracion"]  { --ni-a: #8E9AB8; --ni-b: #2F86DC; --ni-logo: var(--logo-5); }
+
+/* Estilo "Multicolor" (por defecto). --ni-k = cuánto del color se conserva: 100% en oscuro, 72% en claro (más oscuro para
+   que se lea sobre fondo claro; la casa de Resumen es la excepción porque lleva su propia pared). */
+#app-sidebar .btn-nav {
+  --ni-k: 100%;
+  --nav-c1: color-mix(in srgb, var(--ni-a) var(--ni-k), black);
+  --nav-c2: color-mix(in srgb, var(--ni-b) var(--ni-k), black);
+}
+html[data-mode="light"] #app-sidebar .btn-nav { --ni-k: 72%; }
+html[data-mode="light"]:not([data-iconos-nav="logo"]):not([data-iconos-nav="paleta"]) #app-sidebar .btn-nav[data-seccion="resumen"] { --ni-k: 100%; }
+
+/* Casa de Resumen en "Multicolor", sin seleccionar: techo rojo, pared blanca translúcida, zócalo azul y puerta café. */
+html:not([data-iconos-nav="logo"]):not([data-iconos-nav="paleta"]) #app-sidebar .btn-nav[data-seccion="resumen"]:not(.btn-primary) {
+  --nav-wall: rgba(255, 255, 255, 0.38);
+  --nav-wallst: none;
+  --nav-base: color-mix(in srgb, #2F86DC 45%, transparent);
+  --nav-door: color-mix(in srgb, #B8743F 62%, transparent);
+}
+html[data-mode="light"]:not([data-iconos-nav="logo"]):not([data-iconos-nav="paleta"]) #app-sidebar .btn-nav[data-seccion="resumen"]:not(.btn-primary) {
+  --nav-wall: rgba(255, 255, 255, 0.75);
+  --nav-wallst: #C3CAD9;
+  --nav-door: color-mix(in srgb, #8A4B22 70%, transparent);
+}
+
+/* Estilo "Colores del logo": las seis pestañas del logo repartidas entre las secciones. */
+html[data-iconos-nav="logo"] #app-sidebar .btn-nav {
+  --ni-a: var(--ni-logo);
+  --ni-b: color-mix(in srgb, var(--ni-logo) 70%, white);
+}
+
+/* Estilo "Sigue la paleta": dos tonos de --accent-1 / --accent-2, así que cambia solo con cualquier paleta
+   (también la personalizada, que ya escribe esas mismas variables). */
+html[data-iconos-nav="paleta"] #app-sidebar .btn-nav {
+  --nav-c1: var(--accent-2);
+  --nav-c2: color-mix(in srgb, var(--accent-1) 55%, var(--accent-2));
+}
+
+/* Sección activa (btn-primary, relleno de siempre): icono en el color de texto sobre el acento. Va al final a propósito. */
+html #app-sidebar .btn-nav.btn-primary {
+  --nav-c1: var(--on-accent);
+  --nav-c2: var(--on-accent);
+}
+
+/* Sidebar colapsada (escritorio): solo el icono, centrado. En móvil el texto vuelve (ver el bloque < 900px). */
+.app-sidebar.colapsada .btn-nav:not(.oculto) { justify-content: center; padding-inline: 0; }
+@media (max-width: 899.98px) {
+  .app-sidebar.colapsada .btn-nav:not(.oculto) { justify-content: flex-start; padding-inline: 14px; }
+}
+
+/* Parche 10 — Personalizar logo / iconos, select de idioma, sidebar más compacta y con ancho suficiente. */
+
+/* Colores de las seis pestañas del logo original (de arriba abajo). Con "Colores personalizados" marca.js los pisa en
+   <html style>; con "Colores originales" o "Colores de la paleta" valen estos, que son los que usan los iconos
+   en "Color según logo". */
+:root {
+  --logo-1: #E0352F; --logo-2: #E8632F; --logo-3: #E3BC38;
+  --logo-4: #35A878; --logo-5: #2F86DC; --logo-6: #8A48DE;
+}
+
+/* Ajustes > Personalizar logo: vista previa del logo (refleja el estilo elegido) junto a las opciones. */
+.ajuste-logo-fila { display: flex; align-items: center; gap: 14px; }
+.ajuste-logo-fila .pill-group { flex: 1; min-width: 0; }
+.ajuste-logo-vista { width: 64px; height: 64px; flex: none; object-fit: contain; }
+@media (max-width: 520px) {
+  .ajuste-logo-fila { flex-direction: column; align-items: stretch; }
+  .ajuste-logo-vista { align-self: center; }
+}
+
+/* Sidebar: 20% menos de distancia entre filas (antes 44px de caja + 6px de hueco = 50px; ahora 36px + 4px = 40px).
+   Letra e iconos no cambian. */
+#app-sidebar .sidebar-scroll { gap: 4px; }
+#app-sidebar .btn-nav:not(.oculto) { min-height: 36px; padding-block: 4px; }
+#app-sidebar .sidebar-scroll { scrollbar-width: thin; }
+
+/* Ancho de la sidebar (escritorio): sigue al texto más largo del menú para que nada se corte (p. ej. "Plan de Estudios" en
+   letra grande o en francés). main.js (ajustarAnchoSidebar) escribe --sidebar-ancho; 230px es el mínimo de siempre. */
+@media (min-width: 900px) {
+  .app-sidebar:not(.colapsada) { width: var(--sidebar-ancho, 230px); max-width: var(--sidebar-ancho, 230px); }
+}
+
+/* Ajustes: logo + iconos van juntos en un solo bloque, con título propio y vista previa de los iconos. */
+.ajuste-grupo { display: flex; flex-direction: column; gap: 16px; padding: 14px; border: 1px solid var(--border-glass); border-radius: 14px; }
+.ajuste-grupo #ajuste-iconos-nav { border-top: 1px solid var(--border-glass); padding-top: 16px; }
+.ajuste-titulo { font-size: 1.05rem; font-weight: 700; color: var(--text-primary); }
+.ajuste-iconos-vista { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.ajuste-icono-vista { width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px solid var(--border-glass); color: var(--ni-a); }
+.ajuste-icono-vista svg { width: 18px; height: 18px; }
+html[data-iconos-nav="logo"] .ajuste-icono-vista { color: var(--ni-logo); }
+html[data-iconos-nav="paleta"] .ajuste-icono-vista { color: var(--accent-1); }
