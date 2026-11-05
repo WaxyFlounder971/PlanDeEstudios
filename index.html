@@ -341,19 +341,15 @@
       <div id="seccion-configuracion" class="stack">
 
         <section class="glass-card ajuste-usuario" id="ajuste-usuario" aria-label="Tu perfil">
-          <div class="ajuste-usuario-foto-col">
-            <button type="button" class="ajuste-usuario-avatar" id="btn-ajuste-foto" title="Cambiar foto" aria-label="Cambiar foto de perfil">
-              <img id="ajuste-usuario-foto" class="oculto" alt="" referrerpolicy="no-referrer">
-              <span id="ajuste-usuario-inicial" class="ajuste-usuario-inicial" aria-hidden="true"></span>
-              <span class="ajuste-usuario-camara" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
-            </button>
-            <button type="button" class="btn-discreto ajuste-usuario-quitar oculto" id="btn-ajuste-foto-quitar">Usar la de Google</button>
-          </div>
+          <span class="ajuste-usuario-avatar" aria-hidden="true">
+            <img id="ajuste-usuario-foto" class="oculto" alt="" referrerpolicy="no-referrer">
+            <span id="ajuste-usuario-inicial" class="ajuste-usuario-inicial"></span>
+          </span>
           <div class="ajuste-usuario-datos">
-            <label class="form-label" for="input-nombre-preferido">Nombre para saludarte</label>
-            <input id="input-nombre-preferido" class="form-input" type="text" maxlength="60" autocomplete="given-name" placeholder="Tu nombre">
-            <p class="muted ajuste-usuario-correo" id="ajuste-usuario-correo"></p>
+            <h2 class="ajuste-usuario-saludo" id="ajuste-usuario-saludo"></h2>
+            <p class="ajuste-usuario-correo" id="ajuste-usuario-correo"></p>
           </div>
+          <button type="button" class="btn btn-secondary ajuste-usuario-editar" id="btn-ajuste-cambiar-datos">Cambiar datos</button>
         </section>
 
         <section class="glass-card stack ajuste-seccion colapsada">
@@ -777,11 +773,11 @@
           <!-- 2026-11-04: ESTA es la estructura de referencia de todos los encabezados de la app
                (botón de semestre · fila izquierda / centro / derecha). Ver .app-encabezado en design-system.css. -->
           <div class="app-encabezado__fila">
-            <div class="app-encabezado__izq"><button type="button" class="btn btn-primary app-encabezado__mas" id="btn-agenda-agregar" title="Agregar">+</button></div>
+            <div class="app-encabezado__izq"><button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda" aria-label="Ajustes de Agenda">⋮</button></div>
 
             <div id="agenda-subheader-dinamico" class="app-encabezado__centro"></div>
 
-            <div class="app-encabezado__der"><button type="button" class="agenda-btn-ajustes" id="btn-agenda-ajustes" title="Ajustes de Agenda" aria-label="Ajustes de Agenda">⋮</button></div>
+            <div class="app-encabezado__der"><button type="button" class="btn btn-primary app-encabezado__mas" id="btn-agenda-agregar" title="Agregar">+</button></div>
           </div>
         </section>
 
@@ -815,8 +811,8 @@
           <button type="button" class="btn-discreto app-encabezado__semestre" id="horario-nombre-semestre"></button>
           <div class="app-encabezado__fila">
             <div class="app-encabezado__izq">
-              <button type="button" class="btn btn-secondary app-encabezado__mas app-encabezado__descargar" id="btn-horario-descargar" title="Descargar horario como imagen" aria-label="Descargar horario como imagen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg></button>
-              <button type="button" class="btn btn-secondary app-encabezado__lado" id="btn-horario-amigos" title="Amigos" aria-label="Amigos"><span class="app-encabezado__lado-icono" aria-hidden="true">👥</span><span class="app-encabezado__lado-texto">Amigos</span></button>
+              <button type="button" class="app-encabezado__icono app-encabezado__descargar" id="btn-horario-descargar" title="Descargar horario como imagen" aria-label="Descargar horario como imagen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg></button>
+              <button type="button" class="btn btn-primary app-encabezado__lado" id="btn-horario-amigos" title="Amigos" aria-label="Amigos"><span class="app-encabezado__lado-icono" aria-hidden="true">👥</span><span class="app-encabezado__lado-texto">Amigos</span></button>
               <button type="button" class="btn btn-secondary app-encabezado__salir oculto" id="btn-salir-modo-conjunto">Salir</button>
             </div>
             <div class="app-encabezado__centro">
@@ -825,7 +821,7 @@
                 <span id="horario-semana-actual" class="texto-encabezado-seccion"></span>
                 <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;">›</button>
               </div>
-              <div class="row app-encabezado__rango"><span class="muted" id="horario-fecha-actual" style="font-size:0.78rem;"></span></div>
+              <div class="row app-encabezado__rango"><span class="muted" id="horario-fecha-actual" style="font-size:var(--enc-fs-sub);"></span></div>
             </div>
             <div class="app-encabezado__der">
               <button type="button" class="btn btn-primary app-encabezado__mas" id="btn-horario-agregar" title="Agregar" aria-label="Agregar">+</button>

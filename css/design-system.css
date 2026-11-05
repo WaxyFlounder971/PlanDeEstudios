@@ -2653,7 +2653,8 @@ img, svg { max-width: 100%; }
    vez de repetir el font-size suelto en cada lugar, para que sea un único
    punto de ajuste si el tamaño vuelve a cambiar. ---- */
 .texto-encabezado-seccion {
-  font-size: 19.5px;
+  /* 19.5px = 1.21875rem a 16px: en rem para que cambie con "Tamaño de letra" (parche 6). */
+  font-size: var(--enc-fs-titulo, 1.21875rem);
   font-weight: 600;
 }
 .ajuste-seccion-chevron {
@@ -3090,7 +3091,7 @@ img, svg { max-width: 100%; }
 .login-contenido { width:min(100%, 520px); margin:auto; text-align:center; gap:clamp(12px,2.4vh,20px); }
 .login-contenido > p { max-width:44ch; margin-inline:auto; }
 .login-contenido > h1 { flex-wrap:wrap; }
-.ajuste-idioma-app { display:grid; gap:5px; max-width:360px; }
+.ajuste-idioma-app { display:grid; gap:5px; width:100%; max-width:none; }
 #selector-idioma-app { width:100%; }
 .onboarding-overlay {
   position:fixed; inset:0; z-index:200000; display:flex; align-items:stretch; justify-content:stretch;
@@ -6579,9 +6580,9 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
 .te-horas-pendientes__btn:disabled { opacity: .6; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .te-horas-pendientes { transition: none; } }
 
-/* Configuración — tarjeta de usuario (siempre abierta, sin título). */
+/* Configuración — tarjeta de usuario (siempre abierta, sin título): foto · saludo + correo · "Cambiar datos". */
 .ajuste-usuario {
-  display: flex; align-items: center; gap: 18px; padding: 18px 20px;
+  display: flex; align-items: center; gap: 16px; padding: 16px 18px;
   background-image: linear-gradient(135deg, color-mix(in srgb, var(--accent-1) 14%, transparent), transparent 62%);
 }
 .ajuste-usuario-foto-col { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: none; }
@@ -6590,7 +6591,7 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
   background: linear-gradient(135deg, var(--accent-1), var(--accent-2));
   box-shadow: 0 6px 18px color-mix(in srgb, var(--accent-1) 35%, transparent);
   transition: transform var(--transition-fast), box-shadow var(--transition-fast);
-  -webkit-tap-highlight-color: transparent;
+  -webkit-tap-highlight-color: transparent; flex: none;
 }
 .ajuste-usuario-avatar:hover { transform: scale(1.03); }
 .ajuste-usuario-avatar:active { transform: scale(0.97); }
@@ -6611,13 +6612,79 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
   border: 2px solid var(--bg-card, var(--bg-panel)); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 .ajuste-usuario-quitar { font-size: 0.75rem; padding: 2px 8px; }
-.ajuste-usuario-datos { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
-.ajuste-usuario-correo { margin: 0; font-size: 0.8rem; overflow-wrap: anywhere; }
+/* En la tarjeta la foto es solo una imagen (no se toca): se cambia desde "Cambiar datos". */
+.ajuste-usuario > .ajuste-usuario-avatar { width: 72px; height: 72px; cursor: default; }
+.ajuste-usuario > .ajuste-usuario-avatar:hover,
+.ajuste-usuario > .ajuste-usuario-avatar:active { transform: none; }
+.ajuste-usuario > .ajuste-usuario-avatar .ajuste-usuario-inicial { font-size: 1.5rem; }
+.ajuste-usuario-datos { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.ajuste-usuario-saludo { margin: 0; font-size: calc(var(--enc-fs-titulo, 1.21875rem) * 1.15); font-weight: 800; line-height: 1.2; overflow-wrap: anywhere; }
+/* Correo en letras llamativas: degradado de los dos colores de acento. */
+.ajuste-usuario-correo {
+  margin: 0; font-size: 0.92rem; font-weight: 800; letter-spacing: 0.02em; overflow-wrap: anywhere;
+  color: var(--accent-1);
+  background: linear-gradient(90deg, var(--accent-1), var(--accent-2));
+  -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+}
 .ajuste-usuario-correo:empty { display: none; }
+.ajuste-usuario-editar { flex: none; white-space: nowrap; }
 @media (max-width: 480px) {
-  .ajuste-usuario { flex-direction: column; text-align: center; padding: 18px 16px; }
-  .ajuste-usuario-datos { width: 100%; }
+  .ajuste-usuario { flex-wrap: wrap; padding: 14px 14px; gap: 12px; }
+  .ajuste-usuario-datos { flex-basis: calc(100% - 100px); }
+  .ajuste-usuario-editar { width: 100%; }
 }
 
 /* Onboarding: "Cambiar foto" bajo el avatar de bienvenida. */
 .onb-bienvenida-cambiar-foto { display: block; margin: 2px auto 10px; font-size: 0.85rem; }
+/* =========================================================================
+   2026-11-04 (parche 6) — Encabezados: -30% de aire vertical, tipografía unificada, botones y filtro
+   ========================================================================= */
+/* Un solo sitio para los tamaños de texto de los encabezados. Todo en rem: cambia con "Tamaño de letra". */
+:root {
+  --enc-fs-titulo: 1.21875rem;   /* Semana N, Comunidad, Notas rápidas, Asistente, títulos de Ajustes */
+  --enc-fs-sub: 0.78rem;         /* fecha/rango, conteos, "Hoy" */
+  --enc-fs-semestre: 0.85rem;    /* botón del semestre */
+  --enc-alto-boton: 38px;        /* +, ⋮, descargar, Unirse, Amigos... */
+  --enc-gap: 1.4px;              /* antes 2px */
+  /* alto del botón del semestre = una línea de su texto + 4px (antes 22px fijos): no corta el texto en "Grande". */
+  --enc-alto-semestre: calc(var(--enc-fs-semestre) * 1.2 + 4px);
+}
+/* Aire vertical: -30% (padding 10→7, separación 6→4, holgura de la fila de título 12→8, fila de días 4→3). */
+.app-encabezado { padding-block: 7px; }
+.app-encabezado:not(.app-encabezado--fila) { gap: 4px; }
+.app-encabezado__titulofila { min-height: calc(1.3rem + 8px); }
+#horario-header #horario-dias-semana { margin-top: 3px; }
+
+/* Mismo tipo de letra, tamaño y peso para el título de TODOS los encabezados (h2 o span). */
+.app-encabezado .texto-encabezado-seccion {
+  font-family: var(--font-display); font-size: var(--enc-fs-titulo); font-weight: 600; line-height: 1.2; margin: 0;
+}
+.app-encabezado__semestre { font-size: var(--enc-fs-semestre); }
+.app-encabezado__sub,
+.app-encabezado__rango,
+.app-encabezado__rango .muted { font-size: var(--enc-fs-sub); }
+
+/* Botones de los costados: todos con el mismo alto que el "+" (Unirse de Competencias incluido). */
+.app-encabezado__mas { width: var(--enc-alto-boton); height: var(--enc-alto-boton); }
+.app-encabezado__icono { width: var(--enc-alto-boton); height: var(--enc-alto-boton); }
+.app-encabezado__lado {
+  box-sizing: border-box; height: var(--enc-alto-boton); min-height: var(--enc-alto-boton);
+  padding-block: 0; line-height: 1;
+}
+
+/* Filtro "Estado" (extendido): el botón nunca desaparece. Si el panel no cabe a la derecha, los chips
+   bajan a una línea propia DEBAJO del botón en vez de empujarlo fuera. */
+.agenda-filtro-estados--ext .agenda-filtro-estado-menu { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-trigger { flex: none; order: 1; position: relative; z-index: 6; }
+.agenda-filtro-estados--ext .agenda-filtro-estado-popover--en-flujo {
+  order: 2; flex: 0 0 100%; flex-wrap: wrap; justify-content: center; margin: 6px 0 0;
+}
+
+/* "Grande" hace height:auto en todos los .btn (más especificidad que las reglas de arriba): se devuelve
+   el alto fijo a los botones del encabezado para que "+", Amigos y Unirse midan lo mismo. */
+html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__mas,
+html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado {
+  height: var(--enc-alto-boton); min-height: var(--enc-alto-boton); line-height: 1; padding-block: 0;
+}
+html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__mas { width: var(--enc-alto-boton); }
+html[data-text-size="grande"] .app-encabezado .btn.app-encabezado__lado { white-space: nowrap; }
