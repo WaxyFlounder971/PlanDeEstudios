@@ -1567,10 +1567,11 @@ body.scroll-bloqueado {
 /* Sidebar colapsada (solo desktop).
    El relleno lateral es el MISMO que expandida (14px) y los botones siguen alineados a la izquierda: el icono queda en
    la misma x en ambos estados (14 de relleno + 1 de borde + 14 de relleno del botón = 29px) y solo se recorta la barra.
-   80px = 14 + (1 + 14 + 22 + 14 + 1) + 14. El texto se desvanece (no se quita con display) para poder animar. */
+   82px = 1 (borde de la barra) + 14 + (1 + 14 + 22 + 14 + 1) + 14 + 1: el centro del icono (x = 41px) queda justo en el
+   centro de la barra, así el círculo del resaltado queda centrado. El texto se desvanece (no display) para animar. */
 .app-sidebar.colapsada {
-  width: 80px;
-  max-width: 80px;
+  width: 82px;
+  max-width: 82px;
 }
 .app-sidebar .texto-nav,
 .app-sidebar .sidebar-titulo span.texto {
@@ -7034,6 +7035,47 @@ html:root #app-sidebar.app-sidebar {
 }
 
 /* 3) Logo del menú alineado con los iconos de sección: mismo tamaño (22px) y mismo eje (x = 40px, igual que en colapsada). */
-.app-sidebar .sidebar-titulo { padding-left: 15px; gap: 12px; min-height: 22px; margin-top: 48px; }
-@media (max-width: 899.98px) { .app-sidebar .sidebar-titulo { margin-top: 0; } }
+.app-sidebar .sidebar-titulo { padding-left: 15px; gap: 12px; min-height: 22px; }
+/* El botón ⟨⟨ de contraer queda oculto (el markup y su código siguen ahí); la barra se contrae sola. */
+.app-sidebar .btn-colapsar { display: none; }
 .app-sidebar .sidebar-titulo img { width: 22px; height: 22px; object-fit: contain; flex: none; }
+
+/* =========================================================================
+   Enlaces rápidos: completo → riel de iconos → botón flotante (decide js/ui/layout-lateral.js con body[data-enlaces-lateral])
+   ========================================================================= */
+body[data-enlaces-lateral="completo"] .columna-derecha,
+body[data-enlaces-lateral="riel"] .columna-derecha { display: flex; }
+body[data-enlaces-lateral="completo"] .enlaces-lateral,
+body[data-enlaces-lateral="riel"] .enlaces-lateral { display: block; }
+body[data-enlaces-lateral="oculto"] .columna-derecha { display: none; }
+body[data-enlaces-lateral="completo"] .btn-flotante-enlaces,
+body[data-enlaces-lateral="riel"] .btn-flotante-enlaces { display: none; }
+body[data-enlaces-lateral="oculto"] .btn-flotante-enlaces { display: flex; }
+/* El timer: en la columna completa va dentro de ella; en riel y sin columna va como tarjeta flotante. */
+body[data-enlaces-lateral="riel"] .timer-indicador--flotante,
+body[data-enlaces-lateral="oculto"] .timer-indicador--flotante { display: flex; }
+body[data-enlaces-lateral="completo"] .timer-indicador--flotante { display: none; }
+body[data-enlaces-lateral="riel"] .timer-indicador--flotante { right: 88px; bottom: 24px; }
+body[data-enlaces-lateral="riel"] .columna-derecha > .timer-indicador--lateral { display: none; }
+
+/* Riel: una barrita discreta con solo el emoji o la imagen de cada enlace (el nombre sale al pasar el cursor). */
+body[data-enlaces-lateral="riel"] .columna-derecha { width: 56px; margin-right: 12px; }
+body[data-enlaces-lateral="riel"] .enlaces-lateral {
+  width: 56px; padding: 10px 6px; border-radius: 28px;
+  scrollbar-width: none;
+}
+body[data-enlaces-lateral="riel"] .enlaces-lateral::-webkit-scrollbar { display: none; }
+body[data-enlaces-lateral="riel"] .enlaces-lateral > h3,
+body[data-enlaces-lateral="riel"] .enlaces-lateral .muted,
+body[data-enlaces-lateral="riel"] .enlaces-lateral .enlace-rapido-nombre { display: none; }
+body[data-enlaces-lateral="riel"] #lista-enlaces-lateral { gap: 6px !important; align-items: center; }
+body[data-enlaces-lateral="riel"] #lista-enlaces-lateral > .glass-panel {
+  width: 40px; height: 40px; padding: 0 !important; justify-content: center;
+  border-radius: 50%; border-color: transparent; background: transparent; box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  transition: background-color .18s ease, transform .18s ease;
+}
+body[data-enlaces-lateral="riel"] #lista-enlaces-lateral > .glass-panel:hover { background: color-mix(in srgb, var(--text-primary) 9%, transparent); transform: scale(1.06); }
+body[data-enlaces-lateral="riel"] #lista-enlaces-lateral > .glass-panel > a { flex: none !important; justify-content: center; }
+body[data-enlaces-lateral="riel"] .enlace-rapido-icono { min-width: 24px; font-size: 1.25rem; }
+body[data-enlaces-lateral="riel"] .enlace-rapido-icono img { width: 24px; height: 24px; }
