@@ -715,6 +715,7 @@ async function iniciarAplicacionDemo() {
     estado.ultimoModifiedTimeConocido = null;
     aplicarTamanoTexto(estado.datos);
     aplicarEstiloIconosNav(estado.datos);
+    iniciarAnchoSidebarAutomatico();
     // El arranque normal también registra navegación y eventos de cada
     // módulo. La demo omite deliberadamente auth/sync, así que inicializa
     // aquí solo las piezas de interfaz que necesita para funcionar.
@@ -1249,6 +1250,7 @@ function mostrarAppInterno() {
   window.procesarNotasCompartidas?.();
   aplicarTamanoTexto(estado.datos);
   aplicarEstiloIconosNav(estado.datos);
+  iniciarAnchoSidebarAutomatico();
   const modoVistaDemo = new URLSearchParams(location.search).get("preview") === "1" ? (cfg.modo || "dark") : "dark";
   aplicarPaleta(cfg.paleta, MODO_DEMO ? modoVistaDemo : obtenerModoTemaLocal(), cfg.paleta === "personalizada" ? cfg.paleta_personalizada?.colores : undefined);
   aplicarLogoApp();
@@ -1344,6 +1346,58 @@ function aplicarEstiloIconosNav(datos) {
   const valores = ["fijo", "logo", "paleta"];
   const elegido = datos?.configuracion?.estilo_iconos_nav;
   document.documentElement.dataset.iconosNav = valores.includes(elegido) ? elegido : "fijo";
+}
+
+// Ancho de la sidebar (escritorio): el que pide el texto más largo del menú (o el título), con 230px de mínimo, para que
+// nada se corte con letra grande ni en idiomas de palabras largas. Solo escribe --sidebar-ancho; el CSS lo aplica.
+let observadorAnchoSidebar = null;
+function ajustarAnchoSidebar() {
+  const barra = document.getElementById("app-sidebar");
+  if (!barra) return;
+  const num = (valor) => parseFloat(valor) || 0; // "normal" / "" -> 0
+  const visible = (el) => el.getClientRects().length > 0;
+  const ancho = (el) => el.getBoundingClientRect().width; // offsetWidth no existe en el <svg> de los iconos
+  const cs = getComputedStyle(barra);
+  let necesario = 0;
+  barra.querySelectorAll(".btn-nav:not(.oculto)").forEach((btn) => {
+    const texto = btn.querySelector(".texto-nav");
+    if (!texto || !visible(btn)) return;
+    const bs = getComputedStyle(btn);
+    const otros = Array.from(btn.children).filter((el) => el !== texto && visible(el));
+    const extras = otros.reduce((suma, el) => suma + ancho(el), 0) + num(bs.columnGap) * otros.length;
+    // Texto completo (scrollWidth, aunque esté recortado) + icono/insignias + hueco + relleno + borde del botón.
+    necesario = Math.max(necesario, texto.scrollWidth + extras + num(bs.paddingLeft) + num(bs.paddingRight) + 2);
+  });
+  // Título: se suma el ancho de sus piezas (logo + texto). Su scrollWidth no sirve: nunca baja del ancho de la barra.
+  const titulo = barra.querySelector(".sidebar-titulo");
+  if (titulo) {
+    const piezas = Array.from(titulo.children).filter(visible);
+    const hueco = num(getComputedStyle(titulo).columnGap) * Math.max(0, piezas.length - 1);
+    necesario = Math.max(necesario, piezas.reduce((suma, el) => suma + ancho(el), 0) + hueco);
+  }
+  // + relleno de la barra + margen para la barra de scroll fina de la lista.
+  const total = Math.ceil(necesario + num(cs.paddingLeft) + num(cs.paddingRight) + 10);
+  const valor = Math.min(Math.max(total, 230), Math.round(window.innerWidth * 0.4));
+  document.documentElement.style.setProperty("--sidebar-ancho", `${valor}px`);
+}
+
+function iniciarAnchoSidebarAutomatico() {
+  ajustarAnchoSidebar();
+  if (observadorAnchoSidebar) return;
+  let pendiente = false;
+  const reprogramar = () => {
+    if (pendiente) return;
+    pendiente = true;
+    requestAnimationFrame(() => { pendiente = false; ajustarAnchoSidebar(); });
+  };
+  const barra = document.getElementById("app-sidebar");
+  observadorAnchoSidebar = new MutationObserver(reprogramar);
+  // Cambia el texto (idioma), se muestran/ocultan secciones o se agrega una insignia.
+  if (barra) observadorAnchoSidebar.observe(barra, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ["class", "hidden"] });
+  // Cambia el tamaño de letra o el idioma de la página.
+  observadorAnchoSidebar.observe(document.documentElement, { attributes: true, attributeFilter: ["data-text-size", "lang"] });
+  window.addEventListener("resize", reprogramar);
+  document.fonts?.ready?.then(reprogramar);
 }
 
 function aplicarTamanoTexto(datos) {

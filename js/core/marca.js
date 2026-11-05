@@ -2,7 +2,6 @@ import { estado } from "./storage/storage.js";
 import { marcarCambioPendiente } from "./storage/storage-sync.js";
 import { sellarTimestamp } from "./schema.js";
 import { mostrarToast } from "../ui/componentes.js";
-import { espejarColoresIntroLocal } from "./intro-apertura.js";
 
 // Un solo logo (la carpeta). El birrete y el logo subido desde archivo ya no existen: una cuenta que los tenga guardados
 // (logo_app = "birrete" / "personalizado", logo_app_url) vuelve a la carpeta, que es lo que se pinta aquí.
@@ -125,8 +124,6 @@ function aplicarLogoApp() {
   const estilo = estiloLogo(cfg);
   const colores = estilo === "personalizado" ? coloresLogoPersonalizados(cfg) : null;
   aplicarColoresLogoAIconos(colores);
-  // La animación de apertura usa los colores del logo; se espejan en local porque al arrancar aún no hay datos de la cuenta.
-  espejarColoresIntroLocal(estilo === "original" ? null : { modo: estilo, colores: colores || undefined });
   const ciclo = ++cicloColorLogo;
   // Colores originales (o paleta sin color hexadecimal simple, p. ej. degradados): logo tal cual.
   const acento = estilo === "paleta" ? colorTema() : null;
@@ -222,34 +219,3 @@ function inicializarSelectorLogo() {
 
 window.aplicarLogoApp = aplicarLogoApp;
 export { aplicarLogoApp, inicializarSelectorLogo, prepararImagenLogo, COLORES_LOGO_ORIGINALES };
-
-// Ajustes > Personalizar iconos: vista previa. Copia los iconos de las secciones visibles del menú (mismo orden) y el
-// CSS los pinta según el estilo elegido (html[data-iconos-nav]), así que cambia al instante al tocar una opción.
-function pintarVistaIconosNav() {
-  const cont = document.getElementById("iconos-nav-vista");
-  if (!cont) return;
-  cont.replaceChildren();
-  document.querySelectorAll("#app-sidebar .btn-nav:not(.oculto)").forEach((btn) => {
-    const svg = btn.querySelector("svg");
-    if (!svg || !btn.dataset.seccion) return;
-    const caja = document.createElement("span");
-    caja.className = "ajuste-icono-vista";
-    caja.dataset.seccion = btn.dataset.seccion;
-    caja.appendChild(svg.cloneNode(true));
-    cont.appendChild(caja);
-  });
-}
-(function iniciarVistaIconosNav() {
-  const arrancar = () => {
-    pintarVistaIconosNav();
-    const barra = document.getElementById("app-sidebar");
-    if (!barra) return;
-    let pendiente = false;
-    new MutationObserver(() => {
-      if (pendiente) return;
-      pendiente = true;
-      requestAnimationFrame(() => { pendiente = false; pintarVistaIconosNav(); });
-    }).observe(barra, { subtree: true, childList: true, attributes: true, attributeFilter: ["class"] });
-  };
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", arrancar); else arrancar();
-})();
