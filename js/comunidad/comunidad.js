@@ -4046,7 +4046,6 @@ function construirEncabezadoComunidad() {
   // "+" a la izquierda, título + conteos al centro, ⋮ a la derecha y, debajo, el selector
   // Profesores/Compañeros.
   encabezado.className = "app-encabezado com-encabezado";
-  encabezado.style.gap = "12px";
 
   const fila = document.createElement("div");
   fila.className = "app-encabezado__fila";
@@ -4150,9 +4149,11 @@ function construirEncabezadoComunidad() {
     grupo.appendChild(btn);
   });
   thumb.classList.toggle("pill-switch-thumb--derecha", estado.tabComunidad === "companeros");
-  encabezado.appendChild(grupo);
-
-  return encabezado;
+  // 2026-11-04 (parche 6): el switch Profesores/Compañeros sale del panel del encabezado y queda
+  // justo debajo, como en Tiempo de estudio. Se devuelve todo junto para que el llamador no cambie.
+  const bloque = document.createDocumentFragment();
+  bloque.append(encabezado, grupo);
+  return bloque;
 }
 
 /**
@@ -4215,7 +4216,7 @@ function asegurarVistaComunidadArmada(indice) {
 function cambiarVistaComunidad(vista) {
   if (!["profesores", "companeros"].includes(vista) || vista === estado.tabComunidad) return;
   estado.tabComunidad = vista;
-  const grupo = document.querySelector("#seccion-comunidad > section .pill-switch-binario");
+  const grupo = document.querySelector("#seccion-comunidad > .pill-switch-binario");
   if (!pistaVistasComunidad || !grupo) { renderizarComunidad(); return; }
   const indice = vista === "companeros" ? 1 : 0;
   asegurarVistaComunidadArmada(indice);

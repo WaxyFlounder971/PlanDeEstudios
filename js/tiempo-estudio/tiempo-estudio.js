@@ -475,7 +475,7 @@ function construirEncabezado(cont, botonSemestre = null) {
   filaRango.className = "row app-encabezado__rango";
   const rango = document.createElement("span");
   rango.className = "muted";
-  rango.style.fontSize = "0.78rem";
+  rango.style.fontSize = "var(--enc-fs-sub)";
   const finSemana = new Date(inicioSemana);
   finSemana.setDate(finSemana.getDate() + 6);
   rango.textContent = formatearRangoSemanaAgenda([{ fecha: inicioSemana }, { fecha: finSemana }]);
@@ -713,7 +713,9 @@ function sincronizarPillVistaSeccion(grupo) {
 }
 
 const indicesVistaTE = { materias: 0, estadisticas: 1, competencias: 2 };
-const GAP_PANE_VISTA_TE = 12;
+// 2026-11-04 (parche 6): 0 = los paneles van pegados y al deslizar no asoma la franja oscura entre
+// Materias, Estadísticas y Competencias. Todo el cálculo de la pista deriva de este valor.
+const GAP_PANE_VISTA_TE = 0;
 let panelesVistaTE = null;
 let pistaVistaTE = null;
 function desplazamientoVistaTE(indice) {

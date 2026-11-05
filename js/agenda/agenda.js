@@ -415,6 +415,8 @@ function construirBarraFiltroEstadosAgenda() {
     const seParte = barra.scrollWidth > barra.clientWidth + 1;
     barra.classList.remove("agenda-filtro-estados--midiendo");
     barra.classList.toggle("agenda-filtro-estados--multilinea", seParte);
+    // 2026-11-04 (parche 6): con el panel de Estado abierto, también se reevalúa si cabe a la derecha.
+    if (FILTRO_ESTADO_EXTENDIDO && menuEstado.classList.contains("abierto")) requestAnimationFrame(ajustarEnFlujo);
   };
   observadorAnchoFiltroAgenda = new ResizeObserver(medirMultilinea);
   observadorAnchoFiltroAgenda.observe(barra);
@@ -1297,7 +1299,7 @@ function irAHoyAgenda() {
 function construirEnlaceHoyAgenda() {
   const hoy = document.createElement("span");
   hoy.className = "muted";
-  hoy.style.cssText = "font-size:0.74rem; text-decoration:underline; cursor:pointer;";
+  hoy.style.cssText = "font-size:var(--enc-fs-sub); text-decoration:underline; cursor:pointer;";
   hoy.textContent = "Hoy";
   hoy.addEventListener("click", irAHoyAgenda);
   return hoy;
@@ -1373,7 +1375,7 @@ function construirSubheaderSemanal(dias, semestreActivo, { navegable = true, off
 
   const rango = document.createElement("span");
   rango.className = "muted";
-  rango.style.fontSize = "0.78rem";
+  rango.style.fontSize = "var(--enc-fs-sub)";
   rango.textContent = formatearRangoSemanaAgenda(dias);
 
   filaRango.appendChild(rango);

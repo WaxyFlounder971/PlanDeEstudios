@@ -1253,9 +1253,9 @@ function inicializarAccesoDocumentosLegales() {
 }
 
 /**
- * Tarjeta de usuario (arriba de todo en Configuración, siempre abierta): foto, cómo cambiarla,
- * nombre editable y correo. El campo de nombre conserva su id (`input-nombre-preferido`) y su
- * lógica de guardado más abajo en renderizarAjustes.
+ * Tarjeta de usuario (arriba de todo en Configuración, siempre abierta): foto, saludo "Hola, Nombre!",
+ * correo y, a la derecha, "Cambiar datos" (2026-11-04, parche 6). La foto, el nombre y el botón de
+ * cambiar correo viven en la ventana que abre ese botón (abrirModalCambiarDatos).
  */
 function renderizarUsuarioAjustes() {
   const tarjeta = document.getElementById("ajuste-usuario");
@@ -1264,40 +1264,131 @@ function renderizarUsuarioAjustes() {
   const foto = document.getElementById("ajuste-usuario-foto");
   const inicial = document.getElementById("ajuste-usuario-inicial");
   const nombreVisible = perfil.nombre_preferido || perfil.nombre || "";
+  pintarAvatarUsuario(foto, inicial, perfil, nombreVisible);
+  const saludo = document.getElementById("ajuste-usuario-saludo");
+  if (saludo) {
+    const primerNombre = nombreVisible.trim().split(/\s+/)[0] || "";
+    saludo.textContent = primerNombre
+      ? traducirTextoInterfaz("Hola, {nombre}!").replace("{nombre}", primerNombre)
+      : traducirTextoInterfaz("Tu perfil");
+  }
+  const correo = document.getElementById("ajuste-usuario-correo");
+  if (correo) correo.textContent = perfil.correo || "";
+}
+window.renderizarUsuarioAjustes = renderizarUsuarioAjustes;
+
+/** Pone la foto (la elegida o la de Google) o, si no hay o no carga, las iniciales. */
+function pintarAvatarUsuario(foto, inicial, perfil, nombreVisible) {
+  if (!foto || !inicial) return;
   inicial.textContent = obtenerIniciales(nombreVisible || perfil.correo || "?");
   const src = obtenerFotoPerfil(perfil);
   foto.classList.add("oculto");
   inicial.classList.remove("oculto");
-  if (src) {
-    foto.onload = () => { foto.classList.remove("oculto"); inicial.classList.add("oculto"); };
-    foto.onerror = () => { foto.classList.add("oculto"); inicial.classList.remove("oculto"); };
-    if (foto.getAttribute("src") !== src) foto.src = src;
-    else if (foto.complete && foto.naturalWidth) foto.onload();
-    foto.alt = nombreVisible || "Foto de perfil";
-  }
-  document.getElementById("btn-ajuste-foto-quitar")?.classList.toggle("oculto", !perfil.foto_personalizada);
-  const correo = document.getElementById("ajuste-usuario-correo");
-  if (correo) correo.textContent = perfil.correo || "";
-  const inputNombre = document.getElementById("input-nombre-preferido");
-  if (inputNombre && document.activeElement !== inputNombre) inputNombre.value = perfil.nombre_preferido || "";
+  if (!src) return;
+  foto.onload = () => { foto.classList.remove("oculto"); inicial.classList.add("oculto"); };
+  foto.onerror = () => { foto.classList.add("oculto"); inicial.classList.remove("oculto"); };
+  if (foto.getAttribute("src") !== src) foto.src = src;
+  else if (foto.complete && foto.naturalWidth) foto.onload();
+  foto.alt = nombreVisible || "Foto de perfil";
 }
-window.renderizarUsuarioAjustes = renderizarUsuarioAjustes;
+
+/**
+ * Ventana "Cambiar datos": foto (cambiar / volver a la de Google), nombre editable, correo (solo
+ * lectura) y el botón de cambiar correo. El cambio de correo real (migrar la cuenta) necesita
+ * verificar el correo nuevo en el servidor y todavía no está disponible: el botón lo avisa.
+ */
+function abrirModalCambiarDatos() {
+  if (!estado.datos) return;
+  document.getElementById("modal-cambiar-datos")?.remove();
+  const perfil = estado.datos.perfil || (estado.datos.perfil = {});
+  const overlay = document.createElement("div");
+  overlay.id = "modal-cambiar-datos";
+  overlay.className = "modal-overlay";
+  overlay.style.zIndex = "900";
+  const caja = document.createElement("div");
+  caja.className = "glass-card modal-card stack";
+  caja.style.cssText = "width:min(100%,440px); gap:14px;";
+  caja.setAttribute("role", "dialog");
+  caja.setAttribute("aria-modal", "true");
+  caja.innerHTML = `
+    <h2 style="margin:0;">Datos de tu cuenta</h2>
+    <div class="ajuste-usuario-foto-col" style="align-self:center;">
+      <button type="button" class="ajuste-usuario-avatar" id="cd-foto-btn" title="Cambiar foto" aria-label="Cambiar foto">
+        <img id="cd-foto" class="oculto" alt="" referrerpolicy="no-referrer">
+        <span id="cd-inicial" class="ajuste-usuario-inicial" aria-hidden="true"></span>
+        <span class="ajuste-usuario-camara" aria-hidden="true"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-2.5h6L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.5"/></svg></span>
+      </button>
+      <button type="button" class="btn-discreto ajuste-usuario-quitar oculto" id="cd-foto-quitar">Usar la de Google</button>
+    </div>
+    <label class="stack" style="gap:6px;">
+      <span class="form-label">Nombre para saludarte</span>
+      <input id="cd-nombre" class="form-input" type="text" maxlength="60" autocomplete="given-name" placeholder="Tu nombre">
+    </label>
+    <div class="stack" style="gap:6px;">
+      <span class="form-label">Correo</span>
+      <input id="cd-correo" class="form-input" type="email" readonly tabindex="-1" aria-readonly="true">
+      <button type="button" class="btn btn-secondary" id="cd-cambiar-correo">Cambiar correo</button>
+    </div>
+    <div class="row" style="gap:10px;">
+      <button type="button" class="btn btn-secondary" id="cd-cancelar" style="flex:1;">Cancelar</button>
+      <button type="button" class="btn btn-primary" id="cd-guardar" style="flex:1;">Guardar</button>
+    </div>`;
+  overlay.appendChild(caja);
+  document.body.appendChild(overlay);
+
+  const inputNombre = caja.querySelector("#cd-nombre");
+  inputNombre.value = perfil.nombre_preferido || perfil.nombre || "";
+  caja.querySelector("#cd-correo").value = perfil.correo || "";
+  const btnQuitar = caja.querySelector("#cd-foto-quitar");
+  const pintar = () => {
+    const p = estado.datos?.perfil || {};
+    pintarAvatarUsuario(caja.querySelector("#cd-foto"), caja.querySelector("#cd-inicial"), p, inputNombre.value.trim() || p.nombre || "");
+    btnQuitar.classList.toggle("oculto", !p.foto_personalizada);
+  };
+  pintar();
+
+  const cerrar = () => { overlay.remove(); document.removeEventListener("keydown", alTecla); };
+  const alTecla = (ev) => { if (ev.key === "Escape") cerrar(); };
+  document.addEventListener("keydown", alTecla);
+  overlay.addEventListener("click", (ev) => { if (ev.target === overlay) cerrar(); });
+  caja.querySelector("#cd-cancelar").addEventListener("click", cerrar);
+
+  caja.querySelector("#cd-foto-btn").addEventListener("click", () => {
+    elegirYGuardarFotoPerfil((ok, error) => {
+      if (ok) { mostrarToast(traducirTextoInterfaz("Foto actualizada")); pintar(); }
+      else mostrarToast(traducirTextoInterfaz(error?.message || "No se pudo cambiar la foto"));
+    });
+  });
+  btnQuitar.addEventListener("click", () => {
+    guardarFotoPersonalizada(null);
+    mostrarToast(traducirTextoInterfaz("Volvió la foto de tu cuenta de Google"));
+    pintar();
+  });
+  caja.querySelector("#cd-cambiar-correo").addEventListener("click", () => {
+    mostrarToast(traducirTextoInterfaz("Cambiar el correo requiere verificar el correo nuevo. Esta función llegará pronto."));
+  });
+  caja.querySelector("#cd-guardar").addEventListener("click", () => {
+    const nombre = inputNombre.value.trim().slice(0, 60);
+    if (!nombre) { inputNombre.focus(); return; }
+    if (nombre !== (estado.datos.perfil.nombre_preferido || "")) {
+      estado.datos.perfil.nombre_preferido = nombre;
+      sellarTimestamp(estado.datos.perfil);
+      marcarCambioPendiente();
+      window.renderizarPerfil?.();
+      renderizarUsuarioAjustes();
+      mostrarToast(traducirTextoInterfaz("Datos guardados"));
+    }
+    cerrar();
+  });
+  inputNombre.addEventListener("keydown", (ev) => { if (ev.key === "Enter") caja.querySelector("#cd-guardar").click(); });
+}
 
 function inicializarUsuarioAjustes() {
   const tarjeta = document.getElementById("ajuste-usuario");
   if (!tarjeta) return;
   if (!tarjeta.dataset.listo) {
     tarjeta.dataset.listo = "1";
-    document.getElementById("btn-ajuste-foto")?.addEventListener("click", () => {
-      elegirYGuardarFotoPerfil((ok, error) => {
-        if (ok) mostrarToast(traducirTextoInterfaz("Foto actualizada"));
-        else mostrarToast(traducirTextoInterfaz(error?.message || "No se pudo cambiar la foto"));
-      });
-    });
-    document.getElementById("btn-ajuste-foto-quitar")?.addEventListener("click", () => {
-      guardarFotoPersonalizada(null);
-      mostrarToast(traducirTextoInterfaz("Volvió la foto de tu cuenta de Google"));
-    });
+    document.getElementById("btn-ajuste-cambiar-datos")?.addEventListener("click", abrirModalCambiarDatos);
   }
   renderizarUsuarioAjustes();
 }
@@ -1483,19 +1574,6 @@ function renderizarAjustes() {
   aplicarLogoApp();
   inicializarAjusteIntroApertura();
   inicializarUsuarioAjustes();
-  const inputNombre = document.getElementById("input-nombre-preferido");
-  if (inputNombre) {
-    if (document.activeElement !== inputNombre) inputNombre.value = estado.datos.perfil?.nombre_preferido || "";
-    inputNombre.onchange = () => {
-      const nombre = inputNombre.value.trim().slice(0, 60);
-      if (!nombre) { inputNombre.value = estado.datos.perfil?.nombre_preferido || ""; return; }
-      estado.datos.perfil.nombre_preferido = nombre;
-      sellarTimestamp(estado.datos.perfil);
-      marcarCambioPendiente();
-      window.renderizarPerfil?.();
-    };
-  }
-
   // Paletas — cada cuadro muestra su propio color real (punto 3)
   const grid = document.getElementById("grid-paletas");
   grid.innerHTML = "";
