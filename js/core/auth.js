@@ -888,9 +888,13 @@ async function refrescarAccessTokenViaWorker(refreshToken) {
       });
       const datos = await respuesta.json().catch(() => ({}));
       if (!respuesta.ok) {
-        const error = new Error(datos.error || `El Worker respondió ${respuesta.status} al refrescar.`);
+        const codigoError = String(datos.error || "");
+        const descripcionError = String(datos.error_description || "");
+        const error = new Error(descripcionError || codigoError || `El Worker respondió ${respuesta.status} al refrescar.`);
         error.status = respuesta.status;
-        error.invalidGrant = Boolean(datos.error && /invalid_grant/i.test(String(datos.error)));
+        error.code = codigoError;
+        error.subtype = datos.error_subtype || null;
+        error.invalidGrant = codigoError.toLowerCase() === "invalid_grant";
         if (error.invalidGrant || (respuesta.status < 500 && respuesta.status !== 429)) throw error;
         ultimoError=error;
       } else {

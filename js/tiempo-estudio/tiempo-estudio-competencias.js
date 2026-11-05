@@ -7,10 +7,11 @@
    cierre semanal) — la versión anterior de este archivo había ADIVINADO
    un contrato distinto (POST /competencias/crear con Bearer token) antes
    de que el Worker existiera. Diferencias clave con lo adivinado:
-     - Sin Authorization: Bearer — el Worker no valida el access_token de
-       Google en absoluto, solo el Origin (CORS gate). La "identidad" que
-       usa para todo es `identificador_usuario` (el correo de Google,
-       `estado.datos.perfil.correo`) viajando en el BODY de cada request.
+     - Las rutas privadas incluyen Authorization: Bearer con el access_token
+       de Google; `fetchConTimeout()` centraliza esa cabecera y renueva el
+       token una vez si el Worker responde 401. La identidad de participante
+       sigue siendo `identificador_usuario` (correo de Google), validada por
+       el Worker contra la cuenta autenticada.
      - Rutas y campos en snake_case tal cual la tabla D1: `token_creador`,
        `participante_id`, `horas_semana_actual`, `offset_minutos_utc`.
      - POST /competencias/:id/unirse NO devuelve `nombre` — hay que pedirlo
@@ -56,11 +57,11 @@
    de cada sesión).
    ========================================================================= */
 
-import { estado } from "../core/storage/storage.js";
+import { borrarTokenCache, estado } from "../core/storage/storage.js";
 import { MODO_DEMO } from "../core/demo-mode.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { sellarTimestamp } from "../core/schema.js";
-import { marcarCambioPendiente, intentarSincronizar } from "../core/storage/storage-sync.js";
+import { asegurarTokenValido, marcarCambioPendiente, intentarSincronizar } from "../core/storage/storage-sync.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { adjuntarArchivo } from "../core/storage/storage-adjuntos.js";
@@ -298,13 +299,33 @@ const CLAVE_TOKEN_CREADOR_PREFIJO = "tokenCreadorCompetencia_"; // + id, ver not
  * privada allá) — se duplica acá por el mismo motivo que URL_WORKER_OAUTH
  * se exportó: no vale la pena tocar el export list de auth.js por una
  * función interna de 10 líneas. */
-async function fetchConTimeout(url, opciones = {}) {
+async function fetchConTimeout(url, opciones = {}, reintentar401 = true) {
   const controlador = new AbortController();
   const idTimeout = setTimeout(() => controlador.abort(), TIMEOUT_MS);
   try {
     const headers = new Headers(opciones.headers || {});
     if (estado?.token && !headers.has("Authorization")) headers.set("Authorization", `Bearer ${estado.token}`);
-    return await fetch(url, { ...opciones, headers, signal: controlador.signal });
+    const tokenUsado = (headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+    const respuesta = await fetch(url, { ...opciones, headers, signal: controlador.signal });
+    if (respuesta.status !== 401 || !reintentar401) return respuesta;
+
+    // En móviles Chrome puede suspender la app y dejar vencer el access
+    // token mientras está en segundo plano. El marcador seguía cargando,
+    // pero la consulta protegida de mensajes recibía 401 y solo se veía el
+    // mensaje propio (que se pinta desde localStorage). Descarta únicamente
+    // ese access token, renueva con el refresh token guardado y repite una
+    // vez la solicitud; el refresh token y la sesión no se borran por esto.
+    if (!tokenUsado || estado?.token === tokenUsado) {
+      borrarTokenCache();
+      estado.token = null;
+    }
+    const renovado = await asegurarTokenValido();
+    const tokenNuevo = estado?.token || "";
+    if (!renovado || !tokenNuevo || tokenNuevo === tokenUsado) return respuesta;
+
+    const headersReintento = new Headers(opciones.headers || {});
+    headersReintento.set("Authorization", `Bearer ${tokenNuevo}`);
+    return await fetchConTimeout(url, { ...opciones, headers: headersReintento }, false);
   } catch (e) {
     if (e.name === "AbortError") {
       throw new Error(`El Worker no respondió en ${TIMEOUT_MS / 1000}s (timeout).`);
