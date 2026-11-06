@@ -201,7 +201,7 @@ function construirEncabezadoPlan(planPrincipal) {
   // construirBarraAcciones) — Añadir materia ahora solo aparece ahí y solo
   // mientras el modo edición está activo.
   const botones = document.createElement("div");
-  botones.className = "row";
+  botones.className = "row encabezado-plan-botones";
   botones.style.flexWrap = "wrap";
 
   const btnPlanes = document.createElement("button");
