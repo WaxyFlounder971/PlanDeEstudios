@@ -536,7 +536,8 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-bub-1{--cp-bub-def:#ffc94d;font-size:12.5px;padding:7px 11px;margin-bottom:calc(24px*var(--cp-u))}
   .cp-bub-2{--cp-bub-def:#c9d1dd}
   .cp-bub-3{--cp-bub-def:#d9985f}
-  .cp-comp.cp-anim .cp-bub{animation:cp-fadeUp .45s ease var(--cp-bd2,0s) both}
+  /* El globo entra después del último rebote del podio: evita combinar dos transforms en movimiento. */
+  .cp-comp.cp-anim .cp-bub{animation:cp-fadeUp .45s ease calc(var(--cp-k2,0s) + .42s) both}
   /* las chispas del 1.º son decoración: nunca por encima de un globo */
   .cp-pc .cp-sp{z-index:0;pointer-events:none}
 

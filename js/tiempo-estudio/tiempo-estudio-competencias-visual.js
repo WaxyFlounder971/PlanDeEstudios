@@ -452,7 +452,7 @@ function podioHTML(ordenados, modo, T, yoId, conMensajes) {
     // Globo de texto (solo en la tarjeta, no en el historial): va DENTRO de la columna, en el flujo,
     // encima de la corona/avatar — así nunca tapa ni es tapado por la columna vecina ni por el título.
     const textoMsg = card && conMensajes ? mensajeVisibleDe(p) : "";
-    const globo = textoMsg ? `<div class="cp-bub cp-bub-${i + 1}" style="--cp-bd2:${seg(dn + 0.1)}"><span>${esc(textoMsg)}</span></div>` : "";
+    const globo = textoMsg ? `<div class="cp-bub cp-bub-${i + 1}"><span>${esc(textoMsg)}</span></div>` : "";
     return `<div class="cp-pc ${cls}${yo ? " cp-me-halo" : ""}${tonos ? " cp-tinted" : ""}" style="${vars}">
       ${brillo}
       ${globo}

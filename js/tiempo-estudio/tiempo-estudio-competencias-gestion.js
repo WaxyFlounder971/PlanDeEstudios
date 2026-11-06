@@ -33,6 +33,7 @@ import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import {
   construirCajaModal,
   fetchConTimeout,
+  fetchConSesion,
   formatearHoras,
   leerTokenCreador,
   salirDeCompetencia,
@@ -205,7 +206,7 @@ function crearIdClienteMensaje() {
 }
 
 /** Envía el mensaje al Worker; el registro local permanece como cola de reintento offline. */
-async function enviarMensajePendiente(competencia) {
+async function enviarMensajePendiente(competencia, { avisar = false } = {}) {
   let registro = leerMiMensaje(competencia.id);
   if (!registro || registro.semana !== semanaISOActual()) return;
   // Registros antiguos se marcaban como enviados aunque solo se guardaban en local.
@@ -216,7 +217,7 @@ async function enviarMensajePendiente(competencia) {
   }
   if (registro.enviado) return;
   try {
-    const respuesta = await fetchConTimeout(
+    const respuesta = await fetchConSesion(
       `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competencia.id)}/mensajes`,
       {
         method: "POST",
@@ -229,12 +230,18 @@ async function enviarMensajePendiente(competencia) {
         }),
       }
     );
-    if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status}`);
+    if (!respuesta.ok) {
+      const detalle = await respuesta.clone().json().catch(() => ({}));
+      throw new Error(`El Worker respondió ${respuesta.status}${detalle.error ? `: ${detalle.error}` : ""}`);
+    }
     const actual = leerMiMensaje(competencia.id);
     // Solo se marca como enviado si mientras tanto no lo cambiaron otra vez.
     if (actual && actual.texto === registro.texto && actual.semana === registro.semana) guardarMiMensaje(competencia.id, { ...actual, enviado: true });
   } catch (e) {
     console.warn("[competencias] No se pudo enviar el mensaje semanal — se reintenta la próxima vez:", e);
+    if (avisar && navigator.onLine !== false) {
+      mostrarToast(traducirTextoInterfaz("Tu mensaje se guardó, pero no se pudo enviar. Se reintentará solo."));
+    }
   }
 }
 
@@ -269,7 +276,7 @@ function abrirModalMensajeSemanal(competencia, textoInicial, alCambiar) {
     cerrar();
     mostrarToast(traducirTextoInterfaz(aviso));
     if (typeof alCambiar === "function") alCambiar();
-    enviarMensajePendiente(competencia);
+    enviarMensajePendiente(competencia, { avisar: true });
   };
   caja.querySelector("#comp-mensaje-borrar").addEventListener("click", () => aplicar("", "Mensaje borrado"));
   caja.querySelector("#comp-mensaje-guardar").addEventListener("click", () => {

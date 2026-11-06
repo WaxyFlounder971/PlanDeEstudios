@@ -1,6 +1,7 @@
 import { crearDatosUsuarioNuevo, migrarDatosAntiguos, PALETAS_DISPONIBLES } from "./schema.js";
 import { registrarAnaliticaUso } from "./analitica.js";
 import { aplicarPaleta, guardarModoDisenoLocal } from "../ui/tema.js";
+import { agregarDatosRelativosDemo } from "./demo-relativo.js";
 
 /**
  * Modo de demostración: el query param se resuelve antes del arranque para
@@ -137,6 +138,7 @@ async function cargarDatosDemo() {
   // La demo usa los mismos defaults y migraciones que las cuentas reales:
   // el dataset puede conservar ejemplos legados, pero nunca debe bloquear
   // una sección por una forma antigua de los datos.
+  agregarDatosRelativosDemo(datos); // fix10: agenda, sesiones, movimientos y mensajes alrededor de hoy
   return migrarDatosAntiguos(datos);
 }
 

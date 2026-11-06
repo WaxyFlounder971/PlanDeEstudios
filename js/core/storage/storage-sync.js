@@ -384,8 +384,21 @@ function recuperarConexionEscalonada() {
       return false; // siguen los reintentos automáticos (online/9s/45s)
     }
 
-    // Paso 4: última opción, renovar el login de Google (requiere un toque)
-    console.warn("No se pudo reconectar en silencio con internet confirmado. Hace falta renovar el login de Google.");
+    // Solo se debe pedir autorización interactiva si no queda refresh_token.
+    // Un fallo del Worker/Google distinto de invalid_grant (que es el único
+    // caso que borrarRefreshTokenGoogle elimina arriba) no demuestra que la
+    // sesión haya caducado: pedir login en ese caso era especialmente
+    // molesto en teléfonos que suspenden la app o cambian de red al abrirla.
+    if (haySesionGuardada()) {
+      console.warn("La renovación silenciosa falló, pero la sesión guardada sigue presente; se reintentará sin pedir otro login.");
+      mostrarIndicadorConexion("reconectando");
+      prepararAvisoRenovarLogin(false);
+      return false;
+    }
+
+    // No hay token guardado o Google confirmó invalid_grant: el toque del
+    // usuario sí es necesario para obtener una autorización nueva.
+    console.warn("No hay una sesión Google renovable guardada; hace falta autorizar de nuevo.");
     mostrarIndicadorConexion("desconectado");
     prepararAvisoRenovarLogin(true);
     mostrarToast("Tu sesión de Google necesita renovarse. Toca «Sin conexión» o «Reconectar».");
