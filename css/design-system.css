@@ -7155,3 +7155,42 @@ body[data-enlaces-lateral="riel"] .enlace-rapido-icono img { width: 24px; height
 }
 .horario-salir-fs:hover { background: color-mix(in srgb, var(--text-primary) 22%, transparent); }
 .horario-salir-fs svg { width: 22px; height: 22px; }
+
+/* =========================================================================
+   fix10 — Finanzas: capas, toasts, favoritos, gesto de deslizar y guía
+   ========================================================================= */
+
+/* 1) Toasts SIEMPRE por encima de cualquier ventana (modales 100–325, onboarding 200000, paleta 300000, guía 200020). */
+.toast-app, .toast-app-accion { z-index: 400000; }
+
+@media (max-width: 899.98px) {
+  /* 2) Sidebar (cajón) y Enlaces rápidos por encima de la barra inferior (70) y de la hoja «Más» (74/75) de Finanzas. */
+  body.finanzas-subnav-activa .app-sidebar,
+  body.finanzas-subnav-activa .drawer-enlaces-movil { z-index: 90; }
+  body.finanzas-subnav-activa .sidebar-overlay { z-index: 89; }
+  body.finanzas-subnav-activa .mobile-topbar { z-index: 60; }
+  /* 3) Los toasts no quedan tapados por la barra inferior de Finanzas. */
+  body.finanzas-subnav-activa .toast-app,
+  body.finanzas-subnav-activa .toast-app-accion { bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
+}
+
+/* 4) Hoja «Más»: cabecera con el botón ⋮ de ajustes. */
+.finanzas-hoja-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.finanzas-hoja-ajustes {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid var(--border-glass); background: transparent; color: var(--text-primary); cursor: pointer; font-size: 1rem;
+}
+.finanzas-hoja-ajustes .finanzas-nav-ico { width: 22px; height: 22px; }
+.finanzas-fav-opcion { cursor: pointer; }
+
+/* 5) Gesto de deslizar: entrada suave de la sección nueva. */
+@keyframes finanzas-desliza-sig { from { opacity: .35; transform: translateX(36px); } to { opacity: 1; transform: none; } }
+@keyframes finanzas-desliza-ant { from { opacity: .35; transform: translateX(-36px); } to { opacity: 1; transform: none; } }
+#seccion-finanzas.finanzas-desliza-sig { animation: finanzas-desliza-sig .24s ease both; }
+#seccion-finanzas.finanzas-desliza-ant { animation: finanzas-desliza-ant .24s ease both; }
+@media (prefers-reduced-motion: reduce) {
+  #seccion-finanzas.finanzas-desliza-sig, #seccion-finanzas.finanzas-desliza-ant { animation: none; }
+}
+
+/* 6) Guía «Cómo funciona Finanzas». */
+.finanzas-guia-lista { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: .92rem; }
