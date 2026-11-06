@@ -2635,6 +2635,9 @@ img, svg { max-width: 100%; }
    una flecha (22px) + el gap (8px) entre flecha y título. */
 .encabezado-plan-linea2 { margin: 0; padding-left: 30px; }
 .encabezado-plan-linea2.sin-flechas { padding-left: 0; }
+/* Los 2 botones del encabezado del plan ocupan todo el ancho disponible (lado a lado si caben; apilados, cada uno a todo el ancho). */
+.encabezado-plan-botones { align-items: stretch; }
+.encabezado-plan-botones > .btn { flex: 1 1 auto; justify-content: center; text-align: center; }
 
 /* ---- Bloques colapsables independientes ---- */
 
@@ -6971,6 +6974,10 @@ html[data-iconos-nav="paleta"] .ajuste-icono-vista { color: var(--accent-1); }
   }
   .finanzas-bottombar .finanzas-bar-item .finanzas-nav-texto { max-width: 100%; }
   .finanzas-bottombar .finanzas-bar-item.active { box-shadow: none; }
+  /* Pantallas angostas (no caben los botones repartidos a lados iguales): «Más» se ancla a la izquierda para que la barra no quede dispareja. */
+  @media (max-width: 380px) {
+    .finanzas-bottombar .finanzas-bar-mas { order: -1; }
+  }
   .finanzas-bar-fab {
     flex: none; align-self: flex-start; width: 56px; height: 56px; margin: -22px 6px 0;
     display: grid; place-items: center; border: 0; border-radius: 50%; cursor: pointer;
