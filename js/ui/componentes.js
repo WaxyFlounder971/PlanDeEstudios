@@ -163,6 +163,7 @@ function inicializarLayoutResponsivo() {
   const btnColapsar = document.getElementById("btn-colapsar-sidebar");
 
   btnHamburguesa.addEventListener("click", () => {
+    marcarSidebarAnimando();
     sidebar.classList.add("abierta");
     overlay.classList.add("abierta");
     // C.6 (v9): con el drawer abierto en móvil, se bloquea el scroll de la
@@ -237,7 +238,17 @@ function inicializarLayoutResponsivo() {
   });
 }
 
+// will-change solo durante la transición del drawer (clase .sidebar-animando, ver design-system.css).
+function marcarSidebarAnimando() {
+  const sb = document.getElementById("app-sidebar");
+  if (!sb) return;
+  sb.classList.add("sidebar-animando");
+  clearTimeout(marcarSidebarAnimando._t);
+  marcarSidebarAnimando._t = setTimeout(() => sb.classList.remove("sidebar-animando"), 400);
+}
+
 function cerrarSidebarMovil() {
+  marcarSidebarAnimando();
   document.getElementById("app-sidebar").classList.remove("abierta");
   document.getElementById("sidebar-overlay").classList.remove("abierta");
   document.body.classList.remove("scroll-bloqueado");

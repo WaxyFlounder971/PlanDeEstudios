@@ -559,11 +559,13 @@ const PATRONES_PREGUNTA_CAPACIDADES = [
   /^que haces$/,
   /^cuales son tus (funciones|capacidades)$/,
   /^que funciones tenes$/,
+  /^what can you do( wapper)?$/,
+  /^what can you do for me$/,
   /^cosa puoi fare( wapper)?$/,
   /^cosa sai fare$/,
   /^in cosa mi puoi aiutare$/,
   /^quali sono le tue (funzioni|capacita)$/,
-  /^que peux tu faire( wapper)?$/,
+  /^que peux[- ]tu faire( wapper)?$/,
   /^que sais tu faire$/,
   /^en quoi peux tu m aider$/,
   /^quelles sont tes (fonctions|capacites)$/,
@@ -4038,6 +4040,16 @@ function construirEsqueletoAsistente(contenedor) {
     if (habiaAlgo) mostrarToast("Conversación reiniciada");
   };
   derechaEnc.appendChild(btnNueva);
+  // Botón de información (izquierda, simétrico a "Nueva conversación"): envía "¿Qué puedes hacer?"
+  // por el mismo camino que un mensaje escrito (enviarTextoAWapper → manejarEnvioMensaje).
+  const btnInfo = document.createElement("button");
+  btnInfo.type = "button";
+  btnInfo.className = "app-encabezado__icono app-encabezado__icono--acento";
+  btnInfo.title = traducirTextoInterfaz("¿Qué puedes hacer?");
+  btnInfo.setAttribute("aria-label", traducirTextoInterfaz("¿Qué puedes hacer?"));
+  btnInfo.innerHTML = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></svg>';
+  btnInfo.onclick = () => { enviarTextoAWapper(traducirTextoInterfaz("¿Qué puedes hacer?")); };
+  izquierdaEnc.appendChild(btnInfo);
   filaEncabezado.append(izquierdaEnc, centroEnc, derechaEnc);
   encabezado.appendChild(filaEncabezado);
 
@@ -4239,15 +4251,9 @@ function mostrarSaludoInicial() {
   const idioma = obtenerIdiomaActual();
   const etiquetaEjemplo = ({ en: "Example", it: "Esempio", fr: "Exemple" })[idioma] || "Ejemplo";
   agregarBurbujaAlDom(crearBurbuja("modelo", `${etiquetaEjemplo}: ${elegirEjemploBienvenidaAlAzar()}`));
-  // Punto 8 del brief (2026-08-31): agregado, no reemplazo, del ejemplo de
-  // arriba — invita a descubrir el resto de capacidades (punto 7) sin tener
-  // que adivinar. En tuteo, como el resto de la interfaz de Wapper.
-  const invitacion = ({
-    en: "Not sure where to start? Ask me what I can do.",
-    it: "Non sai da dove iniziare? Chiedimi cosa posso fare.",
-    fr: "Vous ne savez pas par où commencer ? Demandez-moi ce que je peux faire.",
-  })[idioma] || "¿No sabes por dónde empezar? Pregúntame qué puedo hacer.";
-  agregarBurbujaAlDom(crearBurbuja("modelo", invitacion));
+  // OBSOLETO (2026-11-06): la burbuja "¿No sabes por dónde empezar? Pregúntame qué
+  // puedo hacer." (ES/EN/IT/FR) se retiró; la reemplaza el botón de información del
+  // encabezado (btnInfo en construirEsqueletoAsistente).
 }
 
 /**

@@ -1070,7 +1070,9 @@ function construirEncabezadoDetalle(cont, item) {
   btnConfig.className = "te-btn-icono te-btn-icono-fantasma";
   btnConfig.title = "Configurar";
   btnConfig.setAttribute("aria-label", "Configurar");
-  btnConfig.textContent = "⚙️";
+  btnConfig.textContent = "⋮";
+  btnConfig.style.fontSize = "1.7rem";
+  btnConfig.style.lineHeight = "1";
   btnConfig.addEventListener("click", () => {
     abrirModalConfigTiempoEstudio(mm, nombreMateria, () => alGuardarConfiguracionMateria(mm), confirmarEliminarMateriaPersonalizada);
   });

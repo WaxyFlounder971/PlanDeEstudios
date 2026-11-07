@@ -170,15 +170,45 @@ function montarIndicadoresTimer({ elementos, resolverInfo, alTocar, alPip, alTog
     for (const { name, value } of [...origen.attributes]) if (destino.getAttribute(name) !== value) destino.setAttribute(name, value);
     for (const { name } of [...destino.attributes]) if (!origen.hasAttribute(name)) destino.removeAttribute(name);
   };
+  // PATCH 6C (2026-11-06): ventana flotante de Android (PiP de video). El tamaño
+  // lo decide el sistema, pero Android la estiraba (el canvas era 520x180, ~2.9:1,
+  // fuera del rango que acepta) y el texto se veía deformado y enorme. Ahora el
+  // canvas es 440x200 (2.2:1, dentro de 1:2.39 a 2.39:1, dibujado al doble de
+  // resolución) con la estructura de la píldora de diseño: punto de color de la
+  // materia, nombre pequeño arriba, tiempo grande debajo, estado a la derecha.
+  // El canvas no entiende var(): se leen los tokens reales de la app (fondo del
+  // header, textos, fuente) con respaldo, así sigue el tema claro/oscuro/paleta.
+  const leerToken = (nombre, respaldo) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || respaldo;
   const pintarCanvasPiP = () => {
     if (!canvasPiP || !infoActual) return;
-    const ctx = canvasPiP.getContext("2d"), w = canvasPiP.width, h = canvasPiP.height;
-    ctx.fillStyle = "#11131b"; ctx.fillRect(0, 0, w, h);
-    ctx.fillStyle = infoActual.color || "#8b72e8"; ctx.beginPath(); ctx.arc(26, h / 2, 8, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = "#fff"; ctx.textBaseline = "middle"; ctx.font = "600 22px system-ui";
-    ctx.fillText(String(infoActual.nombre || "Tiempo de estudio").slice(0, 32), 48, h / 2 - 15, w - 62);
-    ctx.font = "700 36px system-ui"; ctx.fillText(String(infoActual.tiempo || "00:00"), 48, h / 2 + 25);
-    if (infoActual.estado) { ctx.font = "15px system-ui"; ctx.fillStyle = "#bbb"; ctx.fillText(infoActual.estado, w - 100, h / 2 + 23, 90); }
+    const ctx = canvasPiP.getContext("2d"), w = 440, h = 200;
+    const fuente = getComputedStyle(document.body).fontFamily || "system-ui, sans-serif";
+    ctx.setTransform(2, 0, 0, 2, 0, 0);
+    ctx.fillStyle = leerToken("--bg-header-solido", "#101114"); ctx.fillRect(0, 0, w, h);
+    ctx.textBaseline = "middle"; ctx.textAlign = "left";
+    // Punto de color de la materia (atenuado en pausa, igual que .timer-luz).
+    ctx.globalAlpha = infoActual.pausado ? 0.5 : 1;
+    ctx.fillStyle = infoActual.color || leerToken("--accent-1", "#8b72e8");
+    ctx.beginPath(); ctx.arc(40, 56, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = leerToken("--text-secondary", "#c9c9d4"); ctx.font = `600 24px ${fuente}`;
+    ctx.fillText(String(infoActual.nombre || "Tiempo de estudio"), 62, 56, w - 62 - 28);
+    // Tiempo grande con dígitos de ancho fijo (el canvas no tiene tabular-nums):
+    // así no "baila" cada segundo. Si no cabe, se comprime en horizontal.
+    ctx.fillStyle = leerToken("--text-primary", "#f5f4fb"); ctx.font = `700 64px ${fuente}`;
+    const texto = String(infoActual.tiempo || "00:00");
+    const ancho0 = ctx.measureText("0").width;
+    const anchoDe = (c) => (/\d/.test(c) ? ancho0 : ctx.measureText(c).width);
+    const total = [...texto].reduce((a, c) => a + anchoDe(c), 0);
+    ctx.save();
+    ctx.translate(40, 128); ctx.scale(Math.min(1, (infoActual.estado ? 250 : w - 56) / total), 1);
+    let x = 0;
+    for (const c of texto) { ctx.fillText(c, x + (anchoDe(c) - ctx.measureText(c).width) / 2, 0); x += anchoDe(c); }
+    ctx.restore();
+    if (infoActual.estado) {
+      ctx.fillStyle = leerToken("--text-muted", "#9a9aa8"); ctx.font = `600 22px ${fuente}`; ctx.textAlign = "right";
+      ctx.fillText(infoActual.estado, w - 28, 134, 130);
+    }
   };
   // Respaldo: sin Document PiP ni PiP de video el timer sigue a la vista en la
   // propia app (indicador de la barra o tarjeta flotante); se avisa en vez de no hacer nada.
@@ -198,13 +228,25 @@ function montarIndicadoresTimer({ elementos, resolverInfo, alTocar, alPip, alTog
     // controles permanecen en la app para no exponer controles de video falsos.
     if (document.pictureInPictureEnabled && HTMLCanvasElement.prototype.captureStream && HTMLVideoElement.prototype.requestPictureInPicture) {
       const video = document.createElement("video"), canvas = document.createElement("canvas");
-      canvas.width = 520; canvas.height = 180; video.muted = true; video.playsInline = true;
+      canvas.width = 880; canvas.height = 400; video.muted = true; video.playsInline = true;
       video.style.cssText = "position:fixed;width:1px;height:1px;opacity:.01;pointer-events:none"; document.body.append(video);
       canvasPiP = canvas; videoPiP = video;
       try {
         pintarCanvasPiP(); video.srcObject = canvas.captureStream(2); await video.play(); await video.requestPictureInPicture();
         intervaloPiP = setInterval(pintarCanvasPiP, 1000);
-        video.addEventListener("leavepictureinpicture", () => { clearInterval(intervaloPiP); intervaloPiP = null; video.srcObject?.getTracks().forEach((t) => t.stop()); video.remove(); videoPiP = null; canvasPiP = null; }, { once: true });
+        // Pausa/reanudar/detener desde los controles del propio PiP: reusan las mismas
+        // callbacks (alTogglePausa/alDetener) del timer principal, no hay otro temporizador.
+        if ("mediaSession" in navigator) {
+          try {
+            const ms = navigator.mediaSession;
+            ms.metadata = new MediaMetadata({ title: infoActual.nombre || "Tiempo de estudio" });
+            ms.playbackState = infoActual.pausado ? "paused" : "playing";
+            ms.setActionHandler("pause", () => { if (!infoActual?.pausado) alTogglePausa?.(); });
+            ms.setActionHandler("play", () => { if (infoActual?.pausado) alTogglePausa?.(); });
+            ms.setActionHandler("stop", () => alDetener?.());
+          } catch (_) { /* controles opcionales: sin ellos el PiP solo muestra el contador */ }
+        }
+        video.addEventListener("leavepictureinpicture", () => { clearInterval(intervaloPiP); intervaloPiP = null; if ("mediaSession" in navigator) { try { for (const a of ["pause", "play", "stop"]) navigator.mediaSession.setActionHandler(a, null); navigator.mediaSession.metadata = null; } catch (_) {} } video.srcObject?.getTracks().forEach((t) => t.stop()); video.remove(); videoPiP = null; canvasPiP = null; }, { once: true });
       } catch (_) { video.srcObject?.getTracks().forEach((t) => t.stop()); video.remove(); videoPiP = null; canvasPiP = null; avisarSinPiP(); }
       return;
     }
@@ -228,6 +270,7 @@ function montarIndicadoresTimer({ elementos, resolverInfo, alTocar, alPip, alTog
     indicadores.forEach((indicador) => pintarUno(indicador, info));
     actualizarVentanaPiP();
     pintarCanvasPiP();
+    if (videoPiP && "mediaSession" in navigator) navigator.mediaSession.playbackState = info.pausado ? "paused" : "playing";
   };
 }
 
