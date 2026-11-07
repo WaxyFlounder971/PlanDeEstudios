@@ -1887,6 +1887,8 @@ function resolverInfoIndicadorTimer(activo) {
     tiempo: formatearDuracion(tf.transcurridos) + (enExtra ? ` +${formatearDuracion(tf.extra)}` : ""),
     pausado: Boolean(activo.pausado),
     estado: activo.pausado ? "En pausa" : enDescanso ? "Descanso" : enExtra ? "Extra" : "",
+    // PATCH 15: lo usa el botón redondo de la tarjeta plegada para pasar a rojo con tiempo extra (el `estado` es texto traducible).
+    extra: enExtra,
   };
 }
 

@@ -29,7 +29,7 @@ Los cálculos se derivan del modelo unificado; las pantallas no deben sumar por 
 
 El shell está en `js/finanzas/finanzas.js`. Las pestañas base incluyen Inicio, Semestres, Plan, Movimientos, Metas, Presupuesto y Beneficios. Cuentas y Deudas se agregan cuando sus módulos están activos. La lista visible también depende de la selección de módulos de Finanzas.
 
-En la barra inferior móvil, `css/design-system.css` coloca «Más» antes de las pestañas cuando el viewport mide 380 px o menos; a anchos mayores conserva el orden normal.
+En la barra inferior móvil se muestran exactamente tres favoritos: dos antes del «＋» central, uno después y «Más» al final. Los valores predeterminados son Inicio, Gastos universitarios y Plan. Si hay favoritos antiguos de más, se conservan los tres primeros y se muestra un aviso; al escoger un cuarto, sale el favorito más antiguo. El espacio vacío se completa con la prioridad predeterminada. La barra mantiene el mismo orden a anchos angostos: el «＋» ya no se mueve al principio.
 
 ### Incorporación y guía de Finanzas
 
@@ -98,6 +98,7 @@ Cada fila se genera a partir de los bloques `export { ... }` del código fuente 
 
 | Archivo | Responsabilidad | Exports |
 |---|---|---|
+| `js/finanzas/finanzas-navegacion.js` | Subbarra de escritorio, barra inferior móvil, favoritos, hoja «Más», gesto lateral y cambios de navegación desde el resto de la app. | `INFO_SECCIONES_FINANZAS`, `configurarNavegacionFinanzas`, `ocultarNavegacionFinanzas`, `sincronizarNavegacionFinanzasPorSeccion` |
 | `js/finanzas/finanzas-categorias-ui.js` | Gestor y selector de categorías, clasificación del historial y contadores. | `abrirCategorizarHistorial`, `abrirGestorCategorias`, `ayudasUi`, `construirSelectorCategoria`, `contarSinCategoria` |
 | `js/finanzas/finanzas-cuentas-ui.js` | Pantalla de cuentas, detalle, saldos y traspasos. | `abrirCuentaNueva`, `abrirDetalleCuenta`, `abrirTraspaso`, `formatearEn`, `renderizarPestanaCuentas` |
 | `js/finanzas/finanzas-datos-ui.js` | Flujos de exportación, importación y entrega de archivos. | `abrirExportar`, `abrirImportar`, `construirBloqueDatosFinanzas`, `entregarArchivo`, `puedeCompartirArchivos` |
@@ -128,7 +129,7 @@ Cada fila se genera a partir de los bloques `export { ... }` del código fuente 
 - `js/core/schema.js`: datos iniciales y migraciones; importa las migraciones de formatos bancarios, préstamos y cuentas.
 - `js/core/storage/storage-merge.js`: fusión entre dispositivos de las colecciones y sus tombstones.
 - `js/core/storage/storage-sync.js`: persistencia local, Drive y programación del envío/recepción.
-- `js/core/i18n.js` y `idiomas/*.json`: traducción de interfaz. Las claves pendientes de Finanzas se documentan aparte; esta actualización no cambia traducciones.
+- `js/core/i18n.js` y `idiomas/*.json`: traducción de interfaz. PATCH14 añade las instrucciones y avisos de tres favoritos; también está traducida la etiqueta «Más» de la barra móvil.
 - `service-worker.js`: versión de caché y shell offline. Los módulos se agregan al caché cuando se solicitan; no se mantiene una lista manual de cada JS.
 - `tests/finanzas-*.mjs`: pruebas de lógica/integración presentes en el proyecto. No se deben reemplazar con copias del paquete de actualización anterior.
 

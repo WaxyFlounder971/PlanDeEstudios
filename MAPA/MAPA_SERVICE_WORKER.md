@@ -1,6 +1,6 @@
 # MAPA_SERVICE_WORKER.md — Índice de `service-worker.js`
 
-El Service Worker es un script independiente registrado por el arranque de la app. No importa módulos ES. Su número visible y nombre de caché derivan de `VERSION`; versión actual del código: `v3.26.7`.
+El Service Worker es un script independiente registrado por el arranque de la app. No importa módulos ES. Su número visible y nombre de caché derivan de `VERSION`; versión actual del código: `v3.27.37`.
 
 ## Constantes
 

@@ -239,12 +239,13 @@ function inicializarLayoutResponsivo() {
 }
 
 // will-change solo durante la transición del drawer (clase .sidebar-animando, ver design-system.css).
-function marcarSidebarAnimando() {
-  const sb = document.getElementById("app-sidebar");
-  if (!sb) return;
-  sb.classList.add("sidebar-animando");
-  clearTimeout(marcarSidebarAnimando._t);
-  marcarSidebarAnimando._t = setTimeout(() => sb.classList.remove("sidebar-animando"), 400);
+// PATCH 8 (2026-11-07): acepta cualquier panel que anime como el sidebar (por defecto, el sidebar);
+// el temporizador vive en cada elemento para que dos paneles no se pisen.
+function marcarSidebarAnimando(el = document.getElementById("app-sidebar")) {
+  if (!el) return;
+  el.classList.add("sidebar-animando");
+  clearTimeout(el._tAnimando);
+  el._tAnimando = setTimeout(() => el.classList.remove("sidebar-animando"), 400);
 }
 
 function cerrarSidebarMovil() {
@@ -261,15 +262,20 @@ function cerrarSidebarMovil() {
  * abrir uno nunca interfiera con el estado del otro.
  */
 function abrirDrawerEnlacesMovil() {
-  document.getElementById("drawer-enlaces-movil").classList.add("abierta");
+  const drawer = document.getElementById("drawer-enlaces-movil");
+  marcarSidebarAnimando(drawer);
+  drawer.classList.add("abierta");
   document.getElementById("enlaces-movil-overlay").classList.add("abierta");
-  document.body.classList.add("scroll-bloqueado");
+  document.body.classList.add("scroll-bloqueado", "enlaces-drawer-abierto");
 }
 
 function cerrarDrawerEnlacesMovil() {
-  document.getElementById("drawer-enlaces-movil").classList.remove("abierta");
+  const drawer = document.getElementById("drawer-enlaces-movil");
+  // Se llama en cada resize >= 1500px con el drawer ya cerrado: solo se marca si de verdad va a animar.
+  if (drawer.classList.contains("abierta")) marcarSidebarAnimando(drawer);
+  drawer.classList.remove("abierta");
   document.getElementById("enlaces-movil-overlay").classList.remove("abierta");
-  document.body.classList.remove("scroll-bloqueado");
+  document.body.classList.remove("scroll-bloqueado", "enlaces-drawer-abierto");
 }
 
 function restaurarEstadoSidebar() {

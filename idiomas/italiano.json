@@ -1149,6 +1149,7 @@
     "Mostrar en el horario": "Mostra nell'orario",
     "Mostrar más materias": "Mostra più materie",
     "Mostrar materias en la agenda": "Mostra materie in agenda",
+    "Mostrar timer": "Mostra timer",
     "Mostrar solo activas": "Mostra solo attive",
     "Mostrar:": "Mostra:",
     "Movimientos": "Movimenti",
@@ -2692,6 +2693,13 @@
     "Materia personalizada y sus registros eliminados": "Materia personalizzata e i suoi registri eliminati",
     "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste.": "Tutte le materie sono nascoste. Usa «Mostra più materie» per vederle e modificarne l'impostazione.",
     "Agregar racha": "Aggiungi serie",
-    "Borrar racha": "Elimina serie"
+    "Borrar racha": "Elimina serie",
+    "Más": "Altro",
+    "Elige 3 favoritos para la barra de abajo. El resto sigue en «Más» y también puedes llegar deslizando a los lados.": "Scegli 3 preferiti per la barra in basso. Gli altri restano sotto «Altro» e puoi raggiungerli anche scorrendo di lato.",
+    "La barra ahora admite hasta 3 favoritos. Conservamos tus 3 primeros.": "La barra ora supporta fino a 3 preferiti. Abbiamo mantenuto i primi 3.",
+    "En pausa": "In pausa",
+    "Descanso": "Riposo",
+    "Extra": "Extra",
+    "Plan": "Piano"
   }
 }

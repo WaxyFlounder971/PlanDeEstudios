@@ -1156,6 +1156,7 @@
     "Mostrar en el horario": "Show in schedule",
     "Mostrar más materias": "Show more subjects",
     "Mostrar materias en la agenda": "Show subjects in the agenda",
+    "Mostrar timer": "Show timer",
     "Mostrar solo activas": "Show only active",
     "Mostrar:": "Show:",
     "Movimientos": "Transactions",
@@ -2704,6 +2705,13 @@
     "Materia personalizada y sus registros eliminados": "Custom subject and its records deleted",
     "Todas las materias están ocultas. Usa «Mostrar más materias» para verlas y cambiar su ajuste.": "All subjects are hidden. Use “Show more subjects” to view them and change their setting.",
     "Agregar racha": "Add streak",
-    "Borrar racha": "Delete streak"
+    "Borrar racha": "Delete streak",
+    "Más": "More",
+    "Elige 3 favoritos para la barra de abajo. El resto sigue en «Más» y también puedes llegar deslizando a los lados.": "Choose 3 favorites for the bottom bar. The rest stay under “More” and you can also reach them by swiping sideways.",
+    "La barra ahora admite hasta 3 favoritos. Conservamos tus 3 primeros.": "The bar now supports up to 3 favorites. We kept your first 3.",
+    "En pausa": "Paused",
+    "Descanso": "Break",
+    "Extra": "Extra",
+    "Plan": "Plan"
   }
 }

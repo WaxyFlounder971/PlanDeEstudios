@@ -1112,6 +1112,7 @@
     "Mostrar en el horario": "Mostrar en el horario",
     "Mostrar más materias": "Mostrar más materias",
     "Mostrar materias en la agenda": "Mostrar materias en la agenda",
+    "Mostrar timer": "Mostrar timer",
     "Mostrar solo activas": "Mostrar solo activas",
     "Mostrar:": "Mostrar:",
     "Movimientos": "Movimientos",
@@ -1876,6 +1877,13 @@
     "Semestre de Tiempo de Estudio": "Semestre de Tiempo de Estudio",
     "Semestre sin nombre": "Semestre sin nombre",
     "Agregar racha": "Agregar racha",
-    "Borrar racha": "Borrar racha"
+    "Borrar racha": "Borrar racha",
+    "Más": "Más",
+    "Elige 3 favoritos para la barra de abajo. El resto sigue en «Más» y también puedes llegar deslizando a los lados.": "Elige 3 favoritos para la barra de abajo. El resto sigue en «Más» y también puedes llegar deslizando a los lados.",
+    "La barra ahora admite hasta 3 favoritos. Conservamos tus 3 primeros.": "La barra ahora admite hasta 3 favoritos. Conservamos tus 3 primeros.",
+    "En pausa": "En pausa",
+    "Descanso": "Descanso",
+    "Extra": "Extra",
+    "Plan": "Plan"
   }
 }

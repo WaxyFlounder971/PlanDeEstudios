@@ -1,6 +1,31 @@
 # MAPA_FUNCIONES.md
-**Actualización 06/11/2026:** Finanzas 2.0 tiene su inventario en `MAPA_FUNCIONES_finanzas.md`; el esquema y la fusión incluyen formatos bancarios, préstamos y cuentas. Las entradas vigentes del 05/11 y 06/11 documentan Competencias, el encabezado del Plan, Finanzas móvil, Wapper, el drawer móvil y la edición de categorías. Las entradas fechadas más abajo son historial de cambios y conservan el estado que tenían en su fecha.
+**Actualización 07/11/2026:** Finanzas 2.0 tiene su inventario en `MAPA_FUNCIONES_finanzas.md`; el esquema y la fusión incluyen formatos bancarios, préstamos y cuentas. Las entradas vigentes del 05/11 al 07/11 documentan Competencias, Plan, Finanzas móvil, Wapper, Notas y el timer. Las entradas fechadas más abajo son historial de cambios y conservan el estado que tenían en su fecha.
 
+# 2026-11-07 - Ajustes E1 de Horario, Plan y caret
+Horario aumenta el peso de los nombres de materia a 700 y solo en escritorio amplía el texto 2 px. Las categorías del Plan ahora envuelven chips centrados con gap de 6 px. El toque principal filtra; el clic derecho no altera el filtro y abre el editor, sin duplicarlo tras un long-press móvil. Los controles de ordenar y los dos botones del encabezado comparten alto `2.75rem`. El caret del documento queda transparente y se habilita de nuevo en controles editables y contenido editable; no se alteran outlines ni `:focus-visible`. **Archivos:** `css/design-system.css`, `js/plan/plan-categorias.js`, `js/plan/plan-vista-lista.js`.
+
+# 2026-11-07 - Ajustes E2 de Finanzas y dibujo de Notas
+La barra móvil de Finanzas muestra tres favoritos alrededor del botón central «＋»: dos a la izquierda y uno a la derecha, con «Más» al final. El orden predeterminado es Inicio, Gastos universitarios y Plan; si había más de tres favoritos guardados, conserva los tres primeros y avisa una vez. El 4.º favorito elegido reemplaza al más antiguo; al quitar uno, el espacio se completa con prioridad predeterminada. En Notas, la capa de tinta mantiene `desynchronized`, realiza un primer pintado casi transparente, observa también el viewport y mide en dos frames para corregir un canvas negro inicial; la causa en Android sigue siendo una hipótesis pendiente de verificar en dispositivo.
+
+Los mensajes de Finanzas están traducidos en ES/EN/IT/FR, incluidos los botones «Más». **Archivos:** `js/finanzas/finanzas-navegacion.js`, `css/design-system.css`, `js/notas/notas-tinta.js`, cuatro archivos `idiomas/*.json`.
+
+# 2026-11-07 - Timer flotante, PiP y cierre E5
+
+**E3 (PATCH 8, 11b y 15).** El drawer de Enlaces anima transform y opacidad; la tarjeta flotante del timer queda anclada a la esquina, se mueve al abrir el drawer y puede plegarse con una pulsación larga. El estado plegado se limita a la sesión del timer. **E4 (PATCH 11 y 12).** Document PiP muestra una píldora compacta con controles accesibles; el PiP de Android conserva el canvas 440×200 y ajusta texto sin estirarlo. **E5.** Se completan traducciones del estado del timer y Plan, se actualiza la documentación del Service Worker y su versión a `v3.27.37`. La revisión de Notas conserva `desynchronized`, pinta un píxel transparente tras limpiar, observa el viewport y mide en dos frames.
+
+**Archivos:** `css/design-system.css`, `js/ui/componentes.js`, `js/tiempo-estudio/tiempo-estudio-indicador.js`, `js/tiempo-estudio/tiempo-estudio.js`, `js/notas/notas-tinta.js`, cuatro catálogos de `idiomas/`, `service-worker.js`, `MAPA/MAPA_SERVICE_WORKER.md` y este mapa.
+
+| PATCH | Cambio vigente |
+|---|---|
+| 7 | Materia del Horario en negrita y +2 px desde 900 px. |
+| 8 | Animación del drawer de Enlaces. |
+| 9 | Categorías centradas y gestos de filtro/edición sin doble apertura. |
+| 10 | Caret transparente fuera de campos editables. |
+| 11 / 11b | Document PiP compacto / timer flotante anclado a esquina. |
+| 12 | Canvas PiP de Android sin deformación de texto. |
+| 13 / 13b | Primer dibujo de Notas y medición de viewport para evitar canvas negro inicial. |
+| 14 | Barra de Finanzas con tres favoritos. |
+| 15 | Timer flotante plegable. |
 # 2026-11-06 - Acceso rápido a capacidades y gestos móviles
 Wapper ahora ofrece un botón «¿Qué puedes hacer?» en el lado izquierdo del encabezado, elimina la burbuja de invitación repetida bajo el ejemplo y reconoce la pregunta en español, inglés, italiano y francés para que el botón use la respuesta local de capacidades en vez de llamar a Gemini. La clave nueva está traducida en los cuatro catálogos. En móvil, el drawer del sidebar anima transform y opacidad con easing compartido, atenúa el overlay y respeta `prefers-reduced-motion`; `will-change` solo vive durante la animación. Horario y Tiempo alinean la fila de fechas por baseline, igual que Agenda. En Categorías del Plan se quitó el engranaje: toque corto filtra y mantener 500 ms abre edición, cancelando el gesto al mover el puntero para que el desplazamiento no active un filtro accidental.
 
@@ -12,7 +37,7 @@ En móvil, las tarjetas de materias dentro de cada tarjeta de semestre ocupan 16
 # 2026-11-05 - Entrega de mensajes de Competencias y retoques responsivos
 Los mensajes semanales de Competencias se leen y envían con `fetchConSesion()` en `tiempo-estudio-competencias.js`: asegura/renueva la sesión y permite un reintento ante 401. La tarjeta reintenta los mensajes propios pendientes durante el sondeo y al volver a primer plano; el guardado local no se pierde si falla el envío y, cuando hay conexión, se avisa del fallo para que la persona sepa que el mensaje todavía no llegó a los demás. El Worker autentica estas rutas con la sesión de Google, limita el acceso a participantes y aplica límite de solicitudes. `GET /competencias/:id/mensajes` ya no devuelve el correo de los autores y responde con error JSON/CORS si D1 falla. Los mensajes siguen el cierre semanal existente del Worker, que los elimina al cerrar la competencia/semana.
 
-El encabezado del Plan aplica `encabezado-plan-botones` para repartir el ancho entre sus botones. En la barra inferior de Finanzas, «Más» cambia al primer lugar en pantallas de hasta 380 px. **Archivos:** `js/tiempo-estudio/tiempo-estudio-competencias.js`, `js/tiempo-estudio/tiempo-estudio-competencias-gestion.js`, `worker - USO PARA CHAT GPT/src/index.js`, `js/plan/plan-vista-lista.js`, `css/design-system.css`.
+El encabezado del Plan aplica `encabezado-plan-botones` para repartir el ancho entre sus botones. En Finanzas, la regla temporal que movía «Más» al primer lugar hasta 380 px fue retirada el 2026-11-07 por PATCH14, para mantener el «＋» centrado entre sus tres favoritos. **Archivos:** `js/tiempo-estudio/tiempo-estudio-competencias.js`, `js/tiempo-estudio/tiempo-estudio-competencias-gestion.js`, `worker - USO PARA CHAT GPT/src/index.js`, `js/plan/plan-vista-lista.js`, `css/design-system.css`.
 
 **Aclaración 18/10/2026:** las listas de pendientes incluidas dentro de entradas antiguas (p. ej. 16/10) reflejan el estado de esa fecha. Ya se cerraron en código la indicación de navegador integrado, la documentación de claves de onboarding, la continuidad «Empezar en blanco» y las traducciones nuevas del flujo guiado. Consultar la sección vigente de `Plan_Proyecto_App_Academica.md` para pendientes actuales.
 
@@ -627,7 +652,7 @@ Exporta:
 ## JS - plan
 
 ### plan/plan-categorias.js
-Propósito: gestión de categorías personalizadas de materias (crear/editar categorías y asignar/quitar materias de cada una). Los chips filtran con toque corto y abren edición con long-press de 500 ms o clic derecho; el long-press se cancela al mover para permitir desplazamiento y no filtrar al soltar un gesto de arrastre.
+Propósito: gestión de categorías personalizadas de materias (crear/editar categorías y asignar/quitar materias de cada una). Los chips se acomodan centrados con wrap y gap de 6 px; el helper legado `distribuirCategoriasEnGrid()` aún asigna posiciones grid, que no afectan el flex actual. El toque principal filtra; el long-press de 500 ms o clic derecho abre edición. Mover cancela el long-press y no filtra al soltar; el clic derecho no cambia el filtro.
 Depende de: schema.js, storage-sync.js, storage.js, utils.js, componentes.js, plan-esquema.js, plan-vista-lista.js
 Exporta:
 * `abrirModalCategoria(categoria, plan)` - abre el modal de crear/editar categoría; precarga nombre y color si `categoria` viene de editar, o lo deja vacío si es nueva.
@@ -1345,6 +1370,9 @@ Exporta `notasActuales`, `opcionesNotas`, `crearNota`, `obtenerNota`, `guardarNo
 
 ### `js/notas/notas-editor.js`
 Exporta `abrirEditorNota(id, alCerrar)` y `fechaRelativa(opcion)`. Editor con foco en cuerpo, autoguardado debounce más cierre/blur, HTML de lista permitida, formato básico, tareas, color, vencimiento y acciones de copiar, compartir y Wapper. Limita cada nota a 10 000 caracteres.
+
+### `js/notas/notas-tinta.js`
+Exporta `crearCapaTinta`, `crearMiniTinta`, `dibujarTrazos` y `GROSOR_BASE`. La capa de tinta es un canvas transparente sobre el lienzo de la nota. Para el primer frame, fuerza un pintado casi transparente tras limpiar, observa el cuerpo/modal/viewport y vuelve a medir en dos `requestAnimationFrame`; mantiene `desynchronized` para preservar la baja latencia. El workaround del posible canvas negro en Chrome/Android no está confirmado en un dispositivo.
 
 ### `js/notas/notas-sanitizar.js`
 Exporta `sanearHTMLNota(html)`, `textoPlanoNota(html)`, `escaparHTMLNota(texto)` y `renderizarHTMLNota(contenedor, html)`. Sanitiza al persistir y al renderizar; pega como texto plano y crea enlaces únicamente para `http(s)`.

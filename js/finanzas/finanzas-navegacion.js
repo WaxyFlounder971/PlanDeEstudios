@@ -25,6 +25,7 @@ import { fijarFinanzasAbierta } from "../ui/layout-lateral.js";
 import { estado } from "../core/storage/storage.js";
 import { sellarTimestamp } from "../core/schema.js";
 import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { mostrarToast } from "../ui/componentes.js";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -83,27 +84,38 @@ const T = (texto) => traducirTextoInterfaz(texto);
 /* ------------------------- Favoritos de la barra inferior (fix10) ------------------------- */
 
 const CLAVE_FAVORITOS = "finanzas_barra_favoritos";
-const FAVORITOS_DEFAULT = ["resumen", "gastos-u"];
+// PATCH 14: exactamente 3 favoritos (2 a la izquierda del «＋», 1 a la derecha, y «Más» al final).
+const MAX_FAVORITOS = 3;
+const FAVORITOS_DEFAULT = ["resumen", "gastos-u", "plan"];
 
 /** Orden en que se recorren las secciones al deslizar: el mismo de la lista «Más» (solo las visibles). */
 function idsEnOrden() {
   return gruposVisibles().flatMap((g) => g.ids);
 }
 
-/** Los 2 favoritos válidos (visibles) de la barra; si faltan, se completan con los predeterminados. */
+/** Los (hasta 3) favoritos válidos (visibles) de la barra; si faltan, se completan con los predeterminados. */
 function leerFavoritos() {
   const visibles = new Set(config.visibles);
   const guardados = estado.datos && estado.datos.configuracion ? estado.datos.configuracion[CLAVE_FAVORITOS] : null;
   const salida = [];
   [...(Array.isArray(guardados) ? guardados : []), ...FAVORITOS_DEFAULT, ...PRIORIDAD_BARRA].forEach((id) => {
-    if (salida.length < 2 && visibles.has(id) && !salida.includes(id)) salida.push(id);
+    if (salida.length < MAX_FAVORITOS && visibles.has(id) && !salida.includes(id)) salida.push(id);
   });
   return salida;
 }
 
+/** PATCH 14: si alguien guardó más de 3 favoritos, conserva los 3 primeros y avisa una sola vez (el guardado deja ya 3). */
+function migrarFavoritosExcedidos() {
+  const cfg = estado.datos && estado.datos.configuracion;
+  const guardados = cfg ? cfg[CLAVE_FAVORITOS] : null;
+  if (!Array.isArray(guardados) || guardados.length <= MAX_FAVORITOS) return;
+  guardarFavoritos(guardados.slice(0, MAX_FAVORITOS));
+  mostrarToast(T("La barra ahora admite hasta 3 favoritos. Conservamos tus 3 primeros."), 5000);
+}
+
 function guardarFavoritos(ids) {
   if (!estado.datos.configuracion) estado.datos.configuracion = {};
-  estado.datos.configuracion[CLAVE_FAVORITOS] = ids.slice(0, 2);
+  estado.datos.configuracion[CLAVE_FAVORITOS] = ids.slice(0, MAX_FAVORITOS);
   sellarTimestamp(estado.datos.configuracion);
   marcarCambioPendiente();
 }
@@ -204,9 +216,11 @@ function construirBarra() {
   const barra = elBarra;
   barra.replaceChildren();
   barra.setAttribute("data-finanzas-nav", "");
+  migrarFavoritosExcedidos();
   const elegidas = leerFavoritos();
-  const izquierda = elegidas;
-  const derecha = [];
+  // PATCH 14: [Fav 1] [Fav 2] [＋] [Fav 3] [Más]
+  const izquierda = elegidas.slice(0, 2);
+  const derecha = elegidas.slice(2, 3);
 
   izquierda.forEach((id) => barra.appendChild(crearBotonNav(id, { clase: "finanzas-bar-item" })));
   if (config.anadir) {
@@ -287,12 +301,12 @@ function construirHoja() {
 
 let modoAjustesHoja = false;
 
-/** Panel «Ajustes de Finanzas»: elegir los 2 favoritos de la barra inferior y reabrir la guía. */
+/** Panel «Ajustes de Finanzas»: elegir los 3 favoritos de la barra inferior y reabrir la guía. */
 function construirPanelAjustes(hoja) {
   const intro = document.createElement("p");
   intro.className = "muted";
   intro.style.margin = "0";
-  intro.textContent = T("Elige 2 favoritos para la barra de abajo. El resto sigue en «Más» y también puedes llegar deslizando a los lados.");
+  intro.textContent = T("Elige 3 favoritos para la barra de abajo. El resto sigue en «Más» y también puedes llegar deslizando a los lados.");
   hoja.appendChild(intro);
 
   const rejilla = document.createElement("div");
@@ -314,13 +328,13 @@ function construirPanelAjustes(hoja) {
       btn.addEventListener("click", () => {
         let nuevos = leerFavoritos();
         if (nuevos.includes(id)) {
-          if (nuevos.length <= 1) return; // siempre quedan 2 (o 1 si solo hay 1 visible)
+          if (nuevos.length <= 1) return; // siempre quedan 3 (o menos si hay pocas secciones visibles)
           nuevos = nuevos.filter((x) => x !== id);
-          // se completa con el siguiente predeterminado para mantener 2
+          // se completa con el siguiente predeterminado para mantener 3
           const relleno = [...FAVORITOS_DEFAULT, ...PRIORIDAD_BARRA].find((x) => x !== id && !nuevos.includes(x) && new Set(config.visibles).has(x));
           if (relleno) nuevos.push(relleno);
         } else {
-          nuevos = [nuevos[nuevos.length - 1], id]; // el más viejo sale, entra el nuevo
+          nuevos = [...nuevos, id].slice(-MAX_FAVORITOS); // con 3 llenos, el más viejo sale y entra el nuevo
         }
         guardarFavoritos(nuevos.filter(Boolean));
         pintar();

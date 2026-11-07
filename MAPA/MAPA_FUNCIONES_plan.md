@@ -1,7 +1,7 @@
 ## JS — Plan
 
 ### plan-categorias.js
-Propósito: gestión de categorías personalizadas de materias (crear/editar categorías y asignar/quitar materias de cada una). Los chips filtran con toque corto y abren edición con long-press de 500 ms o clic derecho; el long-press se cancela al mover para permitir desplazamiento sin activar el filtro al soltar.
+Propósito: gestión de categorías personalizadas de materias (crear/editar categorías y asignar/quitar materias de cada una). Los chips se acomodan centrados con wrap y gap de 6 px; el helper legado `distribuirCategoriasEnGrid()` aún asigna posiciones grid, que no afectan el flex actual. El toque principal filtra; el long-press de 500 ms o clic derecho abre edición. Mover cancela el long-press y no filtra al soltar; el clic derecho no cambia el filtro.
 Depende de: schema.js, storage-sync.js, storage.js, utils.js, componentes.js, plan-esquema.js, plan-vista-lista.js
 Exporta:
 
@@ -178,6 +178,8 @@ Exporta:
 * `renderizarPlanEstudios()` — Punto de entrada principal: vacía y reconstruye `#seccion-plan-estudios` completo (encabezado, estadísticas, barra de acciones, contenido de bloques).
 
 **Ajuste 2026-11-05:** los botones del encabezado usan la clase `encabezado-plan-botones`; el CSS los estira para ocupar el ancho disponible y centra su contenido, manteniendo el salto de línea cuando no caben juntos.
+
+**Ajuste 2026-11-07:** el grupo «Ordenar por bloque/categoría» tiene la clase `grupo-orden-plan`. Los dos botones del encabezado y ese selector comparten altura `--plan-control-alto: 2.75rem`; el texto de los botones no envuelve.
 
 ### plan-modo-edicion.js
 Propósito: botón "Editar plan", badge fijo "Modo edición" y el ícono de lápiz que aparece en cada tarjeta de materia mientras el modo está activo.

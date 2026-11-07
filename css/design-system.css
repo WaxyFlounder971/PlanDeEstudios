@@ -141,6 +141,10 @@ body {
 
 h1, h2, h3, h4 { font-family: var(--font-display); font-weight: 700; margin: 0 0 8px; }
 p { margin: 0 0 12px; color: var(--text-secondary); }
+/* PATCH 10: oculta el caret fuera de campos editables sin alterar el indicador de foco. */
+html { caret-color: transparent; }
+input:not([readonly]), textarea:not([readonly]), select,
+[contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"] { caret-color: auto; }
 a { color: var(--accent-1); }
 
 /* ---- Tarjeta de vidrio (glassmorphism) ---- */
@@ -1111,6 +1115,15 @@ body.modal-abierto { overflow: hidden; overscroll-behavior: contain; }
   display: grid;
   gap: 8px;
   justify-content: center;
+}
+/* PATCH 9a: chips seguidos (gap 6px), centrados como grupo y con wrap. Se sobrescribe el
+   grid: grid-row/grid-column/grid-template-columns que pone distribuirCategoriasEnGrid()
+   no tienen efecto en flex, así que no hay que tocar el JS. Tamaño de cada chip intacto. */
+.categorias-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
 }
 
 /* v1.9.8: "Editar plan" + "Añadir materia" (barra de acciones del Plan de
@@ -2651,6 +2664,25 @@ img, svg { max-width: 100%; }
 /* Los 2 botones del encabezado del plan ocupan todo el ancho disponible (lado a lado si caben; apilados, cada uno a todo el ancho). */
 .encabezado-plan-botones { align-items: stretch; }
 .encabezado-plan-botones > .btn { flex: 1 1 auto; justify-content: center; text-align: center; }
+/* PATCH 9c: "Gestionar plan" / "Actualizar malla" con la MISMA altura que el switch
+   "Ordenar por bloque" (.grupo-orden-plan). Una sola variable en rem (escala con el
+   tamaño de texto de la app) fija el alto de ambos; box-sizing:border-box para que
+   padding/borde no lo cambien. */
+:root { --plan-control-alto: 2.75rem; }
+.grupo-orden-plan { box-sizing: border-box; height: var(--plan-control-alto); }
+.encabezado-plan-botones > .btn {
+  box-sizing: border-box;
+  height: var(--plan-control-alto);
+  padding: 0 16px;
+  font-size: 0.85rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 
 /* ---- Bloques colapsables independientes ---- */
 
@@ -4634,7 +4666,7 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
 .horario-bloque-nombre {
   font-family: var(--font-body);
   font-size: .76rem;
-  font-weight: 650;
+  font-weight: 700;
   line-height: 1.18;
   letter-spacing: normal;
   display: -webkit-box;
@@ -4644,6 +4676,11 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
   margin-bottom: 2px;
   overflow-wrap: anywhere;
   word-break: normal;
+}
+/* PATCH 7: en escritorio (>=900px) las columnas del grid son anchas y el nombre
+   de la materia (.76rem) se ve chico frente al bloque; +2px solo ahi. Movil intacto. */
+@media (min-width: 900px) {
+  .horario-bloque-nombre { font-size: calc(.76rem + 2px); }
 }
 .horario-dia-actual-glow {
   color: var(--accent-1);
@@ -7000,9 +7037,10 @@ html[data-iconos-nav="paleta"] .ajuste-icono-vista { color: var(--accent-1); }
   }
   .finanzas-bottombar .finanzas-bar-item .finanzas-nav-texto { max-width: 100%; }
   .finanzas-bottombar .finanzas-bar-item.active { box-shadow: none; }
-  /* Pantallas angostas (no caben los botones repartidos a lados iguales): «Más» se ancla a la izquierda para que la barra no quede dispareja. */
+  /* PATCH 14: orden fijo [Fav1][Fav2][＋][Fav3][Más] a cualquier ancho (se retiró el `order:-1` de «Más» de cambios.patch).
+     4 items con flex 1 1 0 + el «＋» en el centro = barra simétrica. A ≤380px solo se acortan los márgenes del «＋». */
   @media (max-width: 380px) {
-    .finanzas-bottombar .finanzas-bar-mas { order: -1; }
+    .finanzas-bar-fab { margin-left: 2px; margin-right: 2px; }
   }
   .finanzas-bar-fab {
     flex: none; align-self: flex-start; width: 56px; height: 56px; margin: -22px 6px 0;
@@ -7085,7 +7123,7 @@ body[data-enlaces-lateral="oculto"] .btn-flotante-enlaces { display: flex; }
 body[data-enlaces-lateral="riel"] .timer-indicador--flotante,
 body[data-enlaces-lateral="oculto"] .timer-indicador--flotante { display: flex; }
 body[data-enlaces-lateral="completo"] .timer-indicador--flotante { display: none; }
-body[data-enlaces-lateral="riel"] .timer-indicador--flotante { right: 88px; bottom: 24px; }
+/* PATCH 11b (2026-11-07): ya no se reserva sitio al riel (antes right: 88px); el anclaje a la esquina está en el bloque «PATCH 11b» al final del archivo. */
 body[data-enlaces-lateral="riel"] .columna-derecha > .timer-indicador--lateral { display: none; }
 
 /* Riel: una barrita discreta con solo el emoji o la imagen de cada enlace (el nombre sale al pasar el cursor). */
@@ -7251,4 +7289,170 @@ body[data-enlaces-lateral="riel"] .enlace-rapido-icono img { width: 24px; height
 }
 @media (prefers-reduced-motion: reduce) {
   html:root #app-sidebar.app-sidebar, #sidebar-overlay.sidebar-overlay { transition-duration: .01ms !important; transition-delay: 0s !important; }
+}
+
+/* PATCH 8 (2026-11-07): el drawer de Enlaces rápidos abre y cierra con la MISMA animación que el sidebar (PATCH 3):
+   solo transform + opacity en .32s cubic-bezier(.22,1,.36,1), fade sincronizado del fondo oscuro y will-change
+   únicamente mientras anima (clase .sidebar-animando, que pone marcarSidebarAnimando() de componentes.js).
+   Entra por la derecha: la base ya trae translateX(100%) → 0; aquí se añade el fundido.
+   A diferencia del sidebar, este drawer también se abre en escritorio (900–1499px, botón flotante 🔗), así que
+   las reglas NO van dentro de un media query. Antes, en escritorio el overlay (#enlaces-movil-overlay) nunca se
+   mostraba (su display:block vive solo en el media <900px): ahora hace fade y permite cerrar tocando fuera.
+   Cerrado queda en opacity:0, así que la sombra del panel ya no asoma por el borde derecho de la pantalla.
+   prefers-reduced-motion: lo cubre la regla global (transition:none) más arriba; se repite aquí por claridad. */
+#drawer-enlaces-movil.drawer-enlaces-movil {
+  opacity: 0;
+  transition: transform .32s cubic-bezier(.22, 1, .36, 1), opacity .32s cubic-bezier(.22, 1, .36, 1),
+              background-color .32s ease, border-color .32s ease;
+}
+#drawer-enlaces-movil.drawer-enlaces-movil.abierta { opacity: 1; }
+#drawer-enlaces-movil.sidebar-animando { will-change: transform, opacity; }
+#enlaces-movil-overlay.sidebar-overlay {
+  display: block; opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .32s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .32s;
+}
+#enlaces-movil-overlay.sidebar-overlay.abierta {
+  opacity: 1; visibility: visible; pointer-events: auto;
+  transition: opacity .32s cubic-bezier(.22, 1, .36, 1), visibility 0s;
+}
+@media (prefers-reduced-motion: reduce) {
+  #drawer-enlaces-movil.drawer-enlaces-movil, #enlaces-movil-overlay.sidebar-overlay { transition-duration: .01ms !important; transition-delay: 0s !important; }
+}
+
+/* =========================================================================
+   PATCH 11b (2026-11-07): tarjeta flotante del timer anclada a la esquina inferior derecha.
+   Solo afecta a .timer-indicador--flotante (la tarjeta de escritorio); la columna derecha (>= 1500px con enlaces
+   completos) y la línea de la barra superior (< 900px) no cambian.
+   Esquina = mismo margen que el botón redondo de Enlaces (.btn-flotante-enlaces: right/bottom 24px).
+   Ocupantes de esa esquina y cómo se apila la tarjeta:
+     · riel de enlaces contraído (el riel va arriba a la derecha; la tarjeta ya NO reserva su ancho): bottom 24px;
+     · «Instalar app» visible o badge «Modo edición» visible: sube a 76px (igual que el botón de Enlaces);
+     · sin columna ni riel (modo «oculto»): sigue encima del botón de Enlaces (88px), o 140px si además hay «Instalar app»
+       (antes se solapaba con el botón de Enlaces, que sube a 76px);
+     · drawer de Enlaces abierto (body.enlaces-drawer-abierto, ver componentes.js): se desplaza a la izquierda
+       del panel con la misma curva de PATCH 8, usando la propiedad `translate` para no pisar el `transform`
+       de :active ni el de la animación de entrada.
+   ========================================================================= */
+body.instalacion-flotante-activa .timer-indicador--flotante { bottom: 140px; }
+body[data-enlaces-lateral="riel"] { --esq-timer-bottom: calc(24px + env(safe-area-inset-bottom)); }
+body[data-enlaces-lateral="riel"].instalacion-flotante-activa,
+body[data-enlaces-lateral="riel"]:has(#badge-modo-edicion:not(.oculto)) { --esq-timer-bottom: calc(76px + env(safe-area-inset-bottom)); }
+body[data-enlaces-lateral="riel"] .timer-indicador--flotante {
+  right: calc(24px + env(safe-area-inset-right));
+  bottom: var(--esq-timer-bottom);
+}
+/* El riel solo llega hasta justo encima de la tarjeta (64px de alto + 12px de aire), por si hay muchos enlaces. */
+body[data-enlaces-lateral="riel"]:has(.timer-indicador--flotante:not(.oculto)) .columna-derecha,
+body[data-enlaces-lateral="riel"] #app-shell:has(#badge-modo-edicion:not(.oculto)):has(.timer-indicador--flotante:not(.oculto)) .columna-derecha {
+  height: calc(100vh - 96px - var(--esq-timer-bottom));
+  height: calc(100dvh - 96px - var(--esq-timer-bottom));
+}
+/* (PATCH 15 amplía esta transición con scale/opacity/visibility en el bloque «PATCH 15» de más abajo.) */
+.timer-indicador--flotante {
+  transition: translate .32s cubic-bezier(.22, 1, .36, 1), transform var(--transition-fast), border-color var(--transition-fast);
+}
+/* 308px = ancho del drawer (min(320px, 86vw), ver .drawer-enlaces-movil) menos los 24px de margen, más 12px de aire. */
+body.enlaces-drawer-abierto .timer-indicador--flotante { translate: calc(12px - min(320px, 86vw)) 0; }
+
+/* =========================================================================
+   PATCH 15 (2026-11-07): tarjeta flotante del timer plegable (solo escritorio: la variante --flotante).
+   Estado normal = tarjeta píldora de siempre. Mantener ~500ms sobre ella la pliega (JS: tiempo-estudio-indicador.js,
+   clase .timer-plegado); queda un botón redondo (.timer-plegado-boton) con la luz de la materia. Tocarlo la expande.
+   El botón redondo copia EXACTAMENTE el de Enlaces (.btn-flotante-enlaces: 44px, fondo accent-1 al 68% + blur 12px,
+   contorno de 1px, --shadow-glass, mismo right 24px) y se apila en la misma columna de esquina que la tarjeta
+   (mismos right/bottom que ella, ver PATCH 11b). El de «Instalar app» difiere (degradado, borde propio) y es temporal:
+   se tomó el de Enlaces por ser el permanente de esa esquina.
+   Animación: solo translate/scale/opacity (propiedades individuales, no pisan el transform de :active), .32s
+   cubic-bezier(.22,1,.36,1), desde la esquina inferior derecha; visibility espera a que termine el fundido.
+   prefers-reduced-motion: transition/animation nulas (regla global y la de abajo). ========================================================================= */
+.timer-indicador--flotante {
+  transform-origin: 100% 100%;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  transition: translate .32s cubic-bezier(.22, 1, .36, 1), scale .32s cubic-bezier(.22, 1, .36, 1),
+              opacity .32s cubic-bezier(.22, 1, .36, 1), transform var(--transition-fast),
+              border-color var(--transition-fast), visibility 0s;
+}
+/* Feedback de escala mientras se mantiene presionado (mismo gesto que los chips de categoría). */
+.timer-indicador--flotante.timer-presionando {
+  transform: scale(.94);
+  transition: transform .5s ease, translate .32s cubic-bezier(.22, 1, .36, 1), border-color var(--transition-fast);
+}
+.timer-indicador--flotante.timer-plegado {
+  opacity: 0; scale: .4; visibility: hidden; pointer-events: none;
+  transition: translate .32s cubic-bezier(.22, 1, .36, 1), scale .32s cubic-bezier(.22, 1, .36, 1),
+              opacity .32s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .32s;
+}
+
+.timer-plegado-boton {
+  --te-color: var(--accent-1);
+  display: none;
+  position: fixed;
+  right: 24px;
+  bottom: 88px;
+  z-index: 80;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--accent-1) 68%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  outline: 1px solid color-mix(in srgb, var(--text-primary) 16%, transparent);
+  box-shadow: var(--shadow-glass);
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0; scale: .4; visibility: hidden;
+  transform-origin: 100% 100%;
+  transition: translate .32s cubic-bezier(.22, 1, .36, 1), scale .32s cubic-bezier(.22, 1, .36, 1),
+              opacity .32s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .32s, box-shadow .25s ease;
+}
+.timer-plegado-boton:hover { box-shadow: 0 10px 26px var(--accent-glow-1); }
+.timer-plegado-boton:active { transform: scale(.96); }
+.timer-plegado-boton:focus-visible { outline: 2px solid var(--te-color); outline-offset: 2px; }
+/* Visible solo cuando su tarjeta hermana está plegada y el timer está activo. */
+.timer-indicador--flotante:not(.oculto).timer-plegado + .timer-plegado-boton {
+  opacity: 1; scale: 1; visibility: visible;
+  transition: translate .32s cubic-bezier(.22, 1, .36, 1), scale .32s cubic-bezier(.22, 1, .36, 1),
+              opacity .32s cubic-bezier(.22, 1, .36, 1), visibility 0s, box-shadow .25s ease;
+}
+/* Mismas presentaciones que la tarjeta flotante: 900–1499px, y con riel/sin enlaces; nunca con la columna completa ni < 900px. */
+@media (min-width: 900px) and (max-width: 1499.98px) {
+  .timer-plegado-boton { display: flex; }
+}
+body[data-enlaces-lateral="riel"] .timer-plegado-boton,
+body[data-enlaces-lateral="oculto"] .timer-plegado-boton { display: flex; }
+body[data-enlaces-lateral="completo"] .timer-plegado-boton { display: none; }
+/* Misma esquina que la tarjeta (PATCH 11b): encima del botón de Enlaces, o al ras de la esquina con el riel contraído. */
+body.instalacion-flotante-activa .timer-plegado-boton { bottom: 140px; }
+body[data-enlaces-lateral="riel"] .timer-plegado-boton {
+  right: calc(24px + env(safe-area-inset-right));
+  bottom: var(--esq-timer-bottom);
+}
+body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(320px, 86vw)) 0; }
+
+/* La luz: color de la materia; pulso muy suave en marcha, atenuada y quieta en pausa, roja con tiempo extra. */
+.timer-plegado-boton .timer-luz {
+  width: 14px; height: 14px;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--on-accent) 80%, transparent), 0 0 10px 2px var(--te-color);
+  animation: timer-plegado-pulso 2.6s ease-in-out infinite;
+}
+@keyframes timer-plegado-pulso {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.14); opacity: .82; }
+}
+.timer-plegado-boton.timer-extra .timer-luz {
+  background: var(--color-danger);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--on-accent) 80%, transparent), 0 0 10px 2px var(--color-danger);
+}
+.timer-plegado-boton.timer-en-pausa .timer-luz {
+  animation: none; opacity: .45;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--on-accent) 45%, transparent);
+}
+@media (prefers-reduced-motion: reduce) {
+  .timer-plegado-boton .timer-luz { animation: none; }
+  .timer-indicador--flotante, .timer-plegado-boton { transition-duration: .01ms !important; transition-delay: 0s !important; }
 }

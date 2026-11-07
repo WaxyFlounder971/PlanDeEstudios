@@ -244,6 +244,11 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    // PATCH 13: con `desynchronized` algunos Chrome/Android muestran el canvas transparente en NEGRO hasta que recibe
+    // la primera operación de dibujo real (un clearRect no cuenta). Un píxel casi transparente (alfa ~3/255) en la
+    // esquina lo "enciende" desde el primer frame sin cambiar la latencia ni lo que se ve.
+    ctx.fillStyle = "rgba(0,0,0,0.012)";
+    ctx.fillRect(0, 0, 1, 1);
     ctx.restore();
     ctx.save();const alto=canvas.clientHeight||canvas.height/(win.devicePixelRatio||1),cx=centroZoomLienzo?.x??ancho/2,cy=centroZoomLienzo?.y??alto/2;ctx.translate(cx*(1-zoomLienzo),cy*(1-zoomLienzo));ctx.scale(zoomLienzo,zoomLienzo);ctx.translate(-viewport.scrollLeft/zoomLienzo,0);
     { // solo se pintan los trazos que caen dentro de la parte visible del lienzo
@@ -475,8 +480,11 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   const observador = typeof win.ResizeObserver === "function" ? new win.ResizeObserver(ubicar) : null;
   observador?.observe(cuerpo);
   observador?.observe(modal);
+  // PATCH 13: el lienzo se ubica según el viewport; si este cambia solo (barras que saltan de línea, animación del modal) también hay que recalcular.
+  if (viewport !== cuerpo) observador?.observe(viewport);
   win.addEventListener("resize", ubicar);
-  win.requestAnimationFrame(ubicar);
+  // Tras el layout real: un frame para la primera medida y otro para la medida ya asentada (modal animando / sin ancho aún).
+  win.requestAnimationFrame(() => { ubicar(); win.requestAnimationFrame(ubicar); });
 
   return {
     establecerNivel(nivel) { canvas.style.zIndex = String(Math.max(-2000, Math.min(2000, Number(nivel) || 0))); },

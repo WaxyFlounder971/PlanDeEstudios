@@ -224,6 +224,11 @@ function construirChipCategoria(cat, principal) {
     chip.style.filter = "";
   };
   chip.addEventListener("pointerdown", (e) => {
+    // PATCH 9b: solo el botón principal (o toque/lápiz) inicia filtro/long-press; el derecho lo maneja `contextmenu`.
+    if (e.button !== 0) {
+      disparoLargo = false;
+      return;
+    }
     disparoLargo = false;
     movimientoDetectado = false;
     origenX = e.clientX;
@@ -242,7 +247,9 @@ function construirChipCategoria(cat, principal) {
       cancelarLongPress();
     }
   });
-  chip.addEventListener("pointerup", () => {
+  chip.addEventListener("pointerup", (e) => {
+    // PATCH 9b: el botón derecho no alterna el filtro ni re-renderiza el chip (perdía el contextmenu).
+    if (e.button !== 0) return;
     cancelarLongPress();
     if (!disparoLargo && !movimientoDetectado) {
       estado.filtroCategoriaId = estado.filtroCategoriaId === cat.id ? null : cat.id;
@@ -254,7 +261,10 @@ function construirChipCategoria(cat, principal) {
   chip.addEventListener("contextmenu", (e) => {
     e.preventDefault();
     // En móvil el long-press ya abrió el editor a los 500ms; el contextmenu nativo no debe abrirlo dos veces.
-    if (disparoLargo) return;
+    if (disparoLargo) {
+      disparoLargo = false;
+      return;
+    }
     cancelarLongPress();
     disparoLargo = true;
     abrirModalCategoria(cat, principal);

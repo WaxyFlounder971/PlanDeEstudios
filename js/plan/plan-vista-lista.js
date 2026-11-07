@@ -249,7 +249,7 @@ function construirBarraAcciones() {
   sec.className = "glass-card stack";
 
   const grupoOrden = document.createElement("div");
-  grupoOrden.className = "pill-group";
+  grupoOrden.className = "pill-group grupo-orden-plan"; // PATCH 9c: altura compartida con los botones del encabezado
   [
     { valor: "bloque", texto: "Ordenar por bloque" },
     { valor: "categoria", texto: "Ordenar por categoría" },
