@@ -29,6 +29,8 @@ Los cálculos se derivan del modelo unificado; las pantallas no deben sumar por 
 
 El shell está en `js/finanzas/finanzas.js`. Las pestañas base incluyen Inicio, Semestres, Plan, Movimientos, Metas, Presupuesto y Beneficios. Cuentas y Deudas se agregan cuando sus módulos están activos. La lista visible también depende de la selección de módulos de Finanzas.
 
+En la barra inferior móvil, `css/design-system.css` coloca «Más» antes de las pestañas cuando el viewport mide 380 px o menos; a anchos mayores conserva el orden normal.
+
 ### Incorporación y guía de Finanzas
 
 El primer uso presenta una descripción de las funciones antes de elegir un perfil. Después solicita el saldo inicial cuando el perfil lo requiere y abre un recorrido contextual por las pestañas que estén activas. La guía cubre Inicio/Disponible, Semestres, Plan, Movimientos, Metas, Presupuesto, Beneficios, Cuentas y Deudas; omite las pestañas opcionales apagadas y termina en Ajustes para explicar módulos, importación, exportación y formatos de mensajes bancarios. Se puede volver a abrir desde la guía de la sección Finanzas. Las descripciones están en español; las traducciones se mantienen fuera de este cambio.

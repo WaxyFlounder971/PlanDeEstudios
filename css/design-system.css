@@ -2006,6 +2006,19 @@ img, svg { max-width: 100%; }
    expandir (que sigue flotando dentro de .materia-linea1, más a la
    izquierda de ese carril). */
 .materia-card.modo-edicion-activa { padding-right: 42px; }
+/* PATCH 5 (2026-11-06): en móvil, las tarjetas de materia dentro de la tarjeta
+   de un semestre (Semestre actual / pasados) desperdiciaban los 24px laterales
+   del padding de .glass-card. Se compensan con margen lateral negativo SOLO
+   en esa lista (hijos directos de la tarjeta del semestre): el título, la
+   fecha, el chip de créditos y el menú "..." conservan su padding. Quedan 8px
+   de inset (24px - 16px) para que la barra de color y el radio no choquen con
+   el borde de la tarjeta madre; para sangrado total, cambiar 16px por 24px. */
+@media (max-width: 899.98px) {
+  .glass-card[data-semestre-id] > .materia-card {
+    margin-left: -16px;
+    margin-right: -16px;
+  }
+}
 .materia-editar-lapiz {
   display: none;
   position: absolute;
@@ -5112,6 +5125,15 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
 .timer-indicador--linea .timer-fila-tiempo { flex: none; flex-wrap: nowrap; gap: 5px; }
 .timer-indicador--linea .timer-tiempo { font-size: 0.74rem; }
 .timer-indicador--linea .timer-estado { font-size: 0.68rem; }
+/* PATCH 6A (2026-11-06): en modo Optimizado, [data-rendimiento="reducido"] .timer-indicador
+   (especificidad 0,2,0, más arriba) le pintaba a esta línea el fondo teñido con el
+   color de la materia, ganándole a `background: none` de .timer-indicador--linea.
+   Se vuelve a dejar sin fondo SOLO la variante de la barra superior (<900px);
+   la tarjeta lateral y la flotante conservan el suyo. */
+[data-rendimiento="reducido"] .timer-indicador--linea {
+  background-color: transparent;
+  background-image: none;
+}
 
 /* Encabezado (B.1): título + engranaje de Ajustes (el filtro Todo/Activos
    se mudó adentro del modal de Ajustes). */
@@ -6464,6 +6486,10 @@ html { overflow-y: scroll; scrollbar-gutter: stable; }
 #agenda-header .app-encabezado__centro,
 #horario-header .app-encabezado__centro,
 #seccion-tiempo-estudio .app-encabezado__centro { gap: var(--enc-gap); }
+/* Horario y Tiempo: la fila de fechas alinea por baseline igual que Agenda (que lo fija inline);
+   con "center" el texto quedaba ~3px más abajo dentro del min-height (16px vs 13px). */
+#horario-header .app-encabezado__rango,
+#seccion-tiempo-estudio .app-encabezado__rango { align-items: baseline; }
 /* Los botones laterales (+, ⋮, racha, Unirse/Crear...) se centran respecto a la altura TOTAL del encabezado
    (semestre + semana + fecha), sin moverse en horizontal: se suben la mitad de lo que ocupa el semestre. */
 #agenda-header .app-encabezado__fila,
@@ -7201,3 +7227,28 @@ body[data-enlaces-lateral="riel"] .enlace-rapido-icono img { width: 24px; height
 
 /* 6) Guía «Cómo funciona Finanzas». */
 .finanzas-guia-lista { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 6px; font-size: .92rem; }
+
+/* Sidebar móvil (drawer): apertura/cierre suave, acelerada por GPU. Solo transform + opacity (antes: 0.28s ease sin
+   fundido) y el fondo oscuro hace fade sincronizado en vez de aparecer de golpe. will-change solo mientras anima
+   (clase .sidebar-animando, ver cerrarSidebarMovil/hamburguesa en componentes.js). Escritorio no cambia: ahí la
+   barra está en el flujo y su ancho ya anima con el mismo easing. */
+@media (max-width: 899.98px) {
+  html:root #app-sidebar.app-sidebar {
+    opacity: 0;
+    transition: transform .32s cubic-bezier(.22, 1, .36, 1), opacity .32s cubic-bezier(.22, 1, .36, 1),
+                background-color .32s ease, color .32s ease, border-color .32s ease;
+  }
+  html:root #app-sidebar.app-sidebar.abierta { opacity: 1; }
+  #app-sidebar.sidebar-animando { will-change: transform, opacity; }
+  #sidebar-overlay.sidebar-overlay {
+    display: block; opacity: 0; visibility: hidden; pointer-events: none;
+    transition: opacity .32s cubic-bezier(.22, 1, .36, 1), visibility 0s linear .32s;
+  }
+  #sidebar-overlay.sidebar-overlay.abierta {
+    opacity: 1; visibility: visible; pointer-events: auto;
+    transition: opacity .32s cubic-bezier(.22, 1, .36, 1), visibility 0s;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:root #app-sidebar.app-sidebar, #sidebar-overlay.sidebar-overlay { transition-duration: .01ms !important; transition-delay: 0s !important; }
+}

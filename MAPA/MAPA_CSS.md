@@ -1,14 +1,16 @@
 # MAPA_CSS.md — Índice de `css/design-system.css`
 
-## Notas rápidas (v3.24.0)
+## Notas rápidas (actualizado 2026-11-06)
 
 `design-system.css` incorpora `notas-grid`/`notas-lista`, tarjetas tipo post-it con vista expandible, barra de selección, editor modal adaptable, paleta, estados de pin/arrastre, filtros y aviso de contenido compartido. El fondo de cada tarjeta proviene del color de nota y el JS calcula texto claro u oscuro para mantener contraste.
+
+Cambios del 2026-11-06: la lista de materias de Semestres sangra 16 px por lado en móvil; el mini-timer del encabezado no recibe un fondo teñido en Modo Optimizado. El PiP de Android se dibuja en canvas en `tiempo-estudio-indicador.js`, no como tarjeta CSS.
 
 > Adaptación del formato de `MAPA_FUNCIONES.md` a CSS: en vez de funciones se listan las **variables (custom properties)** y las **clases de componente reutilizables** que otros archivos (HTML/JS) consumen. No se documentan reglas de un solo uso ni ajustes puntuales de layout — esas quedan "internas" del archivo, igual que una función privada de un `.js`.
 
 ---
 
-## css/design-system.css (3590 líneas)
+## css/design-system.css (7254 líneas al 2026-11-06)
 Propósito: sistema de diseño único de la app — base glassmorphism (tarjetas translúcidas + blur), botones, pills, badges, switches, modales, y estilos específicos de cada sección (Plan de Estudios, Agenda, Horario, paleta personalizada, etc.). Soporta 13 paletas de color × 2 modos (claro/oscuro) vía atributos en `<html>`.
 Depende de: nada (CSS puro, sin imports). Se referencia desde `index.html` y `amigos.html`.
 
@@ -50,16 +52,19 @@ Otros atributos de `<html>` que el CSS lee: `data-rendimiento="reducido"` (Modo 
 | Línea | Sección |
 |---|---|
 | 1 | Base del sistema (`:root`, reset, tipografía, `.glass-card`/`.glass-panel`/`.btn`) |
-| 870 | Paletas — los 26 bloques `[data-palette][data-mode]` |
-| 1106 | Layout de la app (shell + sidebar), responsivo real |
-| 1406 | Breakpoint < 900px — sidebar pasa a drawer superior |
-| 1507 | Vista del Plan de Estudios (Iteración 1, Parte 2) |
-| 2175 | Agenda |
-| 2509 | Vista de Mapa interactivo del Plan de Estudios (B.3) |
-| 2927 | Modo de Rendimiento (`[data-rendimiento="reducido"]`) |
-| 3012 | Panel "Crear mi paleta" (paleta personalizada) |
-| 3236 | Degradado configurable dentro de "Crear mi paleta" |
-| 3500 | Horario — núcleo |
+| 1123 | Paletas — los 26 bloques `[data-palette][data-mode]` |
+| 1491 | Navegación y sidebar |
+| 1822 | Breakpoint < 900px — sidebar pasa a drawer móvil |
+| 1954 | Vista del Plan de Estudios |
+| 2791 | Agenda |
+| 3555 | Vista de Mapa interactivo del Plan de Estudios |
+| 3606 | Finanzas: pestañas y accesos responsivos |
+| 4177 | Crear mi paleta: selección de paleta base |
+| 4368 | Panel de personalización de paleta |
+| 4896 | Tiempo de Estudio |
+| 6082 | Notas rápidas |
+| 6439 | Encabezados compartidos de Agenda, Horario y Tiempo |
+| 7231 | Animación del drawer móvil y overlay |
 
 ---
 

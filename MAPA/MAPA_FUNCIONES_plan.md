@@ -1,7 +1,7 @@
 ## JS — Plan
 
 ### plan-categorias.js
-Propósito: gestión de categorías personalizadas de materias (crear/editar categorías y asignar/quitar materias de cada una).
+Propósito: gestión de categorías personalizadas de materias (crear/editar categorías y asignar/quitar materias de cada una). Los chips filtran con toque corto y abren edición con long-press de 500 ms o clic derecho; el long-press se cancela al mover para permitir desplazamiento sin activar el filtro al soltar.
 Depende de: schema.js, storage-sync.js, storage.js, utils.js, componentes.js, plan-esquema.js, plan-vista-lista.js
 Exporta:
 
@@ -176,6 +176,8 @@ Exporta:
 * `navegarPlanCarrusel(delta)` — Cambia el plan activo al siguiente/anterior (`delta` ±1) dentro del carrusel de planes.
 * `obtenerClavesAgrupacionActuales()` — Devuelve el set de claves de agrupación actuales (por categoría o por bloque, según el orden activo) de las materias visibles.
 * `renderizarPlanEstudios()` — Punto de entrada principal: vacía y reconstruye `#seccion-plan-estudios` completo (encabezado, estadísticas, barra de acciones, contenido de bloques).
+
+**Ajuste 2026-11-05:** los botones del encabezado usan la clase `encabezado-plan-botones`; el CSS los estira para ocupar el ancho disponible y centra su contenido, manteniendo el salto de línea cuando no caben juntos.
 
 ### plan-modo-edicion.js
 Propósito: botón "Editar plan", badge fijo "Modo edición" y el ícono de lápiz que aparece en cada tarjeta de materia mientras el modo está activo.
