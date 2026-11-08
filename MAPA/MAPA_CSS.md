@@ -1,4 +1,9 @@
 # MAPA_CSS.md — Índice de `css/design-system.css`
+v3.28.0 - Parche A3 - Tarjetas tocables de Finanzas: .fin-tarjeta-tocable, .fin-chevron y aviso de .fin-sin-asignar negativo, con foco visible y estados hover.
+v3.28.0 - Parche C2 - Timer plegado: design-system.css aplica el color de la materia al círculo plegado (44 px), con tinte, aro y modo Optimizado sin blur/sombra.
+v3.28.0 - Parche C6 - Avisos del timer: design-system.css añade animaciones Onda y píldora de descanso, con soporte para rendimiento y movimiento reducidos.
+v3.28.0 - Parche D1 - Estilos de Notas (en `js/notas/notas-estilos.js`): canvas de tinta transparente; .nt-tinta-vacia oculta el lienzo sin trazos; el editor declara color-scheme claro u oscuro según data-mode.
+v3.28.0 - Parche D4 - Estilos de Notas (en `js/notas/notas-estilos.js`): en Optimizado, las capas de cierre, compartir y stickers usan fondo opaco sin desenfoque; modo normal sin cambios.
 
 ## Notas rápidas (actualizado 2026-11-07)
 
@@ -6,11 +11,13 @@
 
 Cambios del 2026-11-06/07: la lista de materias de Semestres sangra 16 px por lado en móvil; el mini-timer del encabezado no recibe un fondo teñido en Modo Optimizado; los chips de categorías del Plan usan flex-wrap centrado y los botones del encabezado/selector de orden comparten altura; el caret general se oculta salvo en campos editables. El PiP de Android se dibuja en canvas en `tiempo-estudio-indicador.js`, no como tarjeta CSS. Finanzas conserva tres favoritos con el «＋» centrado en todos los anchos de su barra móvil.
 
+Cambios v3.28.0 B: los Enlaces rápidos adoptan el tratamiento de navegación sin borde y toda la fila abre su enlace; los encabezados usan `--bg-encabezado` oscuro; el menú lateral se expande como capa por pulsación larga; los botones del Plan quedan en 36 px; el drawer de Enlaces reutiliza la expansión y se corrigen los clics lentos.
+
 > Adaptación del formato de `MAPA_FUNCIONES.md` a CSS: en vez de funciones se listan las **variables (custom properties)** y las **clases de componente reutilizables** que otros archivos (HTML/JS) consumen. No se documentan reglas de un solo uso ni ajustes puntuales de layout — esas quedan "internas" del archivo, igual que una función privada de un `.js`.
 
 ---
 
-## css/design-system.css (7288 líneas al 2026-11-07)
+## css/design-system.css (7555 líneas al 2026-11-07)
 Propósito: sistema de diseño único de la app — base glassmorphism (tarjetas translúcidas + blur), botones, pills, badges, switches, modales, y estilos específicos de cada sección (Plan de Estudios, Agenda, Horario, paleta personalizada, etc.). Soporta 13 paletas de color × 2 modos (claro/oscuro) vía atributos en `<html>`.
 Depende de: nada (CSS puro, sin imports). Se referencia desde `index.html` y `amigos.html`.
 
@@ -52,19 +59,21 @@ Otros atributos de `<html>` que el CSS lee: `data-rendimiento="reducido"` (Modo 
 | Línea | Sección |
 |---|---|
 | 1 | Base del sistema (`:root`, reset, tipografía, `.glass-card`/`.glass-panel`/`.btn`) |
-| 1133 | Paletas — los 26 bloques `[data-palette][data-mode]` |
-| 1500 | Navegación y sidebar |
-| 1831 | Breakpoint < 900px — sidebar pasa a drawer móvil |
-| 1963 | Vista del Plan de Estudios |
-| 2819 | Agenda |
-| 3583 | Vista de Mapa interactivo del Plan de Estudios |
-| 3634 | Finanzas: pestañas y accesos responsivos |
-| 4205 | Crear mi paleta: selección de paleta base |
-| 4396 | Panel de personalización de paleta |
-| 4929 | Tiempo de Estudio |
-| 6115 | Notas rápidas |
-| 6472 | Encabezados compartidos de Agenda, Horario y Tiempo |
-| 7265 | Animación del drawer móvil y overlay |
+| 1136 | Paletas — los 26 bloques `[data-palette][data-mode]` |
+| 1504 | Navegación y sidebar |
+| 1869 | Breakpoint < 900px — sidebar pasa a drawer móvil |
+| 1999 | Vista del Plan de Estudios |
+| 2867 | Agenda |
+| 3631 | Vista de Mapa interactivo del Plan de Estudios |
+| 3682 | Finanzas: pestañas y accesos responsivos |
+| 4253 | Crear mi paleta: selección de paleta base |
+| 4444 | Panel de personalización de paleta |
+| 4977 | Tiempo de Estudio |
+| 6163 | Notas rápidas |
+| 6521 | Encabezados compartidos de Agenda, Horario y Tiempo |
+| 7320 | Animación del drawer móvil y overlay |
+| 7345 | Animación del drawer de Enlaces y timer flotante |
+| 7373 | Expansión del menú lateral por pulsación larga |
 
 ---
 

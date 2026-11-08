@@ -1,11 +1,40 @@
 # MAPA_FUNCIONES.md
+v3.28.0 - Parche C3 - PiP de escritorio y Android: tarjeta de materia con controles compactos; canvas Android usa color validado, tinte y datos del timer.
+v3.28.0 - Parche C4 - PiP Android: canvas 440×187 a doble resolución; ?diag=pip informa resolución del video y dimensiones de la ventana.
+v3.28.0 - Parche A3 - Finanzas: cuentas y préstamos se abren tocando la tarjeta; «Sin asignar» negativo explica cómo corregir movimientos sin cuenta. Test: finanzas-A3-tarjeta-tocable.mjs.
+v3.28.0 - Parche D5 - Notas: miniaturas de tinta esperan el ancho real con ResizeObserver y hacen un solo pintado de respaldo si no se mide. Test: notas-mini-tinta-D5-logica.mjs.
+v3.28.0 - Parche C1 - Prototipo de avisos del timer: prototipo-toasts-timer.html es una maqueta manual no enlazada en la app.
+v3.28.0 - Parche C2 - Timer plegado: design-system.css tiñe el botón circular con el color de la materia y conserva su tamaño/posición; en Optimizado quita blur y sombra.
+v3.28.0 - Parche C5 - Competencias: nuevo módulo competencias-transicion.js aplaza solo repintados remotos durante la entrada y disuelve/ajusta altura al cambiar datos; sin movimiento dibuja al instante.
+v3.28.0 - Parche C6 - Avisos del timer: tiempo-estudio-avisos.js reemplaza el toast de inicio por Onda en el anillo (toast de respaldo sin anillo) y el toast al iniciar descanso por píldora fría accesible, de seis segundos y suscrita al timer.
+v3.28.0 - Parche D1 - Notas negras: defensa en profundidad: `notas-tinta.js` usa alfa explícito y desactiva desynchronized por defecto (se puede activar con localStorage), oculta el lienzo vacío; `notas-estilos.js` mantiene transparentes los canvas y declara color-scheme del editor.
+v3.28.0 - Parche D2 - Diagnóstico de Notas: `notas-diagnostico.js` añade el panel opt-in ?diag=notas / ?diag=notas-sinsonda para inspeccionar estilos y alfa del canvas; ?diag=off o window.__ntDiag.quitar() lo desactiva.
+v3.28.0 - Parche D3 - Auditoría estática: `MAPA/OPTIMIZACION.md` registra hallazgos priorizados, recomendaciones y el procedimiento propuesto para medir rendimiento; no incluye mediciones reales.
+v3.28.0 - Parche D4 - Notas en modo Optimizado: `notas-estilos.js` quita `backdrop-filter` de las capas de cierre, compartir, stickers y confirmar sticker cuando data-rendimiento="reducido"; modo normal sin cambios.
+v3.28.0 - Parche B8 - Correcciones de B1 y B2: expansion-lateral.js (accionPara) ya no abre ni cierra por pulsación larga si el menú no está en riel o si se pulsa un botón con el menú abierto. design-system.css: .enlace-rapido-fila > a::after extiende el clic a toda la fila.
+
+v3.28.0 - Parche B4 - Plan: botones a 36 px: design-system.css, variable --plan-boton-alto (2.3rem) para «Gestionar plan», «Actualizar malla» y la nueva clase .btn-plan-compacto. plan-categorias.js: «+ Agregar categoría» usa esa clase. --plan-control-alto (2.75rem) queda solo para «Ordenar por…».
+
+v3.28.0 - Parche B3 - Encabezados del color de las tarjetas: design-system.css, variable --bg-encabezado (= --bg-card en oscuro y oscuro profundo) aplicada a .app-encabezado. Claro sin cambios. Revertir = borrar la declaración de la variable.
+
+v3.28.0 - Parche B2 - Enlaces rápidos sin borde de botón: config-enlaces.js añade la clase .enlace-rapido-fila a las filas del panel lateral y el cajón (no a Configuración). design-system.css: bloque «v3.28.0 B (E1)» tras .enlace-rapido-nombre con las medidas de .btn-nav (36 px, 4×14, radio 14, gap 12, .95rem/600, hover 7 %).
+
+v3.28.0 - Parche B1 - Expandir menú y enlaces con pulsación larga: nuevo js/ui/expansion-lateral.js (inicializarExpansionLateral, pulsación larga de 500 ms delegada en document, Esc, Alt+Mayús+M / Alt+Mayús+E). componentes.js lo inicia desde inicializarLayoutResponsivo.
+CSS: sección «v3.28.0 B (L1/L2)» tras el PATCH 8 del drawer. Menú izquierdo = .expandida-overlay (fixed, espaciador de su ancho, telón #sidebar-overlay). Enlaces = el cajón #drawer-enlaces-movil ya existente.
+
+v3.28.0 - Parche A4 - Asistente, «¿Qué puedes hacer?» sin cerrar el hilo: enviarTextoAWapper (asistente.js) solo navega con mostrarSeccion si no se está ya en el Asistente; si viene de otra sección retoma el historial vigente (retomarHistorial) en vez de pisarlo; no se envía mientras hay una respuesta en curso. manejarEnvioMensaje(textoForzado) envía un texto ya listo sin pasar por el campo (el borrador no se pierde). El aviso «continuar / nueva» lleva id asistente-aviso-continuar. Test nuevo: tests/asistente-AS1-capacidades.mjs (jsdom, opcional).
+
+v3.28.0 - Parche A2 - Revisar y quitar traspasos dañados: core/finanzas/finanzas-reparar-traspasos.js (simularReparacionTraspasos en dry-run; aplicarReparacionTraspasos quita con tumba solo los traspasos desde Sin asignar que excedían lo disponible en su fecha). finanzas/finanzas-reparar-traspasos-ui.js (aviso en Cuentas solo si hay algo; modal con simulación, respaldo obligatorio y confirmación). Enganche en finanzas-cuentas-ui.js (renderizarPestanaCuentas). Test nuevo: tests/finanzas-A2-reparar-traspasos.mjs.
+
+v3.28.0 - Parche A1 - Traspaso desde Sin asignar no duplica el monto: crearTraspaso (finanzas-cuentas.js) rechaza con motivo "sin_asignar_insuficiente" si origen = Sin asignar y monto > Sin asignar disponible (≥ 0). abrirTraspaso (finanzas-cuentas-ui.js) muestra el motivo, avisa cuando el destino no afecta saldo y usa crearGuardReentrada contra el doble toque. Test nuevo: tests/finanzas-F1-traspaso-sin-asignar.mjs.
+
 **Actualización 07/11/2026:** Finanzas 2.0 tiene su inventario en `MAPA_FUNCIONES_finanzas.md`; el esquema y la fusión incluyen formatos bancarios, préstamos y cuentas. Las entradas vigentes del 05/11 al 07/11 documentan Competencias, Plan, Finanzas móvil, Wapper, Notas y el timer. Las entradas fechadas más abajo son historial de cambios y conservan el estado que tenían en su fecha.
 
 # 2026-11-07 - Ajustes E1 de Horario, Plan y caret
 Horario aumenta el peso de los nombres de materia a 700 y solo en escritorio amplía el texto 2 px. Las categorías del Plan ahora envuelven chips centrados con gap de 6 px. El toque principal filtra; el clic derecho no altera el filtro y abre el editor, sin duplicarlo tras un long-press móvil. Los controles de ordenar y los dos botones del encabezado comparten alto `2.75rem`. El caret del documento queda transparente y se habilita de nuevo en controles editables y contenido editable; no se alteran outlines ni `:focus-visible`. **Archivos:** `css/design-system.css`, `js/plan/plan-categorias.js`, `js/plan/plan-vista-lista.js`.
 
 # 2026-11-07 - Ajustes E2 de Finanzas y dibujo de Notas
-La barra móvil de Finanzas muestra tres favoritos alrededor del botón central «＋»: dos a la izquierda y uno a la derecha, con «Más» al final. El orden predeterminado es Inicio, Gastos universitarios y Plan; si había más de tres favoritos guardados, conserva los tres primeros y avisa una vez. El 4.º favorito elegido reemplaza al más antiguo; al quitar uno, el espacio se completa con prioridad predeterminada. En Notas, la capa de tinta mantiene `desynchronized`, realiza un primer pintado casi transparente, observa también el viewport y mide en dos frames para corregir un canvas negro inicial; la causa en Android sigue siendo una hipótesis pendiente de verificar en dispositivo.
+La barra móvil de Finanzas muestra tres favoritos alrededor del botón central «＋»: dos a la izquierda y uno a la derecha, con «Más» al final. El orden predeterminado es Inicio, Gastos universitarios y Plan; si había más de tres favoritos guardados, conserva los tres primeros y avisa una vez. El 4.º favorito elegido reemplaza al más antiguo; al quitar uno, el espacio se completa con prioridad predeterminada. En Notas, D1 desactiva `desynchronized` por defecto, oculta el lienzo vacío y conserva la causa del rectángulo negro como hipótesis pendiente de verificar en dispositivo.
 
 Los mensajes de Finanzas están traducidos en ES/EN/IT/FR, incluidos los botones «Más». **Archivos:** `js/finanzas/finanzas-navegacion.js`, `css/design-system.css`, `js/notas/notas-tinta.js`, cuatro archivos `idiomas/*.json`.
 

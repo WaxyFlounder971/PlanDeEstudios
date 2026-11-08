@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="es" data-mode="dark" data-materia="rojo">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototipo · toasts del timer (v3.28.0 C1)</title>
+<style>
+/* ===== Paleta del prototipo (único bloque con hex; la app real usa sus variables) ===== */
+:root {
+  --bg-canvas: #0b0b12; --bg-panel: #15151f; --bg-card: #1b1b28;
+  --border-glass: rgba(255,255,255,0.10);
+  --text-primary: #f1f2f4; --text-secondary: #b7bac1; --text-muted: #888c94;
+  --accent-1: #6366f1;
+  --mat-rojo: #ef4444; --mat-morado: #a855f7; --mat-verde: #22c55e;
+  --frio-1: #38bdf8; --frio-2: #2dd4bf;
+}
+[data-mode="light"] {
+  --bg-canvas: #eef0f5; --bg-panel: #ffffff; --bg-card: #f6f7fb;
+  --border-glass: rgba(15,23,42,0.10);
+  --text-primary: #0f172a; --text-secondary: #475569; --text-muted: #7b8697;
+}
+[data-materia="rojo"] { --te-color: var(--mat-rojo); }
+[data-materia="morado"] { --te-color: var(--mat-morado); }
+[data-materia="verde"] { --te-color: var(--mat-verde); }
+
+/* ===== Base ===== */
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 16px; background: var(--bg-canvas); color: var(--text-primary);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; line-height: 1.4;
+}
+h1 { font-size: 1.15rem; margin: 0 0 4px; }
+h2 { font-size: 1rem; margin: 0 0 4px; }
+p.nota { margin: 0 0 12px; color: var(--text-secondary); font-size: .85rem; }
+.oculto { display: none !important; }
+.solo-lectores {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+/* ===== Controles ===== */
+.controles {
+  display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 12px; margin-bottom: 16px;
+  border: 1px solid var(--border-glass); border-radius: 14px; background: var(--bg-panel);
+}
+.grupo { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.grupo > span { font-size: .75rem; color: var(--text-muted); margin-right: 2px; }
+.btn {
+  min-height: 36px; padding: 0 12px; border-radius: 10px; cursor: pointer;
+  border: 1px solid var(--border-glass); background: var(--bg-card); color: var(--text-primary);
+  font: inherit; font-size: .82rem;
+}
+.btn[aria-pressed="true"] { border-color: var(--te-color); background: color-mix(in srgb, var(--te-color) 18%, var(--bg-card)); }
+.btn:focus-visible { outline: 2px solid var(--te-color); outline-offset: 2px; }
+.btn-lanzar { font-weight: 600; border-color: color-mix(in srgb, var(--te-color) 55%, transparent); }
+
+/* ===== Marco de viewport ===== */
+.marco { margin: 0 auto; width: 100%; max-width: 1080px; }
+.marco[data-vista="movil"] { max-width: 360px; }
+.rejilla { display: grid; gap: 16px; grid-template-columns: 1fr 1fr; }
+.marco[data-vista="movil"] .rejilla { grid-template-columns: 1fr; }
+@media (max-width: 720px) { .rejilla { grid-template-columns: 1fr; } }
+.tarjeta {
+  padding: 14px; border: 1px solid var(--border-glass); border-radius: 16px;
+  background: var(--bg-panel); display: flex; flex-direction: column; gap: 10px; min-width: 0;
+}
+.tarjeta header { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+.etiqueta-reco {
+  font-size: .68rem; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+  color: var(--text-primary); border: 1px solid color-mix(in srgb, var(--te-color) 55%, transparent);
+  background: color-mix(in srgb, var(--te-color) 14%, transparent);
+}
+.escenario { display: grid; place-items: center; min-height: 300px; padding: 8px 0; }
+.escenario--corto { min-height: 130px; }
+.seccion-titulo { margin: 20px 0 8px; font-size: .78rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+
+/* ===== Anillo del timer (~250 px, como IMG4) ===== */
+.anillo {
+  --tam: 250px; position: relative; width: var(--tam); height: var(--tam); max-width: 100%;
+  aspect-ratio: 1; display: grid; place-items: center;
+}
+.anillo svg { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); overflow: visible; }
+.anillo circle { fill: none; stroke-linecap: round; }
+.anillo .pista { stroke: color-mix(in srgb, var(--te-color) 16%, var(--bg-card)); stroke-width: 10; }
+.anillo .reposo { stroke: color-mix(in srgb, var(--te-color) 55%, var(--bg-panel)); stroke-width: 10; }
+.anillo .trazo { stroke: var(--te-color); stroke-width: 10; stroke-dasharray: 704; stroke-dashoffset: 704; opacity: 0; }
+.anillo .halo { stroke: var(--te-color); stroke-width: 22; opacity: 0; transform-origin: 50% 50%; }
+.anillo .onda {
+  stroke: var(--te-color); stroke-width: 3; opacity: 0; transform-origin: 50% 50%;
+}
+.anillo-centro { position: relative; text-align: center; z-index: 1; display: grid; place-items: center; }
+.anillo-tiempo { font-size: 2.6rem; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.anillo-estado {
+  margin-top: 2px; font-size: .78rem; font-weight: 700; letter-spacing: .18em;
+  color: var(--te-color); opacity: 0;
+}
+.anillo[data-listo] .anillo-estado { opacity: 1; }
+.anillo-play {
+  position: absolute; inset: 0; display: grid; place-items: center; opacity: 0; pointer-events: none;
+  color: var(--te-color);
+}
+.anillo-play svg { position: static; width: 56px; height: 56px; transform: none; fill: currentColor; stroke: none; }
+
+/* A · Ignición */
+.anillo.a-ignicion.corre .trazo { animation: a-dibuja 700ms cubic-bezier(.45,.05,.2,1) forwards; }
+.anillo.a-ignicion.corre .halo { animation: a-destello 520ms ease-out 640ms forwards; }
+.anillo.a-ignicion.corre .anillo-estado { animation: a-entra 420ms cubic-bezier(.2,.8,.2,1) 700ms backwards; }
+@keyframes a-dibuja {
+  0% { stroke-dashoffset: 704; opacity: 1; }
+  88% { stroke-dashoffset: 0; opacity: 1; }
+  100% { stroke-dashoffset: 0; opacity: 0; }
+}
+@keyframes a-destello {
+  0% { opacity: 0; transform: scale(1); }
+  35% { opacity: .22; transform: scale(1.015); }
+  100% { opacity: 0; transform: scale(1.05); }
+}
+@keyframes a-entra {
+  from { opacity: 0; transform: scale(.82); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* B · Onda */
+.anillo.b-onda.corre .onda { animation: b-onda 1100ms ease-out forwards; }
+.anillo.b-onda.corre .onda.dos { animation-delay: 220ms; }
+.anillo.b-onda.corre .anillo-play { animation: b-play 640ms ease-in-out forwards; }
+.anillo.b-onda.corre .anillo-tiempo { animation: b-tiempo 520ms cubic-bezier(.2,.8,.2,1) 360ms backwards; }
+.anillo.b-onda.corre .anillo-estado { animation: a-entra 420ms cubic-bezier(.2,.8,.2,1) 640ms backwards; }
+@keyframes b-onda {
+  0% { opacity: .55; transform: scale(.72); }
+  100% { opacity: 0; transform: scale(1.32); }
+}
+@keyframes b-play {
+  0% { opacity: 0; transform: scale(.7); }
+  30% { opacity: 1; transform: scale(1); }
+  70% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(.4); }
+}
+@keyframes b-tiempo {
+  from { opacity: 0; transform: scale(.7); }
+  to { opacity: 1; transform: scale(1); }
+}
+.anillo.b-onda .anillo-tiempo { opacity: 1; }
+
+/* ===== Descanso ===== */
+.frio { --frio: var(--frio-1); --frio-b: var(--frio-2); }
+.pildora-frio {
+  display: flex; align-items: center; gap: 10px; width: 232px; max-width: 100%; min-height: 54px;
+  padding: 8px 10px 8px 12px; border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--frio) 42%, transparent);
+  background: color-mix(in srgb, var(--frio) 13%, var(--bg-panel));
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  opacity: 0; transform: translateY(14px) scale(.96);
+}
+.pildora-frio.corre { animation: p-entra 420ms cubic-bezier(.2,.8,.2,1) forwards; }
+@keyframes p-entra { to { opacity: 1; transform: none; } }
+.mini-arco { position: relative; flex: none; width: 30px; height: 30px; }
+.mini-arco svg { width: 100%; height: 100%; transform: rotate(-90deg); display: block; }
+.mini-arco circle { fill: none; stroke-width: 4; stroke-linecap: round; }
+.mini-arco .pista { stroke: color-mix(in srgb, var(--frio) 20%, transparent); }
+.mini-arco .vacia { stroke: var(--frio); stroke-dasharray: 100; stroke-dashoffset: 0; }
+.pildora-frio.corre .mini-arco .vacia { animation: p-vacia 272s linear forwards; }
+@keyframes p-vacia { to { stroke-dashoffset: 100; } }
+.pildora-textos { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.pildora-nombre { font-size: .72rem; font-weight: 700; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pildora-tiempo { font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.pildora-fin {
+  margin-left: auto; flex: none; width: 29px; height: 29px; display: grid; place-items: center;
+  border-radius: 9px; border: 1px solid color-mix(in srgb, var(--frio) 35%, transparent);
+  background: color-mix(in srgb, var(--frio) 10%, transparent); color: var(--text-secondary); font-size: .8rem;
+}
+
+.respira { position: relative; width: 190px; height: 190px; display: grid; place-items: center; max-width: 100%; }
+.respira-aro {
+  position: absolute; inset: 14px; border-radius: 50%; opacity: 0;
+  border: 2px solid color-mix(in srgb, var(--frio) 70%, transparent);
+  background: radial-gradient(circle, color-mix(in srgb, var(--frio) 22%, transparent), color-mix(in srgb, var(--frio-b) 6%, transparent) 70%);
+  transform: scale(.7);
+}
+.respira.corre .respira-aro { animation: r-respira 4s ease-in-out infinite; opacity: 1; }
+@keyframes r-respira {
+  0%, 100% { transform: scale(.7); opacity: .75; }
+  50% { transform: scale(1); opacity: 1; }
+}
+.respira-texto { position: relative; text-align: center; line-height: 1.2; }
+.respira-guia { font-size: .72rem; letter-spacing: .14em; text-transform: uppercase; color: var(--text-secondary); min-height: 1em; }
+.respira-tiempo { font-size: 1.6rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* ===== Rendimiento reducido: sin blur, sin brillos, fondos opacos ===== */
+[data-rendimiento="reducido"] .pildora-frio {
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  background-color: var(--bg-canvas);
+  background-image: linear-gradient(color-mix(in srgb, var(--frio) 13%, var(--bg-panel)), color-mix(in srgb, var(--frio) 13%, var(--bg-panel)));
+}
+[data-rendimiento="reducido"] .anillo .halo { display: none; }
+[data-rendimiento="reducido"] .respira-aro { background: color-mix(in srgb, var(--frio) 14%, var(--bg-panel)); }
+[data-rendimiento="reducido"] .anillo.b-onda.corre .onda.dos { display: none; }
+
+/* ===== Movimiento reducido (sistema o interruptor): solo fundidos de opacidad, sin escala ni trazo ===== */
+:root[data-movimiento="reducido"] .anillo.corre .trazo,
+:root[data-movimiento="reducido"] .anillo.corre .halo,
+:root[data-movimiento="reducido"] .anillo.corre .onda,
+:root[data-movimiento="reducido"] .anillo.corre .anillo-play { animation: none; opacity: 0; }
+:root[data-movimiento="reducido"] .anillo.corre .anillo-estado,
+:root[data-movimiento="reducido"] .anillo.corre .anillo-tiempo { animation: m-fundido 300ms linear backwards; }
+:root[data-movimiento="reducido"] .pildora-frio.corre { animation: m-fundido-fin 300ms linear forwards; transform: none; }
+:root[data-movimiento="reducido"] .pildora-frio.corre .mini-arco .vacia { animation: none; stroke-dashoffset: 0; }
+:root[data-movimiento="reducido"] .respira.corre .respira-aro { animation: none; transform: scale(.85); opacity: 1; }
+@keyframes m-fundido { from { opacity: 0; } to { opacity: 1; } }
+@keyframes m-fundido-fin { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  :root:not([data-movimiento="completo"]) .anillo.corre .trazo,
+  :root:not([data-movimiento="completo"]) .anillo.corre .halo,
+  :root:not([data-movimiento="completo"]) .anillo.corre .onda,
+  :root:not([data-movimiento="completo"]) .anillo.corre .anillo-play { animation: none; opacity: 0; }
+  :root:not([data-movimiento="completo"]) .anillo.corre .anillo-estado,
+  :root:not([data-movimiento="completo"]) .anillo.corre .anillo-tiempo { animation: m-fundido 300ms linear backwards; }
+  :root:not([data-movimiento="completo"]) .pildora-frio.corre { animation: m-fundido-fin 300ms linear forwards; transform: none; }
+  :root:not([data-movimiento="completo"]) .pildora-frio.corre .mini-arco .vacia { animation: none; stroke-dashoffset: 0; }
+  :root:not([data-movimiento="completo"]) .respira.corre .respira-aro { animation: none; transform: scale(.85); opacity: 1; }
+}
+</style>
+</head>
+<body>
+<h1>Prototipo · avisos del timer</h1>
+<p class="nota">Reemplazan al toast «Timer iniciado…» y al toast de descanso. Esto es solo una maqueta: no toca la app ni tus datos.</p>
+
+<div class="controles" role="group" aria-label="Controles del prototipo">
+  <div class="grupo" role="group" aria-label="Color de materia">
+    <span>Materia</span>
+    <button class="btn" type="button" data-materia-btn="rojo" aria-pressed="true">Rojo</button>
+    <button class="btn" type="button" data-materia-btn="morado" aria-pressed="false">Morado</button>
+    <button class="btn" type="button" data-materia-btn="verde" aria-pressed="false">Verde</button>
+  </div>
+  <div class="grupo" role="group" aria-label="Vista">
+    <span>Vista</span>
+    <button class="btn" type="button" data-vista-btn="escritorio" aria-pressed="true">Escritorio</button>
+    <button class="btn" type="button" data-vista-btn="movil" aria-pressed="false">360×780</button>
+  </div>
+  <div class="grupo" role="group" aria-label="Opciones">
+    <span>Opciones</span>
+    <button class="btn" type="button" id="btn-modo" aria-pressed="false">Modo claro</button>
+    <button class="btn" type="button" id="btn-mov" aria-pressed="false">Movimiento reducido</button>
+    <button class="btn" type="button" id="btn-rend" aria-pressed="false">Rendimiento reducido (sin blur)</button>
+  </div>
+  <div class="grupo">
+    <button class="btn btn-lanzar" type="button" id="btn-todo">▶ Relanzar todo</button>
+  </div>
+</div>
+
+<div class="marco" id="marco" data-vista="escritorio">
+  <div class="seccion-titulo">1 · Timer iniciado (sobre el anillo)</div>
+  <div class="rejilla">
+    <section class="tarjeta" aria-labelledby="t-a">
+      <header>
+        <div><h2 id="t-a">A · Ignición</h2><p class="nota">El trazo se dibuja una vez (≈700 ms), destello suave al cerrar y «ESTUDIANDO» entra con fundido y escala.</p></div>
+        <span class="etiqueta-reco">Recomendada</span>
+      </header>
+      <div class="escenario">
+        <div class="anillo a-ignicion" id="anillo-a" data-listo>
+          <svg viewBox="0 0 250 250" aria-hidden="true">
+            <circle class="pista" cx="125" cy="125" r="112"/>
+            <circle class="reposo" cx="125" cy="125" r="112"/>
+            <circle class="halo" cx="125" cy="125" r="112"/>
+            <circle class="trazo" cx="125" cy="125" r="112"/>
+          </svg>
+          <div class="anillo-centro"><div class="anillo-tiempo">00:00</div><div class="anillo-estado">ESTUDIANDO</div></div>
+        </div>
+      </div>
+      <button class="btn btn-lanzar" type="button" data-lanza="a">Relanzar A</button>
+    </section>
+
+    <section class="tarjeta" aria-labelledby="t-b">
+      <header>
+        <div><h2 id="t-b">B · Onda</h2><p class="nota">Una onda translúcida se expande y se desvanece; el play se transforma en el tiempo.</p></div>
+      </header>
+      <div class="escenario">
+        <div class="anillo b-onda" id="anillo-b" data-listo>
+          <svg viewBox="0 0 250 250" aria-hidden="true">
+            <circle class="pista" cx="125" cy="125" r="112"/>
+            <circle class="onda uno" cx="125" cy="125" r="112"/>
+            <circle class="onda dos" cx="125" cy="125" r="112"/>
+          </svg>
+          <div class="anillo-play" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></div>
+          <div class="anillo-centro"><div class="anillo-tiempo">00:00</div><div class="anillo-estado">ESTUDIANDO</div></div>
+        </div>
+      </div>
+      <button class="btn btn-lanzar" type="button" data-lanza="b">Relanzar B</button>
+    </section>
+  </div>
+
+  <div class="seccion-titulo">2 · Descanso</div>
+  <div class="rejilla frio">
+    <section class="tarjeta" aria-labelledby="d-a">
+      <header>
+        <div><h2 id="d-a">A · Píldora fría</h2><p class="nota">Mismo lenguaje que el timer flotante, en azul/verde frío. El arco se vacía con el descanso.</p></div>
+        <span class="etiqueta-reco">Recomendada</span>
+      </header>
+      <div class="escenario escenario--corto">
+        <div class="pildora-frio" id="pildora" role="group" aria-label="Descanso en curso">
+          <div class="mini-arco" aria-hidden="true">
+            <svg viewBox="0 0 36 36"><circle class="pista" cx="18" cy="18" r="15.9" pathLength="100"/><circle class="vacia" cx="18" cy="18" r="15.9" pathLength="100"/></svg>
+          </div>
+          <div class="pildora-textos">
+            <span class="pildora-nombre">Cálculo Diferencial E Int…</span>
+            <span class="pildora-tiempo">Descanso · <span data-cuenta="pildora">04:32</span></span>
+          </div>
+          <span class="pildora-fin" aria-hidden="true">■</span>
+        </div>
+      </div>
+      <button class="btn btn-lanzar" type="button" data-lanza="pildora">Relanzar A</button>
+    </section>
+
+    <section class="tarjeta" aria-labelledby="d-b">
+      <header>
+        <div><h2 id="d-b">B · Anillo de respiración</h2><p class="nota">El círculo se expande y se contrae (≈4 s) con la cuenta atrás en el centro.</p></div>
+      </header>
+      <div class="escenario">
+        <div class="respira" id="respira">
+          <div class="respira-aro" aria-hidden="true"></div>
+          <div class="respira-texto">
+            <div class="respira-guia" id="respira-guia" aria-hidden="true">Inhalá</div>
+            <div class="respira-tiempo"><span data-cuenta="respira">04:32</span></div>
+          </div>
+        </div>
+      </div>
+      <button class="btn btn-lanzar" type="button" data-lanza="respira">Relanzar B</button>
+    </section>
+  </div>
+</div>
+
+<!-- Anuncio accesible: reemplaza al toast para lectores de pantalla -->
+<div class="solo-lectores" id="anuncio" role="status" aria-live="polite" aria-atomic="true"></div>
+
+<script>
+(function () {
+  "use strict";
+  var raiz = document.documentElement;
+  var anuncio = document.getElementById("anuncio");
+  var MATERIA = "MA1102 · Cálculo Diferencial E Integral";
+  var DESCANSO_SEG = 272; // 04:32
+  var cuentas = {}; // id -> intervalo
+
+  function anunciar(texto) {
+    anuncio.textContent = "";
+    // Vaciar y volver a escribir en el siguiente frame fuerza que se vuelva a leer.
+    requestAnimationFrame(function () { anuncio.textContent = texto; });
+  }
+
+  function reiniciarClase(el, clase) {
+    el.classList.remove(clase);
+    void el.offsetWidth; // fuerza reflow para relanzar la animación
+    el.classList.add(clase);
+  }
+
+  function formato(seg) {
+    var m = Math.floor(seg / 60), s = seg % 60;
+    return (m < 10 ? "0" : "") + m + ":" + (s < 10 ? "0" : "") + s;
+  }
+
+  // Cuenta atrás basada en marcas de tiempo (no cuenta ticks), como pide el proyecto.
+  function iniciarCuenta(id) {
+    var nodos = document.querySelectorAll('[data-cuenta="' + id + '"]');
+    if (cuentas[id]) clearInterval(cuentas[id]);
+    var fin = performance.now() + DESCANSO_SEG * 1000;
+    function pintar() {
+      var resto = Math.max(0, Math.ceil((fin - performance.now()) / 1000));
+      for (var i = 0; i < nodos.length; i++) nodos[i].textContent = formato(resto);
+      if (resto <= 0) { clearInterval(cuentas[id]); delete cuentas[id]; }
+    }
+    pintar();
+    cuentas[id] = setInterval(pintar, 250);
+  }
+
+  function lanzarIgnicion() {
+    var el = document.getElementById("anillo-a");
+    reiniciarClase(el, "corre");
+    anunciar("Timer iniciado en " + MATERIA);
+  }
+  function lanzarOnda() {
+    var el = document.getElementById("anillo-b");
+    reiniciarClase(el, "corre");
+    anunciar("Timer iniciado en " + MATERIA);
+  }
+  function lanzarPildora() {
+    var el = document.getElementById("pildora");
+    reiniciarClase(el, "corre");
+    iniciarCuenta("pildora");
+    anunciar("Descanso iniciado. Quedan 4 minutos y 32 segundos.");
+  }
+  function lanzarRespira() {
+    var el = document.getElementById("respira");
+    var guia = document.getElementById("respira-guia");
+    reiniciarClase(el, "corre");
+    iniciarCuenta("respira");
+    guia.textContent = "Inhalá";
+    // La guía alterna cada medio ciclo (2 s) según el tiempo transcurrido.
+    if (el._guia) clearInterval(el._guia);
+    var t0 = performance.now();
+    el._guia = setInterval(function () {
+      var fase = Math.floor(((performance.now() - t0) % 4000) / 2000);
+      guia.textContent = fase === 0 ? "Inhalá" : "Exhalá";
+    }, 250);
+    anunciar("Descanso iniciado. Quedan 4 minutos y 32 segundos.");
+  }
+
+  var lanzadores = { a: lanzarIgnicion, b: lanzarOnda, pildora: lanzarPildora, respira: lanzarRespira };
+  document.querySelectorAll("[data-lanza]").forEach(function (b) {
+    b.addEventListener("click", function () { lanzadores[b.getAttribute("data-lanza")](); });
+  });
+  document.getElementById("btn-todo").addEventListener("click", function () {
+    lanzarIgnicion(); lanzarOnda(); lanzarPildora(); lanzarRespira();
+  });
+
+  // Color de materia
+  document.querySelectorAll("[data-materia-btn]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      raiz.setAttribute("data-materia", b.getAttribute("data-materia-btn"));
+      document.querySelectorAll("[data-materia-btn]").forEach(function (o) {
+        o.setAttribute("aria-pressed", o === b ? "true" : "false");
+      });
+    });
+  });
+  // Vista
+  document.querySelectorAll("[data-vista-btn]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      document.getElementById("marco").setAttribute("data-vista", b.getAttribute("data-vista-btn"));
+      document.querySelectorAll("[data-vista-btn]").forEach(function (o) {
+        o.setAttribute("aria-pressed", o === b ? "true" : "false");
+      });
+    });
+  });
+  // Interruptores
+  function interruptor(id, aplicar) {
+    var b = document.getElementById(id);
+    b.addEventListener("click", function () {
+      var on = b.getAttribute("aria-pressed") !== "true";
+      b.setAttribute("aria-pressed", on ? "true" : "false");
+      aplicar(on);
+    });
+  }
+  interruptor("btn-modo", function (on) { raiz.setAttribute("data-mode", on ? "light" : "dark"); });
+  interruptor("btn-mov", function (on) {
+    if (on) raiz.setAttribute("data-movimiento", "reducido");
+    else raiz.setAttribute("data-movimiento", "completo");
+  });
+  interruptor("btn-rend", function (on) {
+    if (on) raiz.setAttribute("data-rendimiento", "reducido");
+    else raiz.removeAttribute("data-rendimiento");
+  });
+
+  // Si el sistema pide movimiento reducido, el interruptor lo refleja al abrir.
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    var bm = document.getElementById("btn-mov");
+    bm.setAttribute("aria-pressed", "true");
+    raiz.setAttribute("data-movimiento", "reducido");
+  }
+
+  lanzarIgnicion(); lanzarOnda(); lanzarPildora(); lanzarRespira();
+})();
+</script>
+</body>
+</html>
