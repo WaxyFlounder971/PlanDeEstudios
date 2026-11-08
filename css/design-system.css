@@ -1775,6 +1775,38 @@ a:hover .enlace-rapido-nombre {
   color: var(--accent-2);
 }
 
+/* v3.28.0 B (E1): Enlaces rápidos con el tratamiento de los ítems del menú lateral (#app-sidebar .btn-nav): sin borde ni fondo de botón,
+   alto mínimo 36px, relleno 4px 14px, radio 14px, gap 12px, letra .95rem/600, texto al 84% y hover al 7%. Logos y su tamaño intactos.
+   Aplica al panel derecho y al cajón (renderizarListaEnlacesEn); la lista de Configuración no lleva esta clase. */
+#lista-enlaces-lateral, #lista-enlaces-drawer-movil { gap: 4px !important; }
+.enlace-rapido-fila.glass-panel {
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 4px 14px;
+  border: 1px solid transparent;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  transition: background-color .18s ease, color .18s ease, transform var(--transition-fast);
+}
+.enlace-rapido-fila.glass-panel:hover,
+.enlace-rapido-fila.glass-panel:focus-within { background: color-mix(in srgb, var(--text-primary) 7%, transparent); }
+.enlace-rapido-fila.glass-panel:active { transform: scale(0.98); }
+.enlace-rapido-fila > a { gap: 12px; font-family: var(--font-body); font-weight: 600; font-size: 0.95rem; border-radius: 10px; }
+.enlace-rapido-fila > a:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.enlace-rapido-fila .enlace-rapido-nombre { color: color-mix(in srgb, var(--text-primary) 84%, transparent); }
+.enlace-rapido-fila:hover .enlace-rapido-nombre,
+.enlace-rapido-fila:focus-within .enlace-rapido-nombre,
+.enlace-rapido-fila > a:hover .enlace-rapido-nombre { color: var(--text-primary); }
+@media (prefers-reduced-motion: reduce) {
+  .enlace-rapido-fila.glass-panel { transition-duration: .01ms !important; }
+}
+
+/* v3.28.0 B (E1, corrección): toda la fila es clicable, no solo el texto (enlace extendido). El hover resalta la fila entera. */
+.enlace-rapido-fila.glass-panel { position: relative; }
+.enlace-rapido-fila > a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+
 /* ---- Enlaces Rápidos laterales: solo con espacio de sobra a la derecha ---- */
 .enlaces-lateral {
   display: none;
@@ -2668,11 +2700,11 @@ img, svg { max-width: 100%; }
    "Ordenar por bloque" (.grupo-orden-plan). Una sola variable en rem (escala con el
    tamaño de texto de la app) fija el alto de ambos; box-sizing:border-box para que
    padding/borde no lo cambien. */
-:root { --plan-control-alto: 2.75rem; }
+:root { --plan-control-alto: 2.75rem; --plan-boton-alto: 2.3rem; } /* v3.28.0 B (P1): botones del Plan 2.75rem × 36/43 ≈ 2.3rem */
 .grupo-orden-plan { box-sizing: border-box; height: var(--plan-control-alto); }
 .encabezado-plan-botones > .btn {
   box-sizing: border-box;
-  height: var(--plan-control-alto);
+  height: var(--plan-boton-alto);
   padding: 0 16px;
   font-size: 0.85rem;
   line-height: 1;
@@ -2685,6 +2717,18 @@ img, svg { max-width: 100%; }
 }
 
 /* ---- Bloques colapsables independientes ---- */
+
+/* v3.28.0 B (P1): «+ Agregar categoría» con el mismo alto, relleno y letra que «Gestionar plan» y «Actualizar malla». */
+.btn-plan-compacto {
+  box-sizing: border-box;
+  height: var(--plan-boton-alto);
+  padding: 0 16px;
+  font-size: 0.85rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+}
 
 /* ---- Secciones de Ajustes: contraídas por defecto (pedido explícito) ----
    Cada <section class="glass-card stack ajuste-seccion colapsada"> arranca
@@ -3659,6 +3703,12 @@ html[data-rendimiento="normal"] #app-shell .btn { transition:background-color .1
 .finanzas-accesos-rapidos > .btn {
   min-width:0; min-height:44px; white-space:normal; line-height:1.25;
 }
+.glass-card.fin-tarjeta-tocable { position:relative; cursor:pointer; padding-right:38px; transition:background-color .16s ease, border-color .16s ease; }
+.glass-card.fin-tarjeta-tocable:hover { border-color:color-mix(in srgb,var(--accent-1) 42%,var(--border-glass)); background-color:color-mix(in srgb,var(--accent-1) 5%,var(--bg-card)); }
+.glass-card.fin-tarjeta-tocable:focus-visible { outline:2px solid var(--accent-1); outline-offset:2px; }
+.fin-chevron { position:absolute; right:14px; top:50%; width:8px; height:8px; border-top:2px solid var(--text-muted); border-right:2px solid var(--text-muted); transform:translateY(-50%) rotate(45deg); opacity:.75; pointer-events:none; }
+.glass-card.fin-sin-asignar { border-color:color-mix(in srgb,var(--color-danger,var(--danger)) 45%,var(--border-glass)); }
+.glass-card.fin-sin-asignar .badge-warning { color:var(--color-danger,var(--danger)); }
 #pill-formato-texto {
   display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px; overflow:visible;
 }
@@ -5015,6 +5065,65 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
 }
 .timer-en-pausa .timer-luz { animation: none; opacity: 0.5; box-shadow: none; }
 
+/* =========================================================================
+   v3.28.0 C (C6): avisos del timer que reemplazan a dos toasts (ver tiempo-estudio-avisos.js).
+   · Inicio «Onda» sobre el anillo del detalle: dos ondas del color de materia + play que pasa al tiempo.
+   · Descanso «píldora fría»: tono azul/verde frío en una sola variable (--te-frio); cámbiala aquí si no te gusta.
+   Solo transform/opacity/stroke-dashoffset (más una altura nunca animada). Contraparte en modo Optimizado y movimiento reducido abajo.
+   ========================================================================= */
+.te-anuncio-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+
+.te-inicio .te-timer-circular-svg { overflow: visible; }
+.te-onda {
+  fill: none; stroke: var(--te-color-materia, var(--text-primary)); stroke-width: 3; opacity: 0;
+  transform-origin: 50% 50%; animation: te-onda-expande 1100ms ease-out forwards;
+}
+.te-onda--2 { animation-delay: 220ms; }
+.te-play-inicio {
+  position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; opacity: 0;
+  color: var(--te-color-materia, var(--text-primary)); animation: te-play-pasa 640ms ease-in-out forwards;
+}
+.te-play-inicio svg { width: 56px; height: 56px; fill: currentColor; }
+.te-inicio .te-timer-display { animation: te-tiempo-entra 520ms cubic-bezier(.2, .8, .2, 1) 360ms backwards; }
+.te-inicio .te-timer-estado-texto { animation: te-estado-entra 420ms cubic-bezier(.2, .8, .2, 1) 640ms backwards; }
+@keyframes te-onda-expande { 0% { opacity: .55; transform: scale(.72); } 100% { opacity: 0; transform: scale(1.32); } }
+@keyframes te-play-pasa { 0% { opacity: 0; transform: scale(.7); } 30%, 70% { opacity: 1; transform: scale(1); } 100% { opacity: 0; transform: scale(.4); } }
+@keyframes te-tiempo-entra { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes te-estado-entra { from { opacity: 0; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
+
+.te-aviso-descanso {
+  --te-frio: hsl(195 85% 58%);
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); translate: -50% 0; z-index: 300;
+  display: flex; align-items: center; gap: 10px; width: max-content; max-width: calc(100% - 32px);
+  padding: 8px 14px 8px 12px; border-radius: 14px; cursor: pointer; color: var(--text-primary);
+  border: 1px solid color-mix(in srgb, var(--te-frio) 42%, transparent);
+  background: color-mix(in srgb, var(--te-frio) 13%, var(--bg-header-solido));
+  box-shadow: var(--shadow-float);
+  animation: te-aviso-descanso 6s ease both;
+}
+@keyframes te-aviso-descanso {
+  0% { opacity: 0; transform: translateY(14px) scale(.96); }
+  7%, 93% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(8px); }
+}
+.te-aviso-arco-svg { flex: none; width: 30px; height: 30px; transform: rotate(-90deg); }
+.te-aviso-pista, .te-aviso-arco { fill: none; stroke-width: 4; stroke-linecap: round; }
+.te-aviso-pista { stroke: color-mix(in srgb, var(--te-frio) 20%, transparent); }
+.te-aviso-arco { stroke: var(--te-frio); stroke-dasharray: 100; stroke-dashoffset: 0; transition: stroke-dashoffset 1s linear; }
+.te-aviso-textos { display: flex; flex-direction: column; min-width: 0; line-height: 1.15; }
+.te-aviso-nombre { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .72rem; font-weight: 700; color: var(--text-secondary); }
+.te-aviso-linea { font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+[data-rendimiento="reducido"] .te-onda--2 { display: none; }
+[data-rendimiento="reducido"] .te-aviso-descanso { box-shadow: none; }
+[data-rendimiento="reducido"] .te-aviso-arco { transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .te-onda, .te-play-inicio { display: none; }
+  .te-inicio .te-timer-display, .te-inicio .te-timer-estado-texto { animation: te-fundido-corto .3s linear backwards; }
+  .te-aviso-descanso { animation: te-fundido-corto .3s linear both; }
+  .te-aviso-arco { transition: none; }
+}
+@keyframes te-fundido-corto { from { opacity: 0; } to { opacity: 1; } }
 .timer-textos {
   flex: 1;
   min-width: 0;
@@ -6473,6 +6582,13 @@ summary.desglose-cabecera { cursor: pointer; }
 .app-encabezado__centro { justify-self: center; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 2px; min-width: 0; max-width: 100%; }
 .app-encabezado__titulo { margin: 0; text-align: center; line-height: 1.2; overflow-wrap: anywhere; }
 .app-encabezado__sub { margin: 0; font-size: 0.78rem; color: var(--text-muted); text-align: center; }
+
+/* v3.28.0 B (H1): las tarjetas-encabezado (.app-encabezado: Cuentas, Semana N de M, Agenda, Horario, Tiempo, Asistente, Comunidad, Notas...)
+   usaban --bg-panel, más transparente que --bg-card de las tarjetas, y por eso se veían más oscuras en los modos oscuros.
+   UNA sola variable: --bg-encabezado. Para volver al gris anterior, borra la línea «--bg-encabezado» de abajo (o pon var(--bg-panel)).
+   Solo cambia el color; el modo claro no se toca (sin la variable, el fondo cae a --bg-panel como antes). */
+:is([data-mode="dark"], [data-mode="true-dark"]) { --bg-encabezado: var(--bg-card); }
+.app-encabezado { background: var(--bg-encabezado, var(--bg-panel)); }
 /* botón del semestre: idéntico en Agenda, Horario y Tiempo (sin flecha, mismo texto y color) */
 .app-encabezado__semestre {
   align-self: center;
@@ -7319,6 +7435,52 @@ body[data-enlaces-lateral="riel"] .enlace-rapido-icono img { width: 24px; height
   #drawer-enlaces-movil.drawer-enlaces-movil, #enlaces-movil-overlay.sidebar-overlay { transition-duration: .01ms !important; transition-delay: 0s !important; }
 }
 
+/* v3.28.0 B (L1/L2): menú lateral expandido por pulsación larga (escritorio). Capa elevada sobre el contenido, sin reflow:
+   js/ui/expansion-lateral.js deja un espaciador del ancho del riel y saca el menú del flujo (position: fixed).
+   Solo animan opacity y transform. Los Enlaces rápidos reutilizan el cajón del teléfono (PATCH 8, arriba). */
+@keyframes sidebar-expansion-entra { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: none; } }
+@keyframes sidebar-expansion-sale { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateX(-14px); } }
+@keyframes telon-expansion-entra { from { opacity: 0; } to { opacity: 1; } }
+@keyframes telon-expansion-sale { from { opacity: 1; } to { opacity: 0; } }
+.sidebar-espaciador-expansion { flex: none; pointer-events: none; }
+/* Fija el estado de golpe al abrir/cerrar (sin que el ancho ni los botones animen y muevan nada). */
+html:root #app-sidebar.expansion-sin-transicion,
+html:root #app-sidebar.expansion-sin-transicion * { transition: none !important; }
+@media (min-width: 900px) {
+  html:root #app-sidebar.app-sidebar.expandida-overlay {
+    position: fixed; top: 0; left: var(--exp-izq, 0px);
+    width: var(--sidebar-ancho, 230px); max-width: var(--sidebar-ancho, 230px);
+    height: 100vh; height: 100dvh;
+    z-index: 60;
+    background: linear-gradient(var(--bg-panel), var(--bg-panel)), var(--bg-header-solido);
+    box-shadow: var(--shadow-glass);
+    transition: none;
+    animation: sidebar-expansion-entra .22s cubic-bezier(.22, 1, .36, 1) both;
+    will-change: transform, opacity;
+  }
+  html:root #app-sidebar.app-sidebar.expandida-overlay.expandida-saliendo {
+    animation: sidebar-expansion-sale .16s cubic-bezier(.22, 1, .36, 1) both;
+  }
+  body.sidebar-expandida-activa #sidebar-overlay.sidebar-overlay {
+    display: block; z-index: 59;
+    animation: telon-expansion-entra .22s ease both;
+  }
+  body.sidebar-expandida-saliendo #sidebar-overlay.sidebar-overlay { animation: telon-expansion-sale .16s ease both; }
+  /* El telón del cajón de Enlaces tapa también los encabezados sticky (z-index 50), como el del menú. */
+  #enlaces-movil-overlay.sidebar-overlay { z-index: 54; }
+  /* Modo rendimiento reducido: sin animación, sin sombra ni blur, fondo sólido. */
+  html[data-rendimiento="reducido"] #app-sidebar.app-sidebar.expandida-overlay {
+    animation: none; box-shadow: none; will-change: auto;
+    backdrop-filter: none; -webkit-backdrop-filter: none;
+    background: var(--bg-header-solido);
+  }
+  html[data-rendimiento="reducido"] body.sidebar-expandida-activa #sidebar-overlay.sidebar-overlay { animation: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:root #app-sidebar.app-sidebar.expandida-overlay,
+  body.sidebar-expandida-activa #sidebar-overlay.sidebar-overlay { animation: none !important; will-change: auto; }
+}
+
 /* =========================================================================
    PATCH 11b (2026-11-07): tarjeta flotante del timer anclada a la esquina inferior derecha.
    Solo afecta a .timer-indicador--flotante (la tarjeta de escritorio); la columna derecha (>= 1500px con enlaces
@@ -7456,3 +7618,38 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   .timer-plegado-boton .timer-luz { animation: none; }
   .timer-indicador--flotante, .timer-plegado-boton { transition-duration: .01ms !important; transition-delay: 0s !important; }
 }
+
+
+/* v3.28.0 C: botón flotante circular (estado plegado del timer) con el color de la materia.
+   Sustituye el aspecto índigo de PATCH 15 (fondo --accent-1 al 68 % + contorno gris) por el de la píldora
+   (.timer-indicador): tinte de --te-color mezclado con --bg-panel, aro de 2px del color de la materia y la misma
+   sombra flotante. Tamaño (44px), posición, apilado en la esquina y gesto de plegado/expandido NO cambian.
+   --te-color lo pone indicador.js en línea (propio > categoría > violeta por defecto, ver obtenerColorMateria).
+   Solo existe junto a .timer-indicador--flotante (900–1499px, y ≥1500px con riel u oculto); con < 900px el timer
+   es la línea de la barra superior y con la columna completa es la tarjeta lateral: ninguna se pliega. */
+.timer-plegado-boton {
+  --timer-fondo: color-mix(in srgb, var(--te-color) 13%, var(--bg-panel));
+  box-sizing: border-box;
+  border: 2px solid color-mix(in srgb, var(--te-color) 60%, transparent);
+  outline: none;
+  background: var(--timer-fondo);
+  box-shadow: var(--shadow-float);
+}
+.timer-plegado-boton:hover {
+  border-color: color-mix(in srgb, var(--te-color) 85%, transparent);
+  box-shadow: var(--shadow-float);
+}
+/* La luz: sin el anillo claro de --on-accent (solo servía sobre el fondo índigo); mismo brillo suave que .timer-luz. */
+.timer-plegado-boton .timer-luz { box-shadow: 0 0 9px 1px var(--te-color); }
+.timer-plegado-boton.timer-extra .timer-luz { box-shadow: 0 0 9px 1px var(--color-danger); }
+.timer-plegado-boton.timer-en-pausa .timer-luz { box-shadow: none; }
+/* Modo Optimizado: sin blur ni sombras; fondo opaco con el mismo tinte (igual que .timer-indicador) y sin pulso. */
+[data-rendimiento="reducido"] .timer-plegado-boton {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background-color: var(--bg-canvas);
+  background-image: linear-gradient(var(--timer-fondo), var(--timer-fondo));
+  box-shadow: none;
+}
+[data-rendimiento="reducido"] .timer-plegado-boton:hover { box-shadow: none; }
+[data-rendimiento="reducido"] .timer-plegado-boton .timer-luz { animation: none; }

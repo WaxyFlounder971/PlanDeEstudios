@@ -2697,9 +2697,28 @@
     "Más": "Plus",
     "Elige 3 favoritos para la barra de abajo. El resto sigue en «Más» y también puedes llegar deslizando a los lados.": "Choisissez 3 favoris pour la barre du bas. Les autres restent sous « Plus » et vous pouvez aussi y accéder en balayant sur les côtés.",
     "La barra ahora admite hasta 3 favoritos. Conservamos tus 3 primeros.": "La barre accepte désormais jusqu'à 3 favoris. Nous avons conservé vos 3 premiers.",
+    "Esa cuenta no afecta tu saldo: el dinero que pases a ella sale de Mi dinero.": "Ce compte n’affecte pas ton solde : l’argent que tu y transfères sort de Mon argent.",
+    "En Sin asignar no hay ese dinero para pasar. Si está en negativo, asigna esos movimientos a su cuenta en lugar de pasar dinero.": "Il n’y a pas cette somme dans « Non attribué » à transférer. S’il est négatif, attribue ces mouvements à leur compte au lieu de transférer de l’argent.",
     "En pausa": "En pause",
     "Descanso": "Repos",
     "Extra": "Extra",
-    "Plan": "Plan"
+    "Plan": "Plan",
+    "Traspasos por revisar": "Transferts à vérifier",
+    "Hay traspasos desde Sin asignar que pasaron más dinero del que había. Puedes ver qué cambiaría antes de tocar nada.": "Certains transferts depuis « Non attribué » ont déplacé plus d’argent qu’il n’y en avait. Tu peux voir ce qui changerait avant de toucher à quoi que ce soit.",
+    "No hay traspasos por revisar.": "Aucun transfert à vérifier.",
+    "Estos traspasos salieron de Sin asignar y pedían más dinero del que había. Al quitarlos, el dinero deja de contarse dos veces. No se cambia ningún gasto ni ingreso.": "Ces transferts sont sortis de « Non attribué » et demandaient plus d’argent qu’il n’y en avait. Les retirer évite que l’argent soit compté deux fois. Aucune dépense ni aucun revenu n’est modifié.",
+    "Dépenses sans compte supérieures à ce que tu avais. Modifie ces mouvements et attribue-les à leur compte pour le ramener à 0.": "Dépenses sans compte supérieures à ce que tu avais. Modifie ces mouvements et attribue-les à leur compte pour le ramener à 0.",
+    "Había en Sin asignar": "Disponible dans « Non attribué »",
+    "Sin asignar hoy": "« Non attribué » aujourd’hui",
+    "Sin asignar después": "« Non attribué » après",
+    "Mi dinero hoy": "Mon argent aujourd’hui",
+    "Mi dinero después": "Mon argent après",
+    "Si Sin asignar sigue en negativo, son gastos sin cuenta: para dejarlo en 0, edita esos movimientos y asígnalos a su cuenta.": "Si « Non attribué » reste négatif, ce sont des dépenses sans compte : pour le ramener à 0, modifie ces mouvements et attribue-les à leur compte.",
+    "Paso 1: descarga un respaldo, por si quieres volver atrás.": "Étape 1 : télécharge une sauvegarde, au cas où tu voudrais revenir en arrière.",
+    "Descargar respaldo": "Télécharger la sauvegarde",
+    "Respaldo descargado": "Sauvegarde téléchargée",
+    "Entiendo que se quitarán estos traspasos.": "Je comprends que ces transferts seront retirés.",
+    "Quitar traspasos": "Retirer les transferts",
+    "El asistente está respondiendo. Espera un momento.": "L’assistant est en train de répondre. Patiente un instant."
   }
 }
