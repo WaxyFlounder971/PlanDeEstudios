@@ -7,6 +7,7 @@
 import { togglePerfilPopover } from "../main.js";
 import { MODALIDADES_HORARIO, crearModalidadHorario, obtenerEstadoEfectivoSemestre } from "../core/schema.js";
 import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
+import { inicializarExpansionLateral } from "./expansion-lateral.js";
 
 // Compatibilidad: la validación de siglas/nombre invertidos vive en su propio
 // módulo (ui/aviso-universidad.js) para no mezclarse con este archivo. Esta
@@ -236,6 +237,9 @@ function inicializarLayoutResponsivo() {
       cerrarDrawerEnlacesMovil();
     }
   });
+
+  // v3.28.0 B (L1/L2): mantener presionado expande el menú izquierdo y los Enlaces rápidos como capa sobre el contenido.
+  inicializarExpansionLateral({ abrirEnlaces: abrirDrawerEnlacesMovil, cerrarEnlaces: cerrarDrawerEnlacesMovil });
 }
 
 // will-change solo durante la transición del drawer (clase .sidebar-animando, ver design-system.css).

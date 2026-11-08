@@ -77,4 +77,22 @@ function filaBotones(...botones) {
   f.append(...botones); return f;
 }
 
-export { abrirCapaNombrada, areaTexto, boton, campo, entrada, filaBotones, insignia, lineaError, mostrar, parrafo, selector };
+/** Hace que una tarjeta completa abra su detalle, conservando la interacción de controles internos. */
+function hacerTarjetaTocable(tarjeta, alAbrir) {
+  tarjeta.classList.add("fin-tarjeta-tocable");
+  tarjeta.setAttribute("role", "button");
+  tarjeta.tabIndex = 0;
+  const activar = (evento) => {
+    if (evento.target.closest("button, a, input, select, textarea, [role='button']")) return;
+    alAbrir();
+  };
+  tarjeta.addEventListener("click", activar);
+  tarjeta.addEventListener("keydown", (evento) => {
+    if (evento.key !== "Enter" && evento.key !== " ") return;
+    if (evento.target !== tarjeta) return;
+    evento.preventDefault(); alAbrir();
+  });
+  return tarjeta;
+}
+
+export { abrirCapaNombrada, areaTexto, boton, campo, entrada, filaBotones, hacerTarjetaTocable, insignia, lineaError, mostrar, parrafo, selector };

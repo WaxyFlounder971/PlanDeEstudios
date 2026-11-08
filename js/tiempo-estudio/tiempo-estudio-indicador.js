@@ -29,6 +29,7 @@ import { mostrarToast } from "../ui/componentes.js";
 import { traducirTextoInterfaz } from "../core/i18n.js";
 
 const COLOR_POR_DEFECTO = "var(--accent-1)";
+const PIP_W = 440, PIP_H = 187;
 
 function esColorHex(valor) {
   return typeof valor === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(valor.trim());
@@ -235,20 +236,28 @@ function montarIndicadoresTimer({ elementos, resolverInfo, alTocar, alPip, alTog
   };
   const CSS_PIP = `*{box-sizing:border-box}
 html,body{margin:0!important;padding:0!important;width:100%;height:100%;min-height:0!important;overflow:hidden;background:var(--bg-header-solido,#191a25)!important;background-image:none!important;color:var(--text-primary,#f5f4fb);font:14px var(--font-body,system-ui,sans-serif)}
-.pip-tarjeta{display:flex;align-items:center;gap:12px;width:100%;height:100%;padding:0 14px;background:var(--bg-header-solido,#191a25);color:var(--text-primary,#f5f4fb)}
-.pip-punto{flex:none;width:12px;height:12px;border-radius:50%;background:var(--pip-color,#8b72e8);box-shadow:0 0 8px 1px var(--pip-color,#8b72e8)}
-.pip-tarjeta.pip-pausa .pip-punto{opacity:.5;box-shadow:none}
+.pip-tarjeta{display:flex;align-items:center;gap:12px;width:100%;height:100%;padding:0 14px;background:color-mix(in srgb,var(--pip-color,#8b72e8) 13%,var(--bg-header-solido,#191a25));color:var(--text-primary,#f5f4fb);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--pip-color,#8b72e8) 42%,transparent)}
+.pip-punto{flex:none;width:10px;height:10px;border-radius:50%;background:var(--pip-color,#8b72e8);box-shadow:0 0 8px 1px color-mix(in srgb,var(--pip-color,#8b72e8) 42%,transparent);animation:pip-luz 1.8s ease-in-out infinite}
+.pip-tarjeta.pip-pausa .pip-punto{opacity:.5;box-shadow:none;animation:none}
+@keyframes pip-luz{50%{box-shadow:0 0 12px 3px color-mix(in srgb,var(--pip-color,#8b72e8) 42%,transparent)}}
+@media (prefers-reduced-motion:reduce){.pip-punto{animation:none}}
+[data-rendimiento="reducido"] .pip-punto{animation:none}
 .pip-info{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-.pip-nombre{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.82rem;font-weight:600;line-height:1.25;color:var(--text-secondary,#c9c9d4)}
+.pip-nombre{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:.8rem;font-weight:700;line-height:1.25;color:var(--text-primary,#f5f4fb)}
 .pip-fila{display:flex;align-items:baseline;gap:8px;min-width:0;overflow:hidden;white-space:nowrap}
 .pip-tiempo{font-size:30px;font-weight:800;line-height:1.1;letter-spacing:.01em;font-variant-numeric:tabular-nums}
+.pip-extra{display:none;font-size:.78rem;font-weight:700;color:var(--color-danger,#ef4444);font-variant-numeric:tabular-nums}
+.pip-extra.pip-extra-activo{display:inline}
 .pip-estado{flex:none;font-size:.76rem;font-weight:600;color:var(--text-muted,#9a9aa8)}
+.pip-estado.pip-estado-extra{color:var(--color-danger,#ef4444);font-variant-numeric:tabular-nums}
 .pip-estado[hidden]{display:none}
 .pip-controles{flex:none;display:flex;gap:8px}
-.pip-controles button{display:grid;place-items:center;width:40px;height:40px;margin:0;padding:0;border-radius:50%;cursor:pointer;font:inherit}
-.pip-controles svg{width:20px;height:20px;fill:currentColor}
-.pip-boton-pausa{border:2px solid transparent;background:var(--accent-1,#8b72e8);color:var(--on-accent,#fff)}
-.pip-boton-stop{border:2px solid var(--color-danger,#f87171);background:transparent;color:var(--color-danger,#f87171)}
+.pip-controles button{display:grid;place-items:center;width:36px;height:36px;margin:0;padding:0;border-radius:10px;cursor:pointer;font:inherit;transition:background-color .15s ease,border-color .15s ease}
+.pip-controles svg{width:19px;height:19px;fill:currentColor}
+.pip-boton-pausa{border:1px solid color-mix(in srgb,var(--pip-color,#8b72e8) 42%,transparent);background:color-mix(in srgb,var(--pip-color,#8b72e8) 13%,transparent);color:var(--pip-color,#8b72e8)}
+.pip-boton-stop{border:1px solid color-mix(in srgb,var(--color-danger,#f87171) 42%,transparent);background:color-mix(in srgb,var(--color-danger,#f87171) 10%,transparent);color:var(--color-danger,#f87171)}
+.pip-controles button:hover{background:color-mix(in srgb,var(--pip-color,#8b72e8) 22%,transparent)}
+.pip-controles .pip-boton-stop:hover{background:color-mix(in srgb,var(--color-danger,#f87171) 20%,transparent)}
 .pip-controles button:focus-visible{outline:2px solid var(--text-primary,#fff);outline-offset:2px}`;
   const actualizarVentanaPiP = () => {
     if (!ventanaPiP || ventanaPiP.closed || !infoActual) return;
@@ -267,7 +276,7 @@ html,body{margin:0!important;padding:0!important;width:100%;height:100%;min-heig
       estilo.textContent = CSS_PIP;
       doc.head.append(estilo);
       tarjeta = doc.createElement("div"); tarjeta.id = "timer-pip-card"; tarjeta.className = "pip-tarjeta";
-      tarjeta.innerHTML = `<i class="pip-punto"></i><div class="pip-info"><span class="pip-nombre"></span><div class="pip-fila"><span class="pip-tiempo"></span><span class="pip-estado" hidden></span></div></div><div class="pip-controles"><button type="button" class="pip-boton-pausa"></button><button type="button" class="pip-boton-stop"></button></div>`;
+      tarjeta.innerHTML = `<i class="pip-punto"></i><div class="pip-info"><span class="pip-nombre"></span><div class="pip-fila"><span class="pip-tiempo"></span><span class="pip-extra"></span><span class="pip-estado" hidden></span></div></div><div class="pip-controles"><button type="button" class="pip-boton-pausa"></button><button type="button" class="pip-boton-stop"></button></div>`;
       tarjeta.querySelector(".pip-boton-pausa").addEventListener("click", () => alTogglePausa?.());
       tarjeta.querySelector(".pip-boton-stop").addEventListener("click", () => alDetener?.());
       doc.body.replaceChildren(tarjeta);
@@ -277,13 +286,19 @@ html,body{margin:0!important;padding:0!important;width:100%;height:100%;min-heig
       setTimeout(remedir, 400);
     }
     const nombre = infoActual.nombre || traducirTextoInterfaz("Tiempo de estudio");
-    const estadoTexto = infoActual.estado ? traducirTextoInterfaz(infoActual.estado) : "";
+    const partesTiempo = String(infoActual.tiempo || "00:00").split(/\s+\+/);
+    const extraTexto = partesTiempo.length > 1 ? `+${partesTiempo.slice(1).join("+")}` : "";
+    const estadoTexto = infoActual.extra ? traducirTextoInterfaz("Extra") : infoActual.estado ? traducirTextoInterfaz(infoActual.estado) : "";
     const texto = (sel, valor) => { const n = tarjeta.querySelector(sel); if (n.textContent !== valor) n.textContent = valor; return n; };
-    tarjeta.style.setProperty("--pip-color", infoActual.color || "#8b72e8");
+    const colorPip = esColorHex(infoActual.color) ? infoActual.color.trim() : getComputedStyle(document.documentElement).getPropertyValue("--accent-1").trim() || "#8b72e8";
+    tarjeta.style.setProperty("--pip-color", colorPip);
     tarjeta.classList.toggle("pip-pausa", Boolean(infoActual.pausado));
     texto(".pip-nombre", nombre);
-    const tiempo = texto(".pip-tiempo", infoActual.tiempo || "00:00");
+    const tiempo = texto(".pip-tiempo", partesTiempo[0] || "00:00");
+    const extra = texto(".pip-extra", extraTexto);
+    extra.classList.toggle("pip-extra-activo", Boolean(extraTexto));
     const estado = texto(".pip-estado", estadoTexto);
+    estado.classList.toggle("pip-estado-extra", Boolean(infoActual.extra));
     estado.hidden = !estadoTexto;
     // Pausa/play y detener: solo iconos; el nombre accesible cambia con el estado.
     const botonPausa = tarjeta.querySelector(".pip-boton-pausa"), botonStop = tarjeta.querySelector(".pip-boton-stop");
@@ -298,7 +313,7 @@ html,body{margin:0!important;padding:0!important;width:100%;height:100%;min-heig
     }
     // Ajuste del tiempo: baja el tamaño de letra (uniforme, sin estirar) hasta que la fila quepa. Solo se vuelve a medir
     // cuando cambia el largo del texto, el estado o el ancho de la ventana (los dígitos son de ancho fijo).
-    const clave = `${tiempo.textContent.length}|${estadoTexto}|${ventanaPiP.innerWidth}`;
+    const clave = `${tiempo.textContent.length}|${extraTexto.length}|${estadoTexto}|${ventanaPiP.innerWidth}`;
     if (tarjeta._clave !== clave) {
       tarjeta._clave = clave;
       const fila = tarjeta.querySelector(".pip-fila");
@@ -315,7 +330,7 @@ html,body{margin:0!important;padding:0!important;width:100%;height:100%;min-heig
   // PATCH 6C (2026-11-06): ventana flotante de Android (PiP de video). El tamaño
   // lo decide el sistema, pero Android la estiraba (el canvas era 520x180, ~2.9:1,
   // fuera del rango que acepta) y el texto se veía deformado y enorme. Ahora el
-  // canvas es 440x200 (2.2:1, dentro de 1:2.39 a 2.39:1, dibujado al doble de
+  // canvas ahora es 440x187 (2.35:1, dentro de 1:2.39 a 2.39:1, dibujado al doble de
   // resolución) con la estructura de la píldora de diseño: punto de color de la
   // materia, nombre pequeño arriba, tiempo grande debajo, estado a la derecha.
   // El canvas no entiende var(): se leen los tokens reales de la app (fondo del
@@ -323,14 +338,20 @@ html,body{margin:0!important;padding:0!important;width:100%;height:100%;min-heig
   const leerToken = (nombre, respaldo) => getComputedStyle(document.documentElement).getPropertyValue(nombre).trim() || respaldo;
   const pintarCanvasPiP = () => {
     if (!canvasPiP || !infoActual) return;
-    // PATCH 12 (2026-11-07): el lienzo mide siempre 440x200 (2.2:1, mismo que la ventana: nunca se redimensiona en vivo) y se
+    // C4 (v3.28.0): el lienzo mide siempre PIP_W×PIP_H (440×187; 2.35:1, dentro del rango Android) y se
     // dibuja a 2x. Antes el texto salía deformado: fillText(..., maxWidth) lo ESTIRA/aplasta en horizontal cuando no cabe, y el
     // tiempo extra se comprimía con scale(x,1). Ahora nada se deforma: lo largo se recorta con "…" (nombre) o se achica de forma
     // UNIFORME (tiempo y estado) hasta caber, así "01:00 +00:25" y "Extra" siempre entran.
-    const ctx = canvasPiP.getContext("2d"), w = 440, h = 200;
+    const ctx = canvasPiP.getContext("2d"), w = PIP_W, h = PIP_H;
     const fuente = getComputedStyle(document.body).fontFamily || "system-ui, sans-serif";
     ctx.setTransform(2, 0, 0, 2, 0, 0);
+    const colorMateria = esColorHex(infoActual.color) ? infoActual.color.trim() : "#8b72e8";
+    const hex = colorMateria.replace("#", "");
+    const rgb = hex.length === 3 ? [...hex].map((x) => parseInt(x + x, 16)) : [0,2,4].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    const tinte = `rgba(${rgb.join(",")},0.13)`;
     ctx.fillStyle = leerToken("--bg-header-solido", "#101114"); ctx.fillRect(0, 0, w, h);
+    ctx.fillStyle = tinte; ctx.fillRect(0, 0, w, h);
+    ctx.strokeStyle = `rgba(${rgb.join(",")},0.42)`; ctx.lineWidth = 1; ctx.strokeRect(.5,.5,w-1,h-1);
     ctx.textBaseline = "middle"; ctx.textAlign = "left";
     const poner = (peso, px) => { ctx.font = `${peso} ${px}px ${fuente}`; };
     const recortar = (texto, maxAncho) => {
@@ -347,26 +368,30 @@ html,body{margin:0!important;padding:0!important;width:100%;height:100%;min-heig
     };
     // Punto de color de la materia (atenuado en pausa, igual que .timer-luz).
     ctx.globalAlpha = infoActual.pausado ? 0.5 : 1;
-    ctx.fillStyle = infoActual.color || leerToken("--accent-1", "#8b72e8");
-    ctx.beginPath(); ctx.arc(40, 56, 9, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = colorMateria;
+    ctx.beginPath(); ctx.arc(40, 56, 13, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(40, 56, 5, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = leerToken("--text-secondary", "#c9c9d4"); poner(600, 24);
+    ctx.fillStyle = leerToken("--text-primary", "#f5f4fb"); poner(700, 22);
     ctx.fillText(recortar(String(infoActual.nombre || "Tiempo de estudio"), w - 62 - 28), 62, 56);
     // Estado a la derecha ("En pausa", "Descanso", "Extra"): se achica hasta caber en 140px y reserva ese ancho al tiempo.
     let anchoEstado = 0;
-    const estado = infoActual.estado ? String(infoActual.estado) : "";
+    const estado = infoActual.extra ? traducirTextoInterfaz("Extra") : infoActual.estado ? traducirTextoInterfaz(infoActual.estado) : "";
     if (estado) {
       const px = tamanoQueCabe(estado, 600, 22, 140, 15);
       poner(600, px);
       const texto = recortar(estado, 140);
       anchoEstado = ctx.measureText(texto).width;
-      ctx.fillStyle = leerToken("--text-muted", "#9a9aa8"); ctx.textAlign = "right";
+      ctx.fillStyle = infoActual.extra ? leerToken("--color-danger", "#ef4444") : leerToken("--text-muted", "#9a9aa8"); ctx.textAlign = "right";
       ctx.fillText(texto, w - 28, 134);
       ctx.textAlign = "left";
     }
     // Tiempo grande con dígitos de ancho fijo (el canvas no tiene tabular-nums): así no "baila" cada segundo.
-    const texto = String(infoActual.tiempo || "00:00");
-    const disponible = w - 40 - 28 - (estado ? anchoEstado + 16 : 0);
+    const partesTiempoCanvas = String(infoActual.tiempo || "00:00").split(/\s+\+/);
+    const texto = partesTiempoCanvas[0];
+    const extraCanvas = partesTiempoCanvas.length > 1 ? `+${partesTiempoCanvas.slice(1).join("+")}` : "";
+    poner(700, 22); const anchoExtra = extraCanvas ? ctx.measureText(extraCanvas).width + 8 : 0;
+    const disponible = w - 40 - 28 - anchoExtra - (estado ? anchoEstado + 16 : 0);
     const medir = (px) => {
       poner(700, px);
       const ancho0 = ctx.measureText("0").width;
@@ -379,6 +404,7 @@ html,body{margin:0!important;padding:0!important;width:100%;height:100%;min-heig
     ctx.fillStyle = leerToken("--text-primary", "#f5f4fb");
     let x = 40;
     for (const c of texto) { ctx.fillText(c, x + (m.anchoDe(c) - ctx.measureText(c).width) / 2, 128); x += m.anchoDe(c); }
+    if (extraCanvas) { poner(700, 22); ctx.fillStyle = leerToken("--color-danger", "#ef4444"); ctx.fillText(extraCanvas, x + 8, 128); }
   };
   // Respaldo: sin Document PiP ni PiP de video el timer sigue a la vista en la
   // propia app (indicador de la barra o tarjeta flotante); se avisa en vez de no hacer nada.
@@ -401,11 +427,17 @@ html,body{margin:0!important;padding:0!important;width:100%;height:100%;min-heig
     // controles permanecen en la app para no exponer controles de video falsos.
     if (document.pictureInPictureEnabled && HTMLCanvasElement.prototype.captureStream && HTMLVideoElement.prototype.requestPictureInPicture) {
       const video = document.createElement("video"), canvas = document.createElement("canvas");
-      canvas.width = 880; canvas.height = 400; video.muted = true; video.playsInline = true;
+      canvas.width = PIP_W * 2; canvas.height = PIP_H * 2; video.muted = true; video.playsInline = true;
       video.style.cssText = "position:fixed;width:1px;height:1px;opacity:.01;pointer-events:none"; document.body.append(video);
       canvasPiP = canvas; videoPiP = video;
       try {
-        pintarCanvasPiP(); video.srcObject = canvas.captureStream(2); await video.play(); await video.requestPictureInPicture();
+        pintarCanvasPiP(); video.srcObject = canvas.captureStream(2); await video.play();
+        const ventanaVideoPiP = await video.requestPictureInPicture();
+        if (new URLSearchParams(location.search).get("diag") === "pip") {
+          const reportar = () => mostrarToast(`PiP ${video.videoWidth}×${video.videoHeight} → ventana ${ventanaVideoPiP.width}×${ventanaVideoPiP.height}`);
+          reportar(); ventanaVideoPiP.addEventListener("resize", reportar);
+          video.addEventListener("leavepictureinpicture", () => { ventanaVideoPiP.removeEventListener("resize", reportar); mostrarToast("Diagnóstico PiP finalizado."); }, { once: true });
+        }
         intervaloPiP = setInterval(pintarCanvasPiP, 1000);
         // Pausa/reanudar/detener desde los controles del propio PiP: reusan las mismas
         // callbacks (alTogglePausa/alDetener) del timer principal, no hay otro temporizador.

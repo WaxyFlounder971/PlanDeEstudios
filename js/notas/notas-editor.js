@@ -5,6 +5,7 @@ import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { iniciarProcesoAnalitico, registrarAnaliticaUso } from "../core/analitica.js";
 import { compartirNotaFuera } from "./notas-compartir.js";
 import { crearCapaTinta, GROSOR_BASE } from "./notas-tinta.js";
+import "./notas-diagnostico.js"; // v3.28.0 D2: diagnóstico opt-in (?diag=notas); no hace nada si no se activa
 import { crearHerramientas, crearMarcadores } from "./notas-herramientas.js";
 import { descargarWapper, leerWapper, compartirImagenNota } from "./notas-wapper.js";
 import { crearCampoFecha, aValorFecha, deValorFecha, formatear } from "./notas-fechas.js";

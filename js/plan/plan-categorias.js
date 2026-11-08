@@ -58,7 +58,7 @@ function construirPanelCategorias() {
   fila.appendChild(h3);
 
   const btnAgregar = document.createElement("button");
-  btnAgregar.className = "btn btn-primary";
+  btnAgregar.className = "btn btn-primary btn-plan-compacto"; // v3.28.0 B (P1): 36 px
   btnAgregar.textContent = "+ Agregar categoría";
   btnAgregar.addEventListener("click", () => abrirModalCategoria(null, principal));
   fila.appendChild(btnAgregar);

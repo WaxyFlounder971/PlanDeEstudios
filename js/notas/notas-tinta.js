@@ -193,7 +193,10 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   canvas.className = "nt-tinta-canvas";
   if (win.getComputedStyle(modal).position === "static") modal.style.position = "relative";
   modal.append(canvas);
-  const ctx = canvas.getContext("2d", { desynchronized: true }) || canvas.getContext("2d");
+  // v3.28.0 D1: contexto con alfa explícito y desynchronized apagado por defecto. En Chrome/Android la capa de hardware puede aparecer como rectángulo negro.
+  // Para probar la baja latencia: localStorage.setItem("nt_tinta_desincronizada", "1") y recargar.
+  const desinc = (() => { try { return win.localStorage?.getItem("nt_tinta_desincronizada") === "1"; } catch { return false; } })();
+  const ctx = canvas.getContext("2d", { alpha: true, desynchronized: desinc }) || canvas.getContext("2d");
 
   let modo = null; // lápiz, borrador, línea, flecha o rectángulo
   let edicionFiguras = false, figuraSeleccionada = null, movimientoFigura = null;
@@ -259,6 +262,12 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
     }
     if (edicionFiguras && figuraSeleccionada) { const p=figuraSeleccionada.p||[], esLinea=["linea","flecha"].includes(figuraSeleccionada.tipo), pts=esLinea?[p[0],p.at(-1)]:p, xs=pts.map(q=>q[0]*ancho), ys=pts.map(q=>q[1]*ancho-viewport.scrollTop/zoomLienzo); if(xs.length){ const pad=5,x0=Math.min(...xs)-pad,y0=Math.min(...ys)-pad,x1=Math.max(...xs)+pad,y1=Math.max(...ys)+pad; ctx.strokeStyle="#b7a5f4";ctx.lineWidth=1.5;ctx.setLineDash([5,4]);ctx.strokeRect(x0,y0,x1-x0,y1-y0);ctx.setLineDash([]);const hs=esLinea?pts:[[x0,y0],[(x0+x1)/2,y0],[x1,y0],[x1,(y0+y1)/2],[x1,y1],[(x0+x1)/2,y1],[x0,y1],[x0,(y0+y1)/2]];for(const h of hs){const hx=esLinea?h[0]*ancho:h[0],hy=esLinea?h[1]*ancho-viewport.scrollTop/zoomLienzo:h[1];ctx.beginPath();ctx.arc(hx,hy,5,0,Math.PI*2);ctx.fillStyle="#9b82e8";ctx.fill();ctx.strokeStyle="#fff";ctx.lineWidth=1.5;ctx.stroke();}}}
     ctx.restore();
+    actualizarVisibilidad();
+  }
+
+  /** v3.28.0 D1: un lienzo sin trazos y sin herramienta activa no necesita mostrarse. Si el navegador lo pintara opaco, la nota seguiría visible. */
+  function actualizarVisibilidad() {
+    canvas.classList.toggle("nt-tinta-vacia", !modo && !edicionFiguras && !obtenerTrazos().length);
   }
 
   /** Al terminar un trazo solo se repinta la zona que ocupa (con sus vecinos), no toda la nota: antes cada trazo nuevo repintaba toda la tinta y retrasaba el siguiente. */
@@ -483,6 +492,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
   // PATCH 13: el lienzo se ubica según el viewport; si este cambia solo (barras que saltan de línea, animación del modal) también hay que recalcular.
   if (viewport !== cuerpo) observador?.observe(viewport);
   win.addEventListener("resize", ubicar);
+  actualizarVisibilidad(); // v3.28.0 D1: oculto desde el primer frame si no hay trazos
   // Tras el layout real: un frame para la primera medida y otro para la medida ya asentada (modal animando / sin ancho aún).
   win.requestAnimationFrame(() => { ubicar(); win.requestAnimationFrame(ubicar); });
 
@@ -492,6 +502,7 @@ function crearCapaTinta({ cuerpo, viewport = cuerpo, modal, obtenerTrazos, alCam
       modo = m;
       canvas.classList.toggle("activo", !!m);
       canvas.dataset.modo = m || "";
+      actualizarVisibilidad(); // v3.28.0 D1
       if (!m) { clearTimeout(timerForma); activo = false; actual = null; }
     },
     obtenerModo: () => modo,
@@ -558,14 +569,26 @@ function crearMiniTinta(trazos, { alinear = false, nivel = 5 } = {}) {
     ctx.translate(-x0 + pad, -y0 + pad);
     dibujarTrazos(ctx, trazos, 1, 0, 1.5 / escala);
   };
-  pintar(360 * (window.devicePixelRatio || 1));
+  let pintado = false;
+  const pintarAncho = (ancho) => {
+    if (!ancho || pintado) return;
+    const px = Math.min(MAX_PX, Math.round(ancho * (window.devicePixelRatio || 1)));
+    pintar(px); pintado = true;
+  };
   if (typeof ResizeObserver === "function") {
-    new ResizeObserver((entradas) => {
+    const observador = new ResizeObserver((entradas) => {
       const ancho = entradas[0]?.contentRect?.width || 0;
       if (!ancho) return;
+      if (!pintado) { pintarAncho(ancho); observador.disconnect(); return; }
       const px = Math.min(MAX_PX, Math.round(ancho * (window.devicePixelRatio || 1)));
       if (Math.abs(px - pxActual) > 8) pintar(px);
-    }).observe(c);
+    });
+    observador.observe(c);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (!pintado) { pintar(360 * (window.devicePixelRatio || 1)); pintado = true; observador.disconnect(); }
+    }));
+  } else {
+    pintar(360 * (window.devicePixelRatio || 1)); pintado = true;
   }
   return c;
 }

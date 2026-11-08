@@ -33,6 +33,7 @@ import { marcarCambioPendiente, registrarHookPostFusion } from "../core/storage/
 import { aplicarFormatoTexto } from "../core/utils.js";
 import { COLOR_TIEMPO_ESTUDIO_DEFAULT, crearMateriaEstudioIndependiente, sellarTimestamp } from "../core/schema.js";
 import { abrirConfirmacion, mostrarToast, poblarVentanaSemestres, subtituloSemestreSelector } from "../ui/componentes.js";
+import { anunciarInicioTimer, mostrarAvisoDescanso } from "./tiempo-estudio-avisos.js";
 import { obtenerSemestresActuales } from "../semestres/semestres.js";
 import { obtenerSemestreActivoAgenda, obtenerFechaInicioSemanaAgenda, formatearRangoSemanaAgenda } from "../agenda/agenda-utils.js";
 import { calcularNumeroSemanaParaFecha } from "../agenda/agenda-clases.js";
@@ -259,7 +260,7 @@ function manejarBotonIniciarDetener(materiaMatriculadaId, nombreMateria) {
       claseConfirmar: "btn-primary",
       onConfirmar: () => {
         cambiarTimerEstudio(materiaMatriculadaId);
-        mostrarToast(`Timer iniciado en ${nombreMateria}`);
+        anunciarInicioTimer(nombreMateria, mostrarToast);
         renderizarTiempoEstudio();
       },
     });
@@ -267,7 +268,7 @@ function manejarBotonIniciarDetener(materiaMatriculadaId, nombreMateria) {
   }
 
   iniciarTimerEstudio(materiaMatriculadaId);
-  mostrarToast(`Timer iniciado en ${nombreMateria}`);
+  anunciarInicioTimer(nombreMateria, mostrarToast);
   renderizarTiempoEstudio();
 }
 
@@ -1504,7 +1505,8 @@ function construirPantallaDetalle(cont, item) {
   btnDescanso.addEventListener("click", () => {
     const activo = obtenerTimerActivo();
     if (!activo || activo.materiaMatriculadaId !== mm.id) return;
-    iniciarDescansoPomodoro();
+    const hayDescanso = iniciarDescansoPomodoro();
+    if (hayDescanso) mostrarAvisoDescanso({ nombre: item.nombreMateriaCorto, suscribir: suscribirseATimer, leerFase: tiempoDeFase });
     renderizarTiempoEstudio();
   });
 

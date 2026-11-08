@@ -89,7 +89,7 @@ import {
   semanaISOActual,
   conMensajePropio,
   mensajeVisibleDe,
-  pintarTarjeta,
+  // pintarTarjeta ahora viene de tiempo-estudio-competencias-transicion.js (v3.28.0 C)
   abrirHoja,
   pintarHistorial,
   avatarHTML,
@@ -98,6 +98,7 @@ import {
   COLOR_PALETA_DEFAULT,
 } from "./tiempo-estudio-competencias-visual.js";
 
+import { pintarTarjeta } from "./tiempo-estudio-competencias-transicion.js";
 const CLAVE_CACHE_COMPETENCIA = "te_comp_marcador_cache_v1:";
 const vistasDemoPorId = new Map();
 let refrescoCompetenciasAlReconectarInstalado = false;
