@@ -48,9 +48,12 @@
   <div id="amigos-contenido" class="stack oculto">
     <div class="glass-card">
       <div class="row-between" style="flex-wrap:wrap; gap:10px; position:relative;">
-        <div>
-          <h2 id="amigos-titulo-semestre" style="margin:0 0 2px; font-size:1rem;"></h2>
-          <p class="muted" id="amigos-subtitulo-semana" style="margin:0;"></p>
+        <div style="display:flex; align-items:center; gap:10px; min-width:0;">
+          <img id="amigos-perfil-foto" class="oculto" alt="" referrerpolicy="no-referrer" style="width:40px; height:40px; border-radius:50%; object-fit:cover; flex-shrink:0; box-shadow:0 0 0 2px var(--accent-1, #6c5cf0);">
+          <div>
+            <h2 id="amigos-titulo-semestre" style="margin:0 0 2px; font-size:1rem;"></h2>
+            <p class="muted" id="amigos-subtitulo-semana" style="margin:0;"></p>
+          </div>
         </div>
         <!-- Centrado real en X e Y entre el bloque de semestre y "Asociar a
              mi cuenta": position:absolute + translate(-50%,-50%) sobre el
