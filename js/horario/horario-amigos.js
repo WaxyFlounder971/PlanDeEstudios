@@ -34,7 +34,7 @@ import { crearModalDinamico, agregarCampoModal } from "../semestres/semestres-ta
 // Restringido por dominio en Google Cloud a este mismo GitHub Pages - ver
 // nota de configuración del prompt. amigos.html vive en la raíz del repo,
 // hermano de index.html.
-const BASE_URL_AMIGOS = "https://waxyflounder971.github.io/PlanDeEstudios/amigos.html";
+const BASE_URL_AMIGOS = "https://wapper.pages.dev/amigos.html";
 
 // Misma API key restringida por dominio + Drive API que ya usa amigos.html
 // (ver nota de configuración del prompt) - se usa acá TAMBIÉN, no solo en
