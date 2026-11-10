@@ -327,10 +327,42 @@ async function obtenerSnapshotPublico(fileId) {
   return resp.json();
 }
 
+/* ===================== Perfil del dueño (foto + paleta) ===================== */
+
+function esHex(v) {
+  return typeof v === "string" && /^#[0-9a-f]{6}$/i.test(v.trim());
+}
+
+/** Aplica la paleta/modo de quien compartió y muestra su foto. Todo best-effort. */
+function aplicarPerfilPublico(perfil) {
+  if (!perfil || typeof perfil !== "object") return;
+  const raiz = document.documentElement;
+  if (typeof perfil.paleta === "string" && /^[a-z0-9_-]{1,30}$/i.test(perfil.paleta)) raiz.setAttribute("data-palette", perfil.paleta);
+  if (perfil.modo === "light" || perfil.modo === "dark") raiz.setAttribute("data-mode", perfil.modo);
+  // Los colores exactos cubren también paletas personalizadas que esta página no conoce.
+  if (esHex(perfil.color)) raiz.style.setProperty("--accent-1", perfil.color.trim());
+  if (esHex(perfil.color2)) raiz.style.setProperty("--accent-2", perfil.color2.trim());
+
+  const img = document.getElementById("amigos-perfil-foto");
+  if (img && typeof perfil.foto_url === "string" && perfil.foto_url.length <= 2048) {
+    try {
+      if (new URL(perfil.foto_url).protocol === "https:") {
+        img.referrerPolicy = "no-referrer";
+        img.addEventListener("error", () => img.classList.add("oculto"), { once: true });
+        img.src = perfil.foto_url;
+        img.classList.remove("oculto");
+      }
+    } catch (e) {
+      // URL inválida: se queda sin foto
+    }
+  }
+}
+
 /* ===================== Render principal ===================== */
 
 function renderizarGridPublico(snapshot) {
   const cont = document.getElementById("amigos-grid");
+  aplicarPerfilPublico(snapshot.perfil);
   const numeroSemana = calcularNumeroSemanaSemestre(snapshot.fecha_inicio, snapshot.duracion_semanas);
 
   document.getElementById("amigos-titulo-semestre").textContent = snapshot.semestre_nombre || "Horario";

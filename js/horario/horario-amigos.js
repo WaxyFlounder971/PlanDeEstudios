@@ -99,6 +99,80 @@ function resolverUniversidadParaMostrar(universidad) {
   return { siglas: texto, nombreCompleto: siglas && nombre && nombre !== siglas ? nombre : null };
 }
 
+/* ===================== Perfil compartido (foto + paleta) ===================== */
+
+const COLOR_PALETA_DEFAULT_APP = "#6c5cf0"; // violeta de marca: "no eligió nada", no cuenta como color propio
+
+function normalizarFotoUrlPerfil(valor) {
+  if (typeof valor !== "string") return null;
+  const v = valor.trim();
+  if (!v || v.length > 2048) return null;
+  try {
+    return new URL(v).protocol === "https:" ? v : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** #rrggbb en minúsculas, o null. Acepta #rgb, #rrggbb y rgb()/rgba(). */
+function normalizarColorPerfil(valor) {
+  if (typeof valor !== "string") return null;
+  const v = valor.trim().toLowerCase();
+  let m = /^#([0-9a-f]{6})$/.exec(v);
+  if (m) return `#${m[1]}`;
+  m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(v);
+  if (m) return `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`;
+  m = /^rgba?\(\s*(\d{1,3})[\s,]+(\d{1,3})[\s,]+(\d{1,3})/.exec(v);
+  if (m) return "#" + [m[1], m[2], m[3]].map((n) => Math.min(255, Number(n)).toString(16).padStart(2, "0")).join("");
+  return null;
+}
+
+/** Resuelve una variable CSS de la app (var()/hsl()/color-mix() incluidos) a #rrggbb. */
+function leerVariableColorApp(nombre) {
+  try {
+    const el = document.createElement("span");
+    el.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;color:var(${nombre})`;
+    document.body.appendChild(el);
+    const rgb = getComputedStyle(el).color;
+    el.remove();
+    return normalizarColorPerfil(rgb);
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Foto de Google + paleta activa de quien comparte. Todo opcional. */
+function construirPerfilCompartido() {
+  const p = (estado.datos && estado.datos.perfil) || {};
+  const raiz = document.documentElement;
+  const paleta = String(raiz.getAttribute("data-palette") || "");
+  const modo = String(raiz.getAttribute("data-mode") || "");
+  return {
+    foto_url: normalizarFotoUrlPerfil(p.foto_url || p.foto || p.picture || p.imagen || ""),
+    color: leerVariableColorApp("--accent-1"),
+    color2: leerVariableColorApp("--accent-2"),
+    paleta: /^[a-z0-9_-]{1,30}$/i.test(paleta) ? paleta : null,
+    modo: modo === "light" || modo === "dark" ? modo : null,
+  };
+}
+
+/**
+ * El amigo tal como se VE: color de su paleta (snapshot.perfil.color) salvo
+ * que la persona lo haya editado a mano (color_manual), y su foto si la
+ * compartió. El violeta de marca por defecto no cuenta como color elegido.
+ */
+function obtenerAmigoConPerfil(amigo) {
+  const entrada = cacheSnapshotsAmigos.get(amigo.file_id);
+  const perfil = (entrada && entrada.snapshot && entrada.snapshot.perfil) || {};
+  const colorPerfil = normalizarColorPerfil(perfil.color);
+  const usable = colorPerfil && colorPerfil !== COLOR_PALETA_DEFAULT_APP ? colorPerfil : null;
+  return {
+    ...amigo,
+    color: amigo.color_manual ? amigo.color : usable || amigo.color,
+    foto: normalizarFotoUrlPerfil(perfil.foto_url || ""),
+  };
+}
+
 /* ===================== Snapshot público (privacidad: mínimo indispensable) ===================== */
 
 /**
@@ -126,6 +200,9 @@ function construirSnapshotHorarioCompartido(semestre, apodoPropietario) {
     // al asociar. Puede ser null: el snapshot sigue sin ningún dato de
     // identidad si el usuario lo deja vacío.
     apodo_propietario: apodoPropietario || null,
+    // Foto de perfil + paleta (color/modo): se muestran en el panel de Amigos
+    // de quien vincula y tiñen la vista pública (amigos.html).
+    perfil: construirPerfilCompartido(),
     semestre_nombre: semestre.nombre,
     fecha_inicio: semestre.fecha_inicio,
     duracion_semanas: semestre.duracion_semanas,
@@ -679,7 +756,12 @@ function abrirModalEditarAmigoVinculado(amigo) {
       return;
     }
     vivo.nombre = nombre;
-    vivo.color = inputColor.value;
+    // Solo cuenta como color elegido a mano si lo cambió: si lo deja igual,
+    // sigue el color de la paleta del amigo.
+    if (inputColor.value.toLowerCase() !== String(amigo.color || "").toLowerCase()) {
+      vivo.color = inputColor.value;
+      vivo.color_manual = true;
+    }
     sellarTimestamp(vivo);
     marcarCambioPendiente();
     overlay.remove();
@@ -1042,7 +1124,8 @@ function minutosDesdeHoraAmigo(horaStr) {
 function obtenerListaAmigosParaDiaConjunto(fecha, diaCodigo) {
   const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
 
-  return vinculados.map((amigo) => {
+  return vinculados.map((amigoBase) => {
+    const amigo = obtenerAmigoConPerfil(amigoBase);
     const entrada = cacheSnapshotsAmigos.get(amigo.file_id);
     if (!entrada || !entrada.snapshot) {
       return { amigo, bloques: [], caida: entrada?.caida === true };
@@ -1082,41 +1165,8 @@ function obtenerListaAmigosParaDiaConjunto(fecha, diaCodigo) {
 
 /* ----------------- Panel "Horarios Activos" (switches + desvincular) ----------------- */
 
-const SVG_ENLACE_ROTO = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 4.9 1.3"/><path d="m13 11 .1-.1a5 5 0 0 0 0-7.07 5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 .5 6.5"/><path d="M14 11a5 5 0 0 0-1.3-.9"/><path d="m11 13-.1.1a5 5 0 0 0 0 7.07 5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-.5-6.5"/><path d="M8 3 7 5M3 8l2 1M16 21l1-2M21 16l-2-1"/></svg>';
+const SVG_ENLACE_ROTO = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18.84 12.25 1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="m5.17 11.75-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71"/><line x1="8" y1="2" x2="8" y2="5"/><line x1="2" y1="8" x2="5" y2="8"/><line x1="16" y1="19" x2="16" y2="22"/><line x1="19" y1="16" x2="22" y2="16"/></svg>';
 const SVG_EDITAR = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
-
-/** Mini vista previa de la tarjeta "Horario conjunto": una columna por día
- *  de la semana de hoy, con una barrita por cada bloque de amigos activos
- *  (usa los mismos datos que el Horario conjunto, sin lógica nueva). */
-function renderizarPreviewConjunto(activos) {
-  const cont = document.getElementById("fm2-conjunto-preview");
-  if (!cont) return;
-  cont.innerHTML = "";
-  if (activos.length === 0) return;
-  const base = new Date();
-  const dia0 = (base.getDay() + 6) % 7; // 0=lunes
-  const codigos = ["L", "K", "M", "J", "V"];
-  codigos.forEach((codigo, i) => {
-    const fecha = new Date(base);
-    fecha.setDate(base.getDate() - dia0 + i);
-    const col = document.createElement("span");
-    col.className = "fm2-preview-col";
-    const bloques = [];
-    obtenerListaAmigosParaDiaConjunto(fecha, codigo).forEach(({ amigo, bloques: bs }) => {
-      if (!activos.some((a) => a.file_id === amigo.file_id)) return;
-      bs.forEach((b) => bloques.push({ ...b, color: amigo.color }));
-    });
-    // Escala 6:00-22:00 sobre el alto de la vista previa.
-    bloques.forEach((b) => {
-      const top = Math.min(92, Math.max(2, ((b.inicioMin - 360) / 960) * 100));
-      const el = document.createElement("span");
-      el.className = "fm2-preview-bloque";
-      el.style.cssText = `top:${top}%;background:${b.color};`;
-      col.appendChild(el);
-    });
-    cont.appendChild(col);
-  });
-}
 
 function renderizarListaAmigosVinculados() {
   const cont = document.getElementById("lista-amigos-vinculados");
@@ -1128,11 +1178,8 @@ function renderizarListaAmigosVinculados() {
 
   const btnConjunto = document.getElementById("btn-horario-conjunto");
   if (btnConjunto) btnConjunto.classList.toggle("oculto", vinculados.length === 0);
-  const elActivos = document.getElementById("fm2-conjunto-activos");
-  if (elActivos) elActivos.textContent = `${activos.length} de ${vinculados.length} activos`;
   const elConteo = document.getElementById("fm2-amigos-conteo");
   if (elConteo) elConteo.textContent = String(vinculados.length);
-  renderizarPreviewConjunto(activos);
 
   if (vinculados.length === 0) {
     cont.innerHTML = `<p class="muted" style="font-size:0.82rem;">Todavía no vinculaste el horario de ningún amigo. Pedile que te comparta su enlace.</p>`;
@@ -1140,7 +1187,8 @@ function renderizarListaAmigosVinculados() {
   }
 
   cont.innerHTML = "";
-  vinculados.forEach((amigo) => {
+  vinculados.forEach((amigoBase) => {
+    const amigo = obtenerAmigoConPerfil(amigoBase);
     const entrada = cacheSnapshotsAmigos.get(amigo.file_id);
     const caida = entrada?.caida === true;
     const oculto = ocultos.has(amigo.file_id);
@@ -1266,4 +1314,5 @@ export {
   obtenerDiasConClaseAmigosVinculados,
   calcularNumeroSemanaAmigo,
   obtenerFileIdsOcultos,
+  obtenerAmigoConPerfil,
 };
