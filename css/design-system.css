@@ -3187,6 +3187,7 @@ img, svg { max-width: 100%; }
 .btn-instalar-app-flotante.instalar-ocultando { opacity:0; transform:translateY(8px) scale(.92); pointer-events:none; }
 .btn-instalar-app-flotante.oculto { display:none; }
 .instalar-app-icono { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:grid; place-items:center; width:28px; height:28px; font-size:1.55rem; line-height:1; flex:0 0 auto; transition:left .52s cubic-bezier(.22,1,.36,1),transform .52s cubic-bezier(.22,1,.36,1); }
+.instalar-app-icono svg { width:24px; height:24px; display:block; overflow:visible; }
 .instalar-expandido .instalar-app-icono { left:18px; transform:translateY(-50%); }
 .instalar-app-texto { margin-left:25px; white-space:nowrap; font-size:.98rem; font-weight:750; letter-spacing:.01em; opacity:0; transform:translateX(5px); transition:opacity .28s ease .08s,transform .42s cubic-bezier(.22,1,.36,1) .04s; }
 .instalar-expandido .instalar-app-texto { opacity:1; transform:translateX(0); }
@@ -7751,6 +7752,9 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
     align-self: stretch; min-width: 0;
     display: flex; flex-direction: column; align-items: center; gap: var(--enc-gap, 2px);
     text-align: center;
+    /* Centrado respecto a TODO el ancho de la barra: a la izquierda hay 1 botón (☰) y a la derecha 2 (🔗 ⋮);
+       este margen iguala los dos lados (42px = 1 botón) para que el bloque no se corra por los iconos. */
+    margin-left: 42px;
   }
   body.agenda-angosta #topbar-agenda #agenda-nombre-semestre {
     height: auto; min-height: 0; max-width: none;
@@ -7767,11 +7771,16 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   }
   body.agenda-angosta #topbar-agenda .app-encabezado__rango { min-height: 0; white-space: nowrap; line-height: 1.2; }
 
-  /* ⋮ (ajustes de Agenda): justo a la izquierda de 🔗; solo mientras Agenda está abierta. */
-  body.agenda-angosta #btn-agenda-ajustes { display: none; }
+  /* ⋮ (ajustes de Agenda): a la derecha de 🔗 (order:1 lo manda al final de la fila); solo mientras Agenda está abierta. */
+  body.agenda-angosta #btn-agenda-ajustes { display: none; order: 1; }
   body.agenda-angosta[data-topbar-ctx="agenda"] #btn-agenda-ajustes {
     display: flex; width: 42px; height: 42px; font-size: 1.45rem; color: var(--text-primary);
   }
+
+  /* Separación uniforme = la de las tarjetas (14px): barra superior → filtros → lista. */
+  body.agenda-angosta .app-contenido { padding-top: 14px; }
+  body.agenda-angosta #seccion-agenda .agenda-filtro-estados { margin-top: 0; }
+  body.agenda-angosta #seccion-agenda .agenda-busqueda-cont { margin: 0; }
 
   /* El encabezado original (ya vacío) no ocupa lugar en la página. */
   body.agenda-angosta #agenda-header { display: none; }
@@ -7794,11 +7803,20 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
     padding: 4px; gap: 0; overflow: visible;      /* 4px = el margen que usa el thumb para calcular su ancho */
     background: transparent; border-radius: 0;
   }
+  /* Resaltado: sin caja. Una barrita con degradado sobre el borde superior de la barra + un resplandor suave
+     detrás del botón activo; el icono y el texto toman el color de su pestaña. El thumb sigue al dedo igual. */
   body.agenda-angosta #pills-agenda-vista .pill-switch-thumb {
-    border-radius: 18px; box-shadow: none;
-    background: color-mix(in srgb, var(--text-primary) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--text-primary) 8%, transparent);
-    box-sizing: border-box;
+    background: radial-gradient(ellipse 70% 90% at 50% 0%, color-mix(in srgb, var(--accent-2) 22%, transparent), transparent 75%);
+    border: 0; border-radius: 0; box-shadow: none; box-sizing: border-box; overflow: visible;
+  }
+  body.agenda-angosta #pills-agenda-vista .pill-switch-thumb::after {
+    content: ""; position: absolute; left: 50%; top: -4px; width: 30px; height: 3px; transform: translateX(-50%);
+    border-radius: 0 0 4px 4px; background: var(--gradient-accent, var(--accent-2));
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-2) 60%, transparent);
+  }
+  /* Separador fino entre los 3 botones y el "+". */
+  body.agenda-angosta #pills-agenda-vista::after {
+    content: ""; position: absolute; right: 0; top: 16px; bottom: 16px; width: 1px; background: var(--border-glass);
   }
   body.agenda-angosta #pills-agenda-vista .pill-item {
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
@@ -7807,32 +7825,34 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
     color: var(--text-muted); overflow: visible; text-overflow: clip; white-space: nowrap;
     -webkit-tap-highlight-color: transparent;
   }
-  body.agenda-angosta #pills-agenda-vista .pill-item.active { color: var(--text-primary); font-weight: 700; }
+  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="lista"]      { --tab-c: #f0b429; }
+  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="calendario"] { --tab-c: #2fb075; }
+  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="materia"]    { --tab-c: #22b8d9; }
+  body.agenda-angosta #pills-agenda-vista .pill-item.active { color: var(--tab-c); font-weight: 700; }
   body.agenda-angosta #pills-agenda-vista .pill-item .agenda-nav-texto { overflow: visible; text-overflow: clip; white-space: nowrap; }
 
   /* Iconos como en el prototipo: trazo de color con relleno translúcido; apagado 60%, activo 100%. */
   body.agenda-angosta #pills-agenda-vista .agenda-nav-ico {
     display: block; width: 24px; height: 24px; flex: none;
     fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
-    opacity: 0.6; transition: opacity var(--transition-fast), transform var(--transition-fast);
+    color: var(--tab-c); opacity: 0.6; transition: opacity var(--transition-fast), transform var(--transition-fast);
   }
   body.agenda-angosta #pills-agenda-vista .pill-item.active .agenda-nav-ico { opacity: 1; transform: translateY(-1px) scale(1.06); }
   [data-rendimiento="reducido"] body.agenda-angosta #pills-agenda-vista .agenda-nav-ico { transition: none; }
-  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="lista"] .agenda-nav-ico      { color: #f0b429; }
-  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="calendario"] .agenda-nav-ico { color: #2fb075; }
-  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="materia"] .agenda-nav-ico    { color: #22b8d9; }
 
-  /* ---- "+" dentro de la barra, a la derecha (círculo de 46px como en el prototipo) ---- */
+  /* ---- "+" dentro de la barra, a la derecha, centrado en altura (46px, esquinas como el resaltado de la barra) ---- */
   body.agenda-angosta #btn-agenda-agregar.agenda-fab {
     position: fixed; z-index: 46;
     right: calc(10px + env(safe-area-inset-right, 0px));
-    bottom: calc(9px + env(safe-area-inset-bottom, 0px));
+    bottom: calc((var(--agenda-nav-alto) - 46px) / 2 + env(safe-area-inset-bottom, 0px));
     width: 46px; height: 46px; min-width: 46px; min-height: 46px; padding: 0;
-    font-size: 1.7rem; line-height: 1; border-radius: 50%;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.7rem; line-height: 1; border-radius: 16px;
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--accent-2) 35%, transparent);
   }
-  /* "Instalar app" siempre por encima de la barra inferior, nunca encima de ella. */
+  /* "Instalar app": siempre por encima de la barra y alineado con el "+" (mismo eje vertical: 44px vs 46px → +1px). */
   body.agenda-angosta .btn-instalar-app-flotante {
+    right: calc(11px + env(safe-area-inset-right, 0px)) !important;
     bottom: calc(var(--agenda-nav-alto) + 14px + env(safe-area-inset-bottom, 0px)) !important;
   }
   /* La barra flotante de selección múltiple queda por encima de la barra inferior, no tapándola. */
