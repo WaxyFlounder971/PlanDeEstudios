@@ -7785,11 +7785,11 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
     content: ""; position: fixed; left: 0; right: 0; bottom: 0; z-index: 44; pointer-events: none;
     height: calc(var(--agenda-nav-alto) + env(safe-area-inset-bottom, 0px));
     background: color-mix(in srgb, var(--bg-header-solido, var(--bg-panel)) 94%, transparent);
-    border-top: 1px solid var(--border-glass); border-radius: 18px 18px 0 0;
+    border-top: 1px solid var(--border-glass);
     -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   }
   body.agenda-angosta #pills-agenda-vista {
-    position: fixed; left: 0; right: 84px; bottom: env(safe-area-inset-bottom, 0px); z-index: 45;
+    position: fixed; left: 0; right: calc(66px + env(safe-area-inset-right, 0px)); bottom: env(safe-area-inset-bottom, 0px); z-index: 45;
     width: auto; height: var(--agenda-nav-alto); box-sizing: border-box;
     padding: 4px; gap: 0; overflow: visible;      /* 4px = el margen que usa el thumb para calcular su ancho */
     background: transparent; border-radius: 0;
@@ -7810,44 +7810,30 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   body.agenda-angosta #pills-agenda-vista .pill-item.active { color: var(--text-primary); font-weight: 700; }
   body.agenda-angosta #pills-agenda-vista .pill-item .agenda-nav-texto { overflow: visible; text-overflow: clip; white-space: nowrap; }
 
-  /* Iconos: mismo lenguaje que los del menú lateral (trazo --nav-c1, relleno/detalle --nav-c2). */
+  /* Iconos como en el prototipo: trazo de color con relleno translúcido; apagado 60%, activo 100%. */
   body.agenda-angosta #pills-agenda-vista .agenda-nav-ico {
     display: block; width: 24px; height: 24px; flex: none;
-    opacity: 0.85; transition: opacity var(--transition-fast), transform var(--transition-fast);
+    fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    opacity: 0.6; transition: opacity var(--transition-fast), transform var(--transition-fast);
   }
   body.agenda-angosta #pills-agenda-vista .pill-item.active .agenda-nav-ico { opacity: 1; transform: translateY(-1px) scale(1.06); }
   [data-rendimiento="reducido"] body.agenda-angosta #pills-agenda-vista .agenda-nav-ico { transition: none; }
+  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="lista"] .agenda-nav-ico      { color: #f0b429; }
+  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="calendario"] .agenda-nav-ico { color: #2fb075; }
+  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="materia"] .agenda-nav-ico    { color: #22b8d9; }
 
-  body.agenda-angosta #pills-agenda-vista .pill-item {
-    --ni-k: 100%;
-    --nav-c1: color-mix(in srgb, var(--ni-a) var(--ni-k), black);
-    --nav-c2: color-mix(in srgb, var(--ni-b) var(--ni-k), black);
-  }
-  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="lista"]      { --ni-a: #E3BC38; --ni-b: #E8632F; --ni-logo: var(--logo-3); }
-  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="calendario"] { --ni-a: #35A878; --ni-b: #2F86DC; --ni-logo: var(--logo-4); }
-  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="materia"]    { --ni-a: #2F86DC; --ni-b: #35A878; --ni-logo: var(--logo-5); }
-  html[data-mode="light"] body.agenda-angosta #pills-agenda-vista .pill-item { --ni-k: 72%; }
-  html[data-iconos-nav="logo"] body.agenda-angosta #pills-agenda-vista .pill-item {
-    --ni-a: var(--ni-logo);
-    --ni-b: color-mix(in srgb, var(--ni-logo) 70%, white);
-  }
-  html[data-iconos-nav="paleta"] body.agenda-angosta #pills-agenda-vista .pill-item {
-    --nav-c1: var(--accent-2);
-    --nav-c2: color-mix(in srgb, var(--accent-1) 55%, var(--accent-2));
-  }
-
-  /* ---- "+" flotante, a la derecha de la barra (sobresale un poco, como en Notas y Finanzas) ---- */
+  /* ---- "+" dentro de la barra, a la derecha (círculo de 46px como en el prototipo) ---- */
   body.agenda-angosta #btn-agenda-agregar.agenda-fab {
     position: fixed; z-index: 46;
-    right: calc(16px + env(safe-area-inset-right, 0px));
-    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
-    width: 56px; height: 56px; min-width: 56px; min-height: 56px; padding: 0;
-    font-size: 1.9rem; line-height: 1; border-radius: 50%;
-    box-shadow: var(--shadow-float, 0 8px 24px rgba(0, 0, 0, 0.35));
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc(9px + env(safe-area-inset-bottom, 0px));
+    width: 46px; height: 46px; min-width: 46px; min-height: 46px; padding: 0;
+    font-size: 1.7rem; line-height: 1; border-radius: 50%;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.3);
   }
-  /* Si el botón flotante de "Instalar app" está a la vista, el "+" se sube para no taparlo. */
-  body.agenda-angosta:has(.btn-instalar-app-flotante:not(.oculto)) #btn-agenda-agregar.agenda-fab {
-    bottom: calc(14px + 44px + 12px + env(safe-area-inset-bottom, 0px));
+  /* "Instalar app" siempre por encima de la barra inferior, nunca encima de ella. */
+  body.agenda-angosta .btn-instalar-app-flotante {
+    bottom: calc(var(--agenda-nav-alto) + 14px + env(safe-area-inset-bottom, 0px)) !important;
   }
   /* La barra flotante de selección múltiple queda por encima de la barra inferior, no tapándola. */
   body.agenda-angosta .agenda-barra-seleccion { bottom: calc(var(--agenda-nav-alto) + 14px + env(safe-area-inset-bottom, 0px)); }
