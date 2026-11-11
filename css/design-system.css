@@ -1480,6 +1480,7 @@ body.asistente-teclado-abierto .mobile-topbar {
   padding: 0;
 }
 .btn-topbar-icono:active { opacity: 0.6; }
+.btn-topbar-icono svg { width: 22px; height: 22px; display: block; }
 /* flex:1 para que el título ocupe el espacio del medio y el botón de
    Enlaces (agregado después de <h3> en el HTML) quede pegado al borde
    derecho de la barra, sin necesitar un wrapper extra. */
@@ -7851,9 +7852,8 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
     height: 46px !important;                       /* mismo tamaño que el "+" */
   }
   body.agenda-angosta .btn-instalar-app-flotante:not(.instalar-expandido) { width: 46px !important; }
-  /* ☰ y 🔗 alineados con el borde de las tarjetas: el símbolo (centrado en su zona de toque de 42px) se corre hasta el margen de 16px. */
-  body.agenda-angosta[data-topbar-ctx="agenda"] #btn-hamburguesa { margin-left: -13px; }
-  body.agenda-angosta[data-topbar-ctx="agenda"] #btn-topbar-enlaces { margin-right: -13px; }
+  /* ☰ y 🔗 quedan donde siempre (igual que en las demás secciones); solo se acerca ⋮ a ☰. */
+  body.agenda-angosta[data-topbar-ctx="agenda"] #btn-agenda-ajustes { margin-left: -12px; }
   /* La barra flotante de selección múltiple queda por encima de la barra inferior, no tapándola. */
   body.agenda-angosta .agenda-barra-seleccion { bottom: calc(var(--agenda-nav-alto) + 14px + env(safe-area-inset-bottom, 0px)); }
   /* Escribiendo en el buscador (teclado abierto) la barra y el "+" se apartan para no subir sobre el teclado. */
