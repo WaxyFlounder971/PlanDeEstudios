@@ -7674,6 +7674,9 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   body[data-topbar-ctx] .mobile-topbar { border-radius: 0 0 18px 18px; }
   body[data-topbar-ctx] .mobile-topbar-centro > h3 { display: none; }
 
+  /* Sin logo en los encabezados de la barra superior (en las secciones que siguen con "Wapper", queda solo el texto). */
+  .mobile-topbar-centro > h3 img { display: none; }
+
   .topbar-ctx {
     align-self: stretch; min-width: 0;
     display: flex; flex-direction: column; align-items: center; gap: var(--enc-gap, 1.4px);
