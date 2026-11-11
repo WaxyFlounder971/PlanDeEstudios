@@ -232,6 +232,8 @@
         <h2 id="topbar-ctx-titulo" class="topbar-ctx__titulo"></h2>
         <span id="topbar-ctx-sub" class="topbar-ctx__sub"></span>
       </div>
+      <!-- Encabezado de Agenda (solo <900px): js/agenda/agenda-angosta.js mueve aquí el semestre y "Semana N · rango · Hoy". -->
+      <div id="topbar-agenda" class="topbar-agenda"></div>
       <div id="timer-linea-topbar" class="timer-indicador timer-indicador--linea oculto"></div>
     </div>
     <!-- Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes solo se
@@ -321,6 +323,26 @@
       <symbol id="ni-notas" viewBox="0 0 24 24">
         <path class="ni-s1 ni-fl" d="M6.5 4h11A2.5 2.5 0 0 1 20 6.5V14l-6 6H6.5A2.5 2.5 0 0 1 4 17.5v-11A2.5 2.5 0 0 1 6.5 4z"/>
         <path class="ni-s2" d="M20 14h-3.5a2.5 2.5 0 0 0-2.5 2.5V20M8 9h8M8 12.5h4"/>
+      </symbol>
+      <!-- Agenda (barra inferior <900px): Lista · Calendario · Cronograma. Mismo lenguaje que los de arriba (trazo --nav-c1, relleno/detalle --nav-c2). -->
+      <symbol id="ni-ag-lista" viewBox="0 0 24 24">
+        <rect class="ni-s1 ni-fl" x="3.5" y="3.5" width="17" height="17" rx="4.2"/>
+        <path class="ni-s1" d="M6.8 8.4l1.3 1.3 2.2-2.6M6.8 12.2l1.3 1.3 2.2-2.6"/>
+        <circle class="ni-d2" cx="8.5" cy="16" r="1"/>
+        <path class="ni-s2" d="M12.8 8.4H17M12.8 12.2H17M12.8 16h2.6"/>
+      </symbol>
+      <symbol id="ni-ag-calendario" viewBox="0 0 24 24">
+        <rect class="ni-s1 ni-fl" x="3.5" y="5" width="17" height="15.5" rx="3.4"/>
+        <path class="ni-s1" d="M8 3v4M16 3v4M3.5 10h17"/>
+        <circle class="ni-d2" cx="7.8" cy="13.8" r="0.95"/><circle class="ni-d2" cx="12" cy="13.8" r="0.95"/>
+        <rect class="ni-d1" x="14.2" y="12.1" width="3.9" height="3.4" rx="1.1"/>
+        <circle class="ni-d2" cx="7.8" cy="17.4" r="0.95"/><circle class="ni-d2" cx="12" cy="17.4" r="0.95"/><circle class="ni-d2" cx="16.2" cy="17.4" r="0.95"/>
+      </symbol>
+      <symbol id="ni-ag-cronograma" viewBox="0 0 24 24">
+        <rect class="ni-s1 ni-fl" x="3.5" y="4.6" width="9.5" height="3.8" rx="1.9"/>
+        <rect class="ni-s1 ni-fl" x="8.5" y="10.1" width="12" height="3.8" rx="1.9"/>
+        <rect class="ni-s1 ni-fl" x="5.5" y="15.6" width="8.5" height="3.8" rx="1.9"/>
+        <path class="ni-s2" d="M13 6.5h2.4v3.6M10.5 13.9v1.7"/>
       </symbol>
       <symbol id="ni-config" viewBox="0 0 24 24">
         <path class="ni-s1" d="M4 7h5.5M14.5 7H20M4 12h1.6M10.4 12H20M4 17h7.6M16.4 17H20"/>
@@ -889,9 +911,10 @@
         </section>
 
         <div class="pill-group" id="pills-agenda-vista">
-          <button type="button" class="pill-item active" data-vista="lista">Lista</button>
-          <button type="button" class="pill-item" data-vista="calendario">Calendario</button>
-          <button type="button" class="pill-item" data-vista="materia">Cronograma</button>
+          <!-- <900px esto es la barra inferior de 3 botones (icono + texto); en >=900px el icono se oculta y sigue siendo el switch de siempre. -->
+          <button type="button" class="pill-item active" data-vista="lista"><svg class="nav-ico agenda-nav-ico" aria-hidden="true" focusable="false"><use href="#ni-ag-lista"/></svg><span class="agenda-nav-texto">Lista</span></button>
+          <button type="button" class="pill-item" data-vista="calendario"><svg class="nav-ico agenda-nav-ico" aria-hidden="true" focusable="false"><use href="#ni-ag-calendario"/></svg><span class="agenda-nav-texto">Calendario</span></button>
+          <button type="button" class="pill-item" data-vista="materia"><svg class="nav-ico agenda-nav-ico" aria-hidden="true" focusable="false"><use href="#ni-ag-cronograma"/></svg><span class="agenda-nav-texto">Cronograma</span></button>
         </div>
 
         <div id="agenda-lista-dias" class="stack"></div>

@@ -1423,6 +1423,8 @@ function renderizarHeaderAgenda() {
   } else {
     nombreEl.textContent = seleccionados.map((s) => s.nombre || "Semestre").join(" · ");
   }
+  // Versión angosta (<900px): el nombre vive en la barra superior y debe entrar en UNA línea (js/agenda/agenda-angosta.js).
+  window.actualizarTopbarAgenda?.(hayAlgunSemestre && seleccionados.length ? seleccionados.map((s) => s.nombre || "Semestre") : null);
 }
 
 /**
