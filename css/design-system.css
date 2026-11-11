@@ -7672,10 +7672,7 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
 @media (max-width: 899.98px) {
   /* Barra: bordes inferiores redondeados; el progreso del semestre recorre ese borde. */
   body[data-topbar-ctx] .mobile-topbar { border-radius: 0 0 18px 18px; }
-  body[data-topbar-ctx] .mobile-topbar-centro > h3 { display: none; }
-
-  /* Sin logo en los encabezados de la barra superior (en las secciones que siguen con "Wapper", queda solo el texto). */
-  .mobile-topbar-centro > h3 img { display: none; }
+  body[data-topbar-ctx] .mobile-topbar-centro > h3 { display: none !important; } /* !important: el <h3> trae display:flex inline en index.html */
 
   .topbar-ctx {
     align-self: stretch; min-width: 0;
