@@ -628,6 +628,15 @@ function selectorVista(root) {
   return grupo;
 }
 
+/** Versión angosta (<900px): título y conteo de notas viven en la barra superior (ver js/ui/topbar-contexto.js). */
+function actualizarTopbarNotas() {
+  const total = notasActuales().filter((n) => !n.eliminada_en).length;
+  window.actualizarTopbarCtx?.("notas", {
+    titulo: t("Notas rápidas"),
+    sub: total === 1 ? t("1 nota", "1 note") : t(`${total} notas`, `${total} notes`),
+  });
+}
+
 function renderizarNotas() {
   const root = document.getElementById("seccion-notas");
   if (!root || !estado.datos) return;
@@ -664,7 +673,21 @@ function renderizarNotas() {
   search.id = "notas-busqueda"; search.type = "search"; search.placeholder = tr("Buscar notas"); search.setAttribute("aria-label", tr("Buscar notas"));
   const barra = el("div", "notas-toolbar-vista");
   barra.append(search);
+  // Versión angosta (<900px): el encabezado se oculta por CSS, así que ⋮ (ajustes) pasa al final de la fila de búsqueda
+  // y "+" se vuelve un botón flotante abajo a la derecha. Son copias con la MISMA acción; en anchas no se ven.
+  const ajustesAngosto = el("span", "notas-cab-acciones notas-ajustes-angosto");
+  const ajustesAngostoBtn = el("button", "nt-btn-circulo nt-btn-circulo--fantasma");
+  ajustesAngostoBtn.innerHTML = ICONO_PUNTOS;
+  ajustesAngostoBtn.title = settings.title; ajustesAngostoBtn.setAttribute("aria-label", settings.title);
+  ajustesAngostoBtn.onclick = settings.onclick;
+  ajustesAngosto.append(ajustesAngostoBtn);
+  barra.append(ajustesAngosto);
   root.append(barra);
+  const fab = el("button", "btn btn-primary nt-btn-circulo notas-fab");
+  fab.innerHTML = add.innerHTML;
+  fab.title = add.title; fab.setAttribute("aria-label", add.title);
+  fab.onclick = add.onclick;
+  root.append(fab);
 
   const filtros = el("div", "row notas-filtros");
   const color = el("div", "notas-palette notas-filtro-colores");
@@ -723,6 +746,7 @@ function renderizarNotas() {
   // Arriba las fijadas, luego una línea divisora y debajo todas las demás notas.
   const contenido = el("div", "notas-grupos");
   const pintarGrupos = () => {
+    actualizarTopbarNotas();
     contenido.querySelectorAll(".nota-card").forEach(card=>card._observadorComposicion?.disconnect());
     const items = notasVisibles();
     window.__notasLista = items;

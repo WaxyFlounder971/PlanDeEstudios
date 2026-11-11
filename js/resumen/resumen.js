@@ -224,6 +224,21 @@ function construirTarjetaSemana(semestreActivo, numeroSemana, hoy) {
   tarjeta.appendChild(barraCont);
   tarjeta.appendChild(centro);
   tarjeta.appendChild(faltan);
+  // Versión angosta (<900px): estos mismos datos los muestra la barra superior (ver js/ui/topbar-contexto.js),
+  // con la barra de progreso en su borde inferior. Candidatos de más largo a más corto: nunca se corta el texto.
+  tarjeta._datosTopbar = {
+    titulo: [
+      traducirTextoInterfaz(centro.dataset.textoCompleto),
+      traducirTextoInterfaz(centro.dataset.textoCorto),
+    ],
+    sub: diasRestantes === 0
+      ? [traducirTextoInterfaz("Último día", "Last day")]
+      : [
+          traducirTextoInterfaz(`Faltan ${diasRestantes} días`, `${diasRestantes} days left`),
+          traducirTextoInterfaz(`${diasRestantes} días`, `${diasRestantes} days`),
+        ],
+    progreso: porcentaje,
+  };
   return tarjeta;
 }
 
@@ -441,6 +456,7 @@ function renderizarResumen() {
   const limiteEventoISO = fechaISOMasDias(hoy, DIAS_EVENTO_PROXIMO);
 
   let huboContenido = false;
+  let datosTopbar = null; // sin tarjeta de semana → la barra superior conserva el logo
 
   // 1. Semana actual del semestre — tarjeta arriba de todo, con barra de
   // progreso del semestre y días restantes. Solo se muestra si el semestre
@@ -452,6 +468,7 @@ function renderizarResumen() {
     if (numeroSemana >= 1 && numeroSemana <= semestreActivo.duracion_semanas) {
       const tarjetaSemana = construirTarjetaSemana(semestreActivo, numeroSemana, hoy);
       cont.appendChild(tarjetaSemana);
+      datosTopbar = tarjetaSemana._datosTopbar || null;
       // Recién acá el elemento tiene layout real y se puede medir "Faltan
       // X días" para igualar el ancho de la barra y decidir si el texto
       // central entra completo o hay que acortarlo.
@@ -459,6 +476,7 @@ function renderizarResumen() {
       escucharRedimensionSemana();
     }
   }
+  window.actualizarTopbarCtx?.("resumen", datosTopbar);
 
   // 2. Estudio de hoy — mismo criterio y fuente que la sección homónima
   // de Agenda Lista (dias_estudio + meta diaria real ya resueltos ahí, ver

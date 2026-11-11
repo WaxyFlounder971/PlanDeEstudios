@@ -7653,3 +7653,78 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
 }
 [data-rendimiento="reducido"] .timer-plegado-boton:hover { box-shadow: none; }
 [data-rendimiento="reducido"] .timer-plegado-boton .timer-luz { animation: none; }
+
+/* =========================================================================
+   Barra superior contextual — SOLO versión angosta (< 900px)
+   -------------------------------------------------------------------------
+   Resumen, Asistente y Notas rápidas: la barra superior móvil muestra el título
+   y subtítulo de la sección en vez del logo (☰ y 🔗 siguen siempre visibles), y
+   el encabezado que antes iba dentro de la página se oculta. El texto es el mismo
+   tamaño de siempre (--enc-fs-titulo / --enc-fs-sub), siempre en UNA línea y
+   sin "…": js/ui/topbar-contexto.js elige la versión corta si la larga no entra.
+   Marca: <body data-topbar-ctx="resumen|asistente|notas"> (lo pone ese módulo).
+   ========================================================================= */
+/* Piezas nuevas: ocultas por defecto, así en >=900px no existen. */
+.topbar-ctx[hidden], .topbar-ctx__sub[hidden], .topbar-progreso[hidden] { display: none; }
+.asistente-acciones-angosto { display: none; }
+.notas-seccion .notas-fab, .notas-seccion .notas-ajustes-angosto { display: none; }
+
+@media (max-width: 899.98px) {
+  /* Barra: bordes inferiores redondeados; el progreso del semestre recorre ese borde. */
+  body[data-topbar-ctx] .mobile-topbar { border-radius: 0 0 18px 18px; }
+  body[data-topbar-ctx] .mobile-topbar-centro > h3 { display: none; }
+
+  .topbar-ctx {
+    align-self: stretch; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; gap: var(--enc-gap, 1.4px);
+    text-align: center;
+  }
+  .topbar-ctx__titulo {
+    margin: 0; font-family: var(--font-display); font-size: var(--enc-fs-titulo, 1.21875rem);
+    font-weight: 600; line-height: 1.2; color: var(--text-primary);
+    white-space: nowrap; overflow: visible; max-width: none;
+  }
+  .topbar-ctx__sub {
+    font-size: var(--enc-fs-sub, 0.78rem); line-height: 1.2; color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* Progreso: sombra interior de 3px que sigue la curva del borde (pista tenue + relleno recortado al %). */
+  .topbar-progreso {
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--text-primary) 14%, transparent);
+  }
+  .topbar-progreso__fill {
+    position: absolute; inset: 0; border-radius: inherit;
+    box-shadow: inset 0 -3px 0 var(--color-primario, var(--accent-1, #7c9eff));
+    clip-path: inset(0 calc(100% - var(--p, 0%)) 0 0);
+    transition: clip-path 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* Resumen: la tarjeta "Semana N de M" ya está arriba, en la barra. */
+  body[data-topbar-ctx="resumen"] .resumen-semana-tarjeta { display: none; }
+
+  /* Asistente: se oculta el encabezado; ⓘ y ⟳ pasan a una fila al tope de la tarjeta del chat. */
+  body[data-topbar-ctx="asistente"] #asistente-encabezado { display: none; }
+  body[data-topbar-ctx="asistente"] .asistente-acciones-angosto {
+    display: flex; align-items: center; justify-content: space-between; flex: none;
+  }
+  .asistente-acciones-angosto .app-encabezado__icono { width: 34px; height: 34px; }
+
+  /* Notas: se oculta el encabezado; ⋮ va al final de la búsqueda y "+" es un botón flotante. */
+  body[data-topbar-ctx="notas"] .notas-encabezado { display: none; }
+  body[data-topbar-ctx="notas"] .notas-seccion .notas-ajustes-angosto { display: inline-flex; flex: none; }
+  body[data-topbar-ctx="notas"] .notas-ajustes-angosto .nt-btn-circulo { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+  body[data-topbar-ctx="notas"] .notas-seccion .notas-fab {
+    display: inline-grid; place-items: center;
+    position: fixed; z-index: 45;
+    right: calc(18px + env(safe-area-inset-right, 0px));
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: 56px; height: 56px; min-width: 56px; min-height: 56px; padding: 0;
+    border-radius: 50%; line-height: 1; box-shadow: var(--shadow-float, 0 8px 24px rgba(0, 0, 0, 0.35));
+  }
+  /* Si el botón flotante de "Instalar app" está a la vista, el "+" se sube para no taparlo. */
+  body[data-topbar-ctx="notas"]:has(.btn-instalar-app-flotante:not(.oculto)) .notas-seccion .notas-fab {
+    bottom: calc(18px + 52px + 12px + env(safe-area-inset-bottom, 0px));
+  }
+}

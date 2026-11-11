@@ -226,12 +226,20 @@
         <span>Sin conexión</span>
       </button>
       <h3 style="display:flex; align-items:center; gap:6px; justify-content:center;"><img src="imagenes/LogoAppFolder-512.png" alt="Logo Wapper" data-app-logo style="height:1.2em; width:auto; vertical-align:middle;"> Wapper</h3>
+      <!-- Barra contextual (solo <900px, ver js/ui/topbar-contexto.js): en Resumen, Asistente y Notas rápidas
+           reemplaza al logo por título + subtítulo de la sección. Oculta mientras no la use ninguna sección. -->
+      <div id="topbar-ctx" class="topbar-ctx" hidden>
+        <h2 id="topbar-ctx-titulo" class="topbar-ctx__titulo"></h2>
+        <span id="topbar-ctx-sub" class="topbar-ctx__sub"></span>
+      </div>
       <div id="timer-linea-topbar" class="timer-indicador timer-indicador--linea oculto"></div>
     </div>
     <!-- Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes solo se
          llegaba entrando a Ajustes. Mismo estilo "símbolo limpio" sin borde
          ni fondo que la hamburguesa — ver .btn-topbar-icono en design-system.css. -->
     <button id="btn-topbar-enlaces" class="btn-topbar-icono" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
+    <!-- Progreso del semestre sobre el borde inferior de la barra (solo Resumen, solo <900px). -->
+    <div id="topbar-progreso" class="topbar-progreso" role="progressbar" aria-label="Progreso del semestre" aria-valuemin="0" aria-valuemax="100" hidden><span class="topbar-progreso__fill"></span></div>
   </div>
 
   <!-- Overlay para cerrar el drawer móvil tocando fuera -->

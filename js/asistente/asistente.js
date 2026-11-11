@@ -4027,6 +4027,12 @@ function construirEsqueletoAsistente(contenedor) {
   tituloSemana.className = "texto-encabezado-seccion app-encabezado__titulo";
   tituloSemana.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana actual");
   centroEnc.appendChild(tituloSemana);
+  // Versión angosta (<900px): "Semana N" + "Asistente" viven en la barra superior (ver js/ui/topbar-contexto.js),
+  // en la misma posición y con el mismo tamaño que en Resumen.
+  window.actualizarTopbarCtx?.("asistente", {
+    titulo: tituloSemana.textContent,
+    sub: traducirTextoInterfaz("Asistente"),
+  });
   const btnNueva = document.createElement("button");
   btnNueva.type = "button";
   // Solo el símbolo (⟳), del alto de los demás botones del encabezado (38px) y en color de acento.
@@ -4052,6 +4058,18 @@ function construirEsqueletoAsistente(contenedor) {
   izquierdaEnc.appendChild(btnInfo);
   filaEncabezado.append(izquierdaEnc, centroEnc, derechaEnc);
   encabezado.appendChild(filaEncabezado);
+
+  // Versión angosta (<900px): el encabezado de arriba se oculta por CSS y sus dos acciones (info a la izquierda,
+  // nueva conversación a la derecha) pasan a esta fila al tope de la tarjeta. Son copias con el MISMO onclick:
+  // en pantallas anchas esta fila está oculta y el encabezado de siempre queda intacto.
+  const filaAccionesAngosto = document.createElement("div");
+  filaAccionesAngosto.className = "asistente-acciones-angosto";
+  [btnInfo, btnNueva].forEach((original) => {
+    const copia = original.cloneNode(true);
+    copia.onclick = original.onclick;
+    filaAccionesAngosto.appendChild(copia);
+  });
+  tarjeta.appendChild(filaAccionesAngosto);
 
   const scroll = document.createElement("div");
   scroll.id = "asistente-chat-scroll";

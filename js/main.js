@@ -15,6 +15,7 @@ import { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, cargarDatosDemo, registrarA
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
 import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario, mostrarTutorialPrimeraVez } from "./core/onboarding.js";
 import { aplicarLogoApp } from "./core/marca.js";
+import "./ui/topbar-contexto.js"; // barra superior contextual (solo <900px): Resumen, Asistente y Notas
 import { abrirIntroCarga, cancelarIntroCarga, iniciarIntroCarga, introEnCurso } from "./core/intro-apertura.js";
 import { inicializarInstalacionApp, mostrarInvitacionInstalacion } from "./core/instalacion-app.js";
 import { obtenerIniciales } from "./core/utils.js";
@@ -1629,6 +1630,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   seccionNavegacionActual = nombre;
   window.__appSeccionActiva = nombre;
   window.sincronizarNavFinanzas?.(nombre); // sub-barra de Finanzas: solo visible en esa sección
+  window.sincronizarTopbarCtx?.(nombre); // barra superior contextual (<900px): título/subtítulo de Resumen, Asistente y Notas
   if (cambioSeccion) registrarAnaliticaUso(nombre, "Abrir sección");
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);
