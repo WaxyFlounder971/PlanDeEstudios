@@ -61,7 +61,7 @@ import { borrarTokenCache, estado } from "../core/storage/storage.js";
 import { MODO_DEMO } from "../core/demo-mode.js";
 import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
 import { sellarTimestamp } from "../core/schema.js";
-import { asegurarTokenValido, marcarCambioPendiente, intentarSincronizar } from "../core/storage/storage-sync.js";
+import { asegurarTokenValido, conReintentoSi401, marcarCambioPendiente, intentarSincronizar } from "../core/storage/storage-sync.js";
 import { URL_WORKER_OAUTH } from "../core/auth.js";
 import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { adjuntarArchivo } from "../core/storage/storage-adjuntos.js";
@@ -86,9 +86,10 @@ import {
   guardarVistaPreferida,
   leerMensajesVisibles,
   semanaISODe,
+  semanaISOActual,
   conMensajePropio,
   mensajeVisibleDe,
-  pintarTarjeta,
+  // pintarTarjeta ahora viene de tiempo-estudio-competencias-transicion.js (v3.28.0 C)
   abrirHoja,
   pintarHistorial,
   avatarHTML,
@@ -97,9 +98,11 @@ import {
   COLOR_PALETA_DEFAULT,
 } from "./tiempo-estudio-competencias-visual.js";
 
+import { pintarTarjeta } from "./tiempo-estudio-competencias-transicion.js";
 const CLAVE_CACHE_COMPETENCIA = "te_comp_marcador_cache_v1:";
 const vistasDemoPorId = new Map();
 let refrescoCompetenciasAlReconectarInstalado = false;
+let eventosRefrescoMensajesInstalados = false;
 
 /* 2026-11-03 — "Se actualiza a cada rato aunque no haya cambios".
    `renderizarTiempoEstudio()` se llama tras CADA interacción de la sección y tras cada
@@ -146,6 +149,18 @@ let horasCompetenciasPendientes = (() => {
 let temporizadorReintentoHoras = null;
 let intentosReintentoHoras = 0;
 const escuchasEnvioHoras = new Set();
+
+// fix10: el Worker ahora solo SUBE el total de la semana (MAX). Para bajarlo a propósito hay que pedirlo.
+const CLAVE_REEMPLAZO_TOTAL = "horasCompetenciasReemplazarTotal";
+function reemplazoTotalPendiente() {
+  try { return localStorage.getItem(CLAVE_REEMPLAZO_TOTAL) === "1"; } catch (e) { return false; }
+}
+function marcarReemplazoTotalPendiente(valor) {
+  try {
+    if (valor) localStorage.setItem(CLAVE_REEMPLAZO_TOTAL, "1");
+    else localStorage.removeItem(CLAVE_REEMPLAZO_TOTAL);
+  } catch (e) { /* no crítico */ }
+}
 
 function marcarHorasPendientes(pendiente) {
   const cambio = pendiente !== horasCompetenciasPendientes;
@@ -336,6 +351,36 @@ async function fetchConTimeout(url, opciones = {}, reintentar401 = true) {
   }
 }
 
+/** Pide un token vigente y reintenta una vez si el Worker rechaza la sesión. */
+async function fetchConSesion(url, opciones = {}) {
+  return conReintentoSi401(async () => {
+    try { await asegurarTokenValido(); } catch (_e) { /* el 401 decide si puede continuar */ }
+    const respuesta = await fetchConTimeout(url, opciones);
+    if (respuesta.status === 401) {
+      const error = new Error("El Worker rechazó la sesión (401).");
+      error.status = 401;
+      throw error;
+    }
+    return respuesta;
+  });
+}
+
+/** Al volver a primer plano, pedir de inmediato los mensajes que pudieron
+ * llegar mientras Chrome tenía la PWA suspendida. El sondeo periódico sigue
+ * siendo el respaldo; esto evita esperar hasta 30 segundos al reabrirla. */
+function instalarEventosRefrescoMensajes() {
+  if (eventosRefrescoMensajesInstalados || typeof document === "undefined") return;
+  eventosRefrescoMensajesInstalados = true;
+  const sincronizarVisibles = () => {
+    if (document.visibilityState !== "visible" || navigator.onLine === false) return;
+    document.querySelectorAll(".cp-comp").forEach((tarjeta) => {
+      tarjeta.__sincronizarMensajesCompetencia?.();
+    });
+  };
+  document.addEventListener("visibilitychange", sincronizarVisibles);
+  window.addEventListener("pageshow", sincronizarVisibles);
+}
+
 // 2026-09-23 — easter egg pedido por el dueño: los "botones de simulación"
 // (construirBotonesSimulacion, tiempo-estudio-celebracion.js) dejaron de
 // mostrarse por defecto — quedan solo para quien sabe que existen. Mantener
@@ -389,8 +434,11 @@ function inicioSemanaLocalMs() {
 
 async function leerMensajesRemotos(competenciaId) {
   const url = `${URL_WORKER_OAUTH}/competencias/${encodeURIComponent(competenciaId)}/mensajes?desde=${inicioSemanaLocalMs()}&limite=200`;
-  const respuesta = await fetchConTimeout(url, { cache: "no-store" });
-  if (!respuesta.ok) throw new Error(`El Worker respondió ${respuesta.status} al leer mensajes`);
+  const respuesta = await fetchConSesion(url, { cache: "no-store" });
+  if (!respuesta.ok) {
+    const detalle = await respuesta.clone().json().catch(() => ({}));
+    throw new Error(`El Worker respondió ${respuesta.status} al leer mensajes${detalle.error ? `: ${detalle.error}` : ""}`);
+  }
   const datos = await respuesta.json();
   const porParticipante = new Map();
   (Array.isArray(datos.mensajes) ? datos.mensajes : []).forEach((mensaje) => {
@@ -572,10 +620,13 @@ async function copiarLinkInvitacion(competencia) {
  * `await` se "sube" a la sincronización que `marcarCambioPendiente()` ya
  * había arrancado en vez de disparar una segunda en paralelo.
  */
-function sincronizarHorasCompetencias() {
+function sincronizarHorasCompetencias(opciones = {}) {
   // Un POST viejo no debe terminar después de uno nuevo y pisar sus horas.
   // Encadenar llamadas conserva el orden en que timer, registro manual y
   // apertura del marcador pidieron sincronizar.
+  // fix10: `reemplazarTotal` solo se pasa al BORRAR/EDITAR una sesión (el total puede bajar a propósito).
+  // Se guarda en localStorage hasta que el Worker lo confirme, para no perderlo si el envío falla.
+  if (opciones && opciones.reemplazarTotal) marcarReemplazoTotalPendiente(true);
   const siguiente = colaSincronizacionHorasCompetencias
     .catch(() => {})
     .then(ejecutarSincronizacionHorasCompetencias);
@@ -608,9 +659,13 @@ async function ejecutarSincronizacionHorasCompetencias() {
   const { inicio, fin } = obtenerRangoSemana(0);
   const horas = calcularMinutosTotalesEnRango(inicio, fin) / 60;
   const identificador_usuario = estado.datos.perfil.correo;
+  // fix10: semana a la que pertenece este total (el Worker corrige el podio cerrado si llega tarde).
+  const semana_inicio_ms = inicio;
+  const reemplazar_total = reemplazoTotalPendiente();
 
   let huboDelegacionRecibida = false;
   let huboFalloEnvio = false;
+  let huboAjusteServidor = null;
 
   await Promise.all(
     competencias.map(async (competencia) => {
@@ -620,9 +675,15 @@ async function ejecutarSincronizacionHorasCompetencias() {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ identificador_usuario, horas_semana_actual: horas }),
+            body: JSON.stringify({
+              identificador_usuario,
+              horas_semana_actual: horas,
+              semana_inicio_ms,
+              ...(reemplazar_total ? { reemplazar_total: true } : {}),
+            }),
           }
         );
+        // fix10: 401 (sesión vencida), 429 (límite), 503 (D1) y cualquier otro fallo = PENDIENTE, nunca "subido".
         if (!respuesta.ok) {
           console.warn(`[competencias] actualizar-horas respondió ${respuesta.status} para "${competencia.nombre}" — se reintenta solo.`);
           huboFalloEnvio = true;
@@ -635,6 +696,21 @@ async function ejecutarSincronizacionHorasCompetencias() {
         // tengamos que hacer nada — se guarda en este dispositivo y se le
         // pone la corona local a la competencia.
         const datos = await respuesta.json();
+        // fix10: si el Worker ya tenía MÁS horas que este dispositivo (otro teléfono, datos sin sincronizar),
+        // se conservan las del servidor: se avisa y se repinta el marcador con ese valor.
+        const horasServidor = Number(datos.horas_servidor);
+        if (Number.isFinite(horasServidor) && horasServidor > horas + 0.02 && !reemplazar_total) {
+          huboAjusteServidor = Math.max(huboAjusteServidor || 0, horasServidor);
+        }
+        // Competencia finalizada en el servidor ("ignorado"): no es un fallo ni hay que reintentar.
+        if (datos.ignorado) {
+          const viva = estado.datos.competencias_unidas.find((c) => c.id === competencia.id);
+          if (viva && viva.estado !== "finalizada" && /finaliz/i.test(String(datos.ignorado))) {
+            viva.estado = "finalizada";
+            sellarTimestamp(viva);
+            marcarCambioPendiente();
+          }
+        }
         if (datos.token_creador_delegado) {
           guardarTokenCreador(competencia.id, datos.token_creador_delegado);
           competencia.es_creador = true;
@@ -649,6 +725,15 @@ async function ejecutarSincronizacionHorasCompetencias() {
   );
 
   marcarHorasPendientes(huboFalloEnvio);
+  // El reemplazo solo se da por cumplido si TODAS las competencias lo recibieron.
+  if (!huboFalloEnvio && reemplazar_total) marcarReemplazoTotalPendiente(false);
+  if (huboAjusteServidor !== null) {
+    invalidarVistaCompetencias();
+    const h = Math.floor(huboAjusteServidor);
+    const m = Math.round((huboAjusteServidor - h) * 60);
+    mostrarToast(`El marcador conservó ${h} h ${m} min: ese dispositivo tenía más horas que este. Abre Tiempo de estudio para sincronizar.`);
+    if (typeof window.renderizarTiempoEstudio === "function") window.renderizarTiempoEstudio();
+  }
 
   if (huboDelegacionRecibida) {
     marcarCambioPendiente();
@@ -1415,6 +1500,7 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
   };
   const instalarPollingMensajes = () => {
     if (tarjeta.__timerMensajesCompetencia) return;
+    instalarEventosRefrescoMensajes();
     tarjeta.__timerMensajesCompetencia = setInterval(() => {
       if (!tarjeta.isConnected) {
         clearInterval(tarjeta.__timerMensajesCompetencia);
@@ -1431,6 +1517,7 @@ async function cargarMarcadorEnTarjeta(competencia, tarjeta, refrescar, sincroni
     instalarPollingMensajes();
     if (!datosVista || !tarjeta.isConnected || navigator.onLine === false) return;
     try {
+      await enviarMensajePendiente(competencia);
       const porParticipante = await leerMensajesRemotos(competencia.id);
       const participantesActualizados = aplicarMensajesRemotos(datosVista.participantes, porParticipante);
       if (JSON.stringify(datosVista.participantes) === JSON.stringify(participantesActualizados)) return;
@@ -1682,6 +1769,9 @@ function construirVistaCompetencias(cont, refrescar) {
         foto_url: persona.foto_url || null,
         color: persona.color || null,
         horas: Number(persona.horas) || 0,
+        // fix10: la demo muestra también los mensajes semanales del podio.
+        mensaje: persona.mensaje || "",
+        mensaje_semana: persona.mensaje ? semanaISOActual() : "",
       }));
       let vista = vistasDemoPorId.get(competencia.id) || "podio";
       const dibujar = (animar) => pintarTarjeta(tarjeta, {
@@ -1690,6 +1780,7 @@ function construirVistaCompetencias(cont, refrescar) {
         apodo: competencia.apodo_propio || "Lucía",
         yoId,
         vista,
+        mensajes: true,
         participantes,
         estadoCuerpo: "ok",
         animar,
@@ -1823,6 +1914,7 @@ export {
   // archivo debería importarlos.
   construirCajaModal,
   fetchConTimeout,
+  fetchConSesion,
   formatearHoras,
   construirLinkInvitacion,
   copiarLinkInvitacion,

@@ -7,6 +7,7 @@
 import { togglePerfilPopover } from "../main.js";
 import { MODALIDADES_HORARIO, crearModalidadHorario, obtenerEstadoEfectivoSemestre } from "../core/schema.js";
 import { obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
+import { inicializarExpansionLateral } from "./expansion-lateral.js";
 
 // Compatibilidad: la validación de siglas/nombre invertidos vive en su propio
 // módulo (ui/aviso-universidad.js) para no mezclarse con este archivo. Esta
@@ -163,6 +164,7 @@ function inicializarLayoutResponsivo() {
   const btnColapsar = document.getElementById("btn-colapsar-sidebar");
 
   btnHamburguesa.addEventListener("click", () => {
+    marcarSidebarAnimando();
     sidebar.classList.add("abierta");
     overlay.classList.add("abierta");
     // C.6 (v9): con el drawer abierto en móvil, se bloquea el scroll de la
@@ -235,9 +237,23 @@ function inicializarLayoutResponsivo() {
       cerrarDrawerEnlacesMovil();
     }
   });
+
+  // v3.28.0 B (L1/L2): mantener presionado expande el menú izquierdo y los Enlaces rápidos como capa sobre el contenido.
+  inicializarExpansionLateral({ abrirEnlaces: abrirDrawerEnlacesMovil, cerrarEnlaces: cerrarDrawerEnlacesMovil });
+}
+
+// will-change solo durante la transición del drawer (clase .sidebar-animando, ver design-system.css).
+// PATCH 8 (2026-11-07): acepta cualquier panel que anime como el sidebar (por defecto, el sidebar);
+// el temporizador vive en cada elemento para que dos paneles no se pisen.
+function marcarSidebarAnimando(el = document.getElementById("app-sidebar")) {
+  if (!el) return;
+  el.classList.add("sidebar-animando");
+  clearTimeout(el._tAnimando);
+  el._tAnimando = setTimeout(() => el.classList.remove("sidebar-animando"), 400);
 }
 
 function cerrarSidebarMovil() {
+  marcarSidebarAnimando();
   document.getElementById("app-sidebar").classList.remove("abierta");
   document.getElementById("sidebar-overlay").classList.remove("abierta");
   document.body.classList.remove("scroll-bloqueado");
@@ -250,15 +266,20 @@ function cerrarSidebarMovil() {
  * abrir uno nunca interfiera con el estado del otro.
  */
 function abrirDrawerEnlacesMovil() {
-  document.getElementById("drawer-enlaces-movil").classList.add("abierta");
+  const drawer = document.getElementById("drawer-enlaces-movil");
+  marcarSidebarAnimando(drawer);
+  drawer.classList.add("abierta");
   document.getElementById("enlaces-movil-overlay").classList.add("abierta");
-  document.body.classList.add("scroll-bloqueado");
+  document.body.classList.add("scroll-bloqueado", "enlaces-drawer-abierto");
 }
 
 function cerrarDrawerEnlacesMovil() {
-  document.getElementById("drawer-enlaces-movil").classList.remove("abierta");
+  const drawer = document.getElementById("drawer-enlaces-movil");
+  // Se llama en cada resize >= 1500px con el drawer ya cerrado: solo se marca si de verdad va a animar.
+  if (drawer.classList.contains("abierta")) marcarSidebarAnimando(drawer);
+  drawer.classList.remove("abierta");
   document.getElementById("enlaces-movil-overlay").classList.remove("abierta");
-  document.body.classList.remove("scroll-bloqueado");
+  document.body.classList.remove("scroll-bloqueado", "enlaces-drawer-abierto");
 }
 
 function restaurarEstadoSidebar() {

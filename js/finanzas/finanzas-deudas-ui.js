@@ -19,7 +19,7 @@ import {
 } from "../core/finanzas/finanzas-deudas.js";
 import { formatearFechaLarga, formatearMonto, renderizarFinanzas } from "./finanzas.js";
 import { mostrarBarraDeshacer } from "./finanzas-registro-rapido.js";
-import { abrirCapaNombrada, areaTexto, boton, campo, entrada, filaBotones, insignia, lineaError, mostrar, parrafo, selector } from "./finanzas-ui-basico.js";
+import { abrirCapaNombrada, areaTexto, boton, campo, entrada, filaBotones, hacerTarjetaTocable, insignia, lineaError, mostrar, parrafo, selector } from "./finanzas-ui-basico.js";
 
 const MOTIVOS = {
   persona: "Escribe el nombre de la persona.", direccion: "Elige si prestaste o te prestaron.", monto: "Escribe un monto mayor que cero.",
@@ -43,9 +43,9 @@ function tarjetaPersona(p, s, alCambiar) {
   if (p.nota) { const n = document.createElement("p"); n.className = "muted"; n.style.cssText = "margin:2px 0 0; font-size:0.8rem; word-break:break-word;"; n.textContent = p.nota; izq.appendChild(n); }
   const der = document.createElement("div"); der.className = "row"; der.style.cssText = "gap:8px; align-items:center; flex-shrink:0; flex-wrap:nowrap;";
   der.append(insignia(s.saldado ? t("Saldado") : formatearMonto(s.pendiente), s.saldado ? "success" : p.direccion === "preste" ? "info" : "warning"),
-    boton(t("Abrir"), "btn btn-secondary", () => abrirDetallePrestamo(p.id, { alCambiar })));
+    (() => { const chevron = document.createElement("span"); chevron.className = "fin-chevron"; chevron.setAttribute("aria-hidden", "true"); return chevron; })());
   tarjeta.append(izq, der);
-  return tarjeta;
+  return hacerTarjetaTocable(tarjeta, () => abrirDetallePrestamo(p.id, { alCambiar }));
 }
 
 function grupo(titulo, lista, alCambiar, vacio) {

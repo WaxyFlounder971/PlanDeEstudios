@@ -317,6 +317,11 @@ const CSS_COMPETENCIAS_VISUAL = `
   .cp-comp.cp-anim .cp-pc.cp-p1 .cp-glow{animation:cp-glowIn 1s ease var(--cp-dg,0s) both}
   .cp-comp.cp-anim .cp-podium.cp-card{animation:cp-thud .35s ease var(--cp-k1,0s),cp-thud .4s ease var(--cp-k2,0s)}
 
+  /* v3.28.0 C (COMP1): disolvencia entre el marcador anterior y el nuevo (ver tiempo-estudio-competencias-transicion.js). Solo opacidad. */
+  .cp-comp{position:relative}
+  .cp-fantasma{position:absolute;inset:0;z-index:5;box-sizing:border-box;overflow:hidden;pointer-events:none;border-radius:inherit;animation:cp-fantasma-sale .32s ease-out forwards}
+  @keyframes cp-fantasma-sale{from{opacity:1}to{opacity:0}}
+  [data-rendimiento="reducido"] .cp-fantasma{display:none}
   /* ---------- aviso de resultado ---------- */
   .cp-res-wrap{display:grid;grid-template-rows:1fr;margin-bottom:14px;transition:grid-template-rows .45s cubic-bezier(.3,.8,.2,1),margin .45s,opacity .3s}
   .cp-res-wrap.cp-gone{grid-template-rows:0fr;margin-bottom:0;opacity:0}

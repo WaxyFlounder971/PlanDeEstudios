@@ -58,7 +58,7 @@ function construirPanelCategorias() {
   fila.appendChild(h3);
 
   const btnAgregar = document.createElement("button");
-  btnAgregar.className = "btn btn-primary";
+  btnAgregar.className = "btn btn-primary btn-plan-compacto"; // v3.28.0 B (P1): 36 px
   btnAgregar.textContent = "+ Agregar categoría";
   btnAgregar.addEventListener("click", () => abrirModalCategoria(null, principal));
   fila.appendChild(btnAgregar);
@@ -207,39 +207,70 @@ function construirChipCategoria(cat, principal) {
     (estado.filtroCategoriaId === cat.id ? "box-shadow:0 0 0 2px var(--text-primary);" : "");
   chip.textContent = cat.nombre;
 
-  // Click corto = filtra. Mantener presionado (~500ms) o click derecho = editar.
+  // Click corto = filtra. Mantener presionado (~500ms) o click derecho = editar (ya no hay engranaje).
+  // Sin menú nativo ni selección de texto; el long-press se cancela si el dedo se mueve (scroll) o se interrumpe.
+  chip.style.userSelect = "none";
+  chip.style.webkitUserSelect = "none";
+  chip.style.webkitTouchCallout = "none";
+  chip.style.transition = "transform 0.5s ease, filter 0.5s ease";
   let timerLongPress = null;
   let disparoLargo = false;
-  chip.addEventListener("pointerdown", () => {
+  let movimientoDetectado = false;
+  let origenX = 0;
+  let origenY = 0;
+  const cancelarLongPress = () => {
+    clearTimeout(timerLongPress);
+    chip.style.transform = "";
+    chip.style.filter = "";
+  };
+  chip.addEventListener("pointerdown", (e) => {
+    // PATCH 9b: solo el botón principal (o toque/lápiz) inicia filtro/long-press; el derecho lo maneja `contextmenu`.
+    if (e.button !== 0) {
+      disparoLargo = false;
+      return;
+    }
     disparoLargo = false;
+    movimientoDetectado = false;
+    origenX = e.clientX;
+    origenY = e.clientY;
+    chip.style.transform = "scale(0.94)";
+    chip.style.filter = "brightness(1.15)";
     timerLongPress = setTimeout(() => {
       disparoLargo = true;
+      cancelarLongPress();
       abrirModalCategoria(cat, principal);
     }, 500);
   });
-  chip.addEventListener("pointerup", () => {
-    clearTimeout(timerLongPress);
-    if (!disparoLargo) {
+  chip.addEventListener("pointermove", (e) => {
+    if (Math.abs(e.clientX - origenX) > 10 || Math.abs(e.clientY - origenY) > 10) {
+      movimientoDetectado = true;
+      cancelarLongPress();
+    }
+  });
+  chip.addEventListener("pointerup", (e) => {
+    // PATCH 9b: el botón derecho no alterna el filtro ni re-renderiza el chip (perdía el contextmenu).
+    if (e.button !== 0) return;
+    cancelarLongPress();
+    if (!disparoLargo && !movimientoDetectado) {
       estado.filtroCategoriaId = estado.filtroCategoriaId === cat.id ? null : cat.id;
       renderizarPlanEstudios();
     }
   });
-  chip.addEventListener("pointerleave", () => clearTimeout(timerLongPress));
+  chip.addEventListener("pointerleave", cancelarLongPress);
+  chip.addEventListener("pointercancel", () => { movimientoDetectado = true; cancelarLongPress(); });
   chip.addEventListener("contextmenu", (e) => {
     e.preventDefault();
+    // En móvil el long-press ya abrió el editor a los 500ms; el contextmenu nativo no debe abrirlo dos veces.
+    if (disparoLargo) {
+      disparoLargo = false;
+      return;
+    }
+    cancelarLongPress();
+    disparoLargo = true;
     abrirModalCategoria(cat, principal);
   });
 
-  const btnEditar = document.createElement("button");
-  btnEditar.type = "button";
-  btnEditar.className = "btn btn-secondary";
-  btnEditar.style.cssText = "padding:2px 8px; font-size:0.75rem;";
-  btnEditar.title = "Editar categoría";
-  btnEditar.textContent = "⚙️";
-  btnEditar.addEventListener("click", () => abrirModalCategoria(cat, principal));
-
   item.appendChild(chip);
-  item.appendChild(btnEditar);
   return item;
 }
 

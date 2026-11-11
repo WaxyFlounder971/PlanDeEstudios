@@ -11,6 +11,7 @@ import { obtenerModulosFinanzas } from "../core/finanzas/finanzas-derivados.js";
 import { pestanasVisiblesFinanzas } from "../core/finanzas/finanzas-perfiles.js";
 import { posponerRecordatorio, recordatoriosDeMetas } from "../core/finanzas/finanzas-recordatorios.js";
 import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { sellarTimestamp } from "../core/schema.js";
 import { estado } from "../core/storage/storage.js";
 import { traducirTextoInterfaz as t } from "../core/i18n.js";
 import { formatearFechaLarga, formatearMonto, renderizarFinanzas } from "./finanzas.js";
@@ -358,4 +359,54 @@ function hayProximos() {
   return calculo.aplica && calculo.proximos.length > 0;
 }
 
-export { abrirDesgloseDisponible, construirBloquesInicio, construirBotonPrivacidad, hayProximos, construirFilaProximo, fijarPrivacidad, montoVisible, privacidadActiva };
+/* ------------------------- Guía «Cómo funciona Finanzas» (fix10) ------------------------- */
+
+const CLAVE_GUIA_CERRADA = "finanzas_guia_cerrada";
+
+/** Finanzas es casi una app aparte: esta tarjeta lo explica en 5 líneas la primera vez. Se cierra con «Entendido». */
+function construirTarjetaGuiaFinanzas() {
+  const cfg = estado.datos && estado.datos.configuracion;
+  if (cfg && cfg[CLAVE_GUIA_CERRADA] === true) return null;
+  const tarjeta = document.createElement("section");
+  tarjeta.className = "glass-card stack finanzas-guia";
+  tarjeta.setAttribute("data-finanzas-guia", "1");
+  const h = document.createElement("h3");
+  h.className = "texto-encabezado-seccion"; h.style.margin = "0";
+  h.textContent = t("Cómo funciona Finanzas");
+  const intro = linea(t("Finanzas es una mini app dentro de la app: lleva tu dinero de principio a fin. Estas son sus partes:"), "muted");
+  const lista = document.createElement("ul");
+  lista.className = "finanzas-guia-lista";
+  [
+    ["Inicio", "Cuánto tienes disponible y qué pagos vienen pronto."],
+    ["Movimientos", "Anota lo que gastas, ganas o ahorras con el botón ＋. Es lo primero que conviene hacer."],
+    ["Cuentas", "Dónde está tu dinero (efectivo, banco, tarjeta). Cada movimiento sale de una cuenta."],
+    ["Plan, Presupuesto y Metas", "Planea pagos futuros, pon un tope por categoría y ahorra para algo concreto."],
+    ["Semestres y Beneficios", "Matrícula, becas y ayudas de la universidad."],
+  ].forEach(([titulo, texto]) => {
+    const li = document.createElement("li");
+    const b = document.createElement("strong");
+    b.textContent = t(titulo) + ": ";
+    li.append(b, document.createTextNode(t(texto)));
+    lista.appendChild(li);
+  });
+  const consejo = linea(t("Consejo: en el teléfono desliza hacia los lados para pasar de una sección a otra, y en «Más» toca ⋮ para elegir tus 2 favoritos de la barra de abajo."), "muted");
+  const entendido = crearBoton(t("Entendido"), "btn btn-primary", () => {
+    if (!estado.datos.configuracion) estado.datos.configuracion = {};
+    estado.datos.configuracion[CLAVE_GUIA_CERRADA] = true;
+    sellarTimestamp(estado.datos.configuracion);
+    marcarCambioPendiente();
+    tarjeta.remove();
+  });
+  tarjeta.append(h, intro, lista, consejo, entendido);
+  return tarjeta;
+}
+
+/** Desde «Ajustes de Finanzas → Cómo funciona Finanzas»: vuelve a mostrar la guía en el Inicio. */
+function reabrirGuiaFinanzas() {
+  if (!estado.datos.configuracion) estado.datos.configuracion = {};
+  estado.datos.configuracion[CLAVE_GUIA_CERRADA] = false;
+  sellarTimestamp(estado.datos.configuracion);
+  marcarCambioPendiente();
+}
+
+export { construirTarjetaGuiaFinanzas, reabrirGuiaFinanzas, abrirDesgloseDisponible, construirBloquesInicio, construirBotonPrivacidad, hayProximos, construirFilaProximo, fijarPrivacidad, montoVisible, privacidadActiva };

@@ -35,6 +35,7 @@ import {
   // individual - ver renderizarConjuntoModoDia/Semana y
   // renderizarVistaIndividualAmigoInterno más abajo.
   obtenerFileIdsOcultos,
+  obtenerAmigoConPerfil,
 } from "./horario-amigos.js";
 
 const PX_POR_MIN_EXPANDIDO = 0.84; // 30% menos que antes (1.2), pedido explícito
@@ -1293,7 +1294,8 @@ function activarVistaIndividualAmigo(fileId, { pantallaCompleta = true } = {}) {
 function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
   const fileId = estado.horarioVistaIndividualAmigoFileId;
   const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
-  const amigo = vinculados.find((a) => a.file_id === fileId);
+  const amigoBase = vinculados.find((a) => a.file_id === fileId);
+  const amigo = amigoBase ? obtenerAmigoConPerfil(amigoBase) : null;
   if (!amigo) {
     cont.innerHTML = `<p class="muted" style="padding:16px;">Este horario ya no está vinculado.</p>`;
     anclarBotonSalirFSEnBarraVacia(cont);

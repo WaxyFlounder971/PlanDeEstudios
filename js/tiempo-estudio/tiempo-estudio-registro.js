@@ -469,7 +469,7 @@ function abrirModalEditarSesion(sesion, refrescar) {
     marcarCambioPendiente();
     revisarFelicitacionMeta(sesionViva.materia_independiente_id || sesionViva.materia_matriculada_id);
     mostrarToast("Sesión actualizada");
-    sincronizarHorasCompetencias();
+    sincronizarHorasCompetencias({ reemplazarTotal: true }); // editar puede bajar el total a propósito
     notificarSesionesEstudioActualizadas(); // repinta Estadísticas al instante (edición)
 
     cerrar();
@@ -505,7 +505,7 @@ function eliminarSesion(sesion, refrescar) {
       estado.datos._eliminados_sesiones_estudio.push({ id: sesion.id, eliminadoEn: Date.now() });
       marcarCambioPendiente();
       mostrarToast("Sesión borrada");
-      sincronizarHorasCompetencias();
+      sincronizarHorasCompetencias({ reemplazarTotal: true }); // borrar puede bajar el total a propósito
       notificarSesionesEstudioActualizadas(); // repinta Estadísticas al instante (borrado)
       if (refrescar) refrescar();
     },

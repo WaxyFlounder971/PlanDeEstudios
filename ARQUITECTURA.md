@@ -162,6 +162,16 @@ sin import de `js/core`).
 (alta/edición de evento/tarea/examen), `agenda-calendario.js` (vista Calendario
 mensual/semanal).
 
+### Tiempo de estudio — Competencias compartidas
+La vista y sincronización viven en `js/tiempo-estudio/`; la información compartida
+se guarda en D1 mediante el Worker. Las rutas privadas validan el access token de
+Google y restringen lectura/escritura a la cuenta participante. Los mensajes son
+semanales: el cliente conserva localmente el mensaje propio hasta que consigue
+enviarlo y vuelve a consultar los mensajes al sondear o reanudar la app. Revisar
+`tiempo-estudio/tiempo-estudio-competencias.js` y
+`tiempo-estudio/tiempo-estudio-competencias-gestion.js` para el cliente, y
+`worker - USO PARA CHAT GPT/src/index.js` para las rutas D1.
+
 ### `js/main.js` — arranque
 Todo lo que pasa una sola vez al cargar la página: sesión guardada vs. login,
 perfil de Google, navegación entre secciones del sidebar, y llama a todas las
@@ -200,6 +210,7 @@ migraciones): el primero es login/sync/tema/perfil; el segundo llama a los
 | Alta de semestre, matricular materias, sincronía con el Plan | `semestres/semestres.js` |
 | Tarjeta de semestre/materia matriculada, motor de notas, criterios/asignaciones | `semestres/semestres-tarjetas.js` |
 | Dashboard de promedio/aprobación en Semestres | `semestres/semestres-dashboard.js` |
+| Mensajes semanales de Competencias y su sincronización | `tiempo-estudio/tiempo-estudio-competencias.js`, `tiempo-estudio/tiempo-estudio-competencias-gestion.js`, `worker - USO PARA CHAT GPT/src/index.js` |
 | Pagos de matrícula/beca heredados por semestre | `js/finanzas/finanzas-semestres.js` |
 | Gastos universitarios heredados y Beneficios | `js/finanzas/finanzas-gastos.js` |
 | Registro de movimientos, metas, disponible y resumen | `js/core/finanzas/` + `js/finanzas/finanzas.js` |

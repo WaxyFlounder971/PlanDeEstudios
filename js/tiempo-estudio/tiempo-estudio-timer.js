@@ -549,7 +549,7 @@ function iniciarDescansoPomodoro() {
   timerActivo.avisoFaseDisparado = false;
 
   guardarSnapshotLocal();
-  mostrarToast(esUltimoBloque ? "🎉 Ciclo completo guardado — arrancó el descanso largo" : "☕ Bloque guardado — arrancó el descanso");
+  // v3.28.0 C: el aviso de descanso (píldora fría) lo muestra la pantalla de detalle; no hay toast aquí.
   notificar();
   notificarSesionesEstudioActualizadas(); // la sesión ya está guardada y el timer ya está en descanso
   return true;

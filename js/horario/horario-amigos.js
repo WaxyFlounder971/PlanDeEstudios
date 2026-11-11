@@ -34,7 +34,7 @@ import { crearModalDinamico, agregarCampoModal } from "../semestres/semestres-ta
 // Restringido por dominio en Google Cloud a este mismo GitHub Pages - ver
 // nota de configuración del prompt. amigos.html vive en la raíz del repo,
 // hermano de index.html.
-const BASE_URL_AMIGOS = "https://waxyflounder971.github.io/PlanDeEstudios/amigos.html";
+const BASE_URL_AMIGOS = "https://wapper.pages.dev/amigos.html";
 
 // Misma API key restringida por dominio + Drive API que ya usa amigos.html
 // (ver nota de configuración del prompt) - se usa acá TAMBIÉN, no solo en
@@ -99,6 +99,80 @@ function resolverUniversidadParaMostrar(universidad) {
   return { siglas: texto, nombreCompleto: siglas && nombre && nombre !== siglas ? nombre : null };
 }
 
+/* ===================== Perfil compartido (foto + paleta) ===================== */
+
+const COLOR_PALETA_DEFAULT_APP = "#6c5cf0"; // violeta de marca: "no eligió nada", no cuenta como color propio
+
+function normalizarFotoUrlPerfil(valor) {
+  if (typeof valor !== "string") return null;
+  const v = valor.trim();
+  if (!v || v.length > 2048) return null;
+  try {
+    return new URL(v).protocol === "https:" ? v : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** #rrggbb en minúsculas, o null. Acepta #rgb, #rrggbb y rgb()/rgba(). */
+function normalizarColorPerfil(valor) {
+  if (typeof valor !== "string") return null;
+  const v = valor.trim().toLowerCase();
+  let m = /^#([0-9a-f]{6})$/.exec(v);
+  if (m) return `#${m[1]}`;
+  m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/.exec(v);
+  if (m) return `#${m[1]}${m[1]}${m[2]}${m[2]}${m[3]}${m[3]}`;
+  m = /^rgba?\(\s*(\d{1,3})[\s,]+(\d{1,3})[\s,]+(\d{1,3})/.exec(v);
+  if (m) return "#" + [m[1], m[2], m[3]].map((n) => Math.min(255, Number(n)).toString(16).padStart(2, "0")).join("");
+  return null;
+}
+
+/** Resuelve una variable CSS de la app (var()/hsl()/color-mix() incluidos) a #rrggbb. */
+function leerVariableColorApp(nombre) {
+  try {
+    const el = document.createElement("span");
+    el.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;color:var(${nombre})`;
+    document.body.appendChild(el);
+    const rgb = getComputedStyle(el).color;
+    el.remove();
+    return normalizarColorPerfil(rgb);
+  } catch (e) {
+    return null;
+  }
+}
+
+/** Foto de Google + paleta activa de quien comparte. Todo opcional. */
+function construirPerfilCompartido() {
+  const p = (estado.datos && estado.datos.perfil) || {};
+  const raiz = document.documentElement;
+  const paleta = String(raiz.getAttribute("data-palette") || "");
+  const modo = String(raiz.getAttribute("data-mode") || "");
+  return {
+    foto_url: normalizarFotoUrlPerfil(p.foto_url || p.foto || p.picture || p.imagen || ""),
+    color: leerVariableColorApp("--accent-1"),
+    color2: leerVariableColorApp("--accent-2"),
+    paleta: /^[a-z0-9_-]{1,30}$/i.test(paleta) ? paleta : null,
+    modo: modo === "light" || modo === "dark" ? modo : null,
+  };
+}
+
+/**
+ * El amigo tal como se VE: color de su paleta (snapshot.perfil.color) salvo
+ * que la persona lo haya editado a mano (color_manual), y su foto si la
+ * compartió. El violeta de marca por defecto no cuenta como color elegido.
+ */
+function obtenerAmigoConPerfil(amigo) {
+  const entrada = cacheSnapshotsAmigos.get(amigo.file_id);
+  const perfil = (entrada && entrada.snapshot && entrada.snapshot.perfil) || {};
+  const colorPerfil = normalizarColorPerfil(perfil.color);
+  const usable = colorPerfil && colorPerfil !== COLOR_PALETA_DEFAULT_APP ? colorPerfil : null;
+  return {
+    ...amigo,
+    color: amigo.color_manual ? amigo.color : usable || amigo.color,
+    foto: normalizarFotoUrlPerfil(perfil.foto_url || ""),
+  };
+}
+
 /* ===================== Snapshot público (privacidad: mínimo indispensable) ===================== */
 
 /**
@@ -126,6 +200,9 @@ function construirSnapshotHorarioCompartido(semestre, apodoPropietario) {
     // al asociar. Puede ser null: el snapshot sigue sin ningún dato de
     // identidad si el usuario lo deja vacío.
     apodo_propietario: apodoPropietario || null,
+    // Foto de perfil + paleta (color/modo): se muestran en el panel de Amigos
+    // de quien vincula y tiñen la vista pública (amigos.html).
+    perfil: construirPerfilCompartido(),
     semestre_nombre: semestre.nombre,
     fecha_inicio: semestre.fecha_inicio,
     duracion_semanas: semestre.duracion_semanas,
@@ -679,7 +756,12 @@ function abrirModalEditarAmigoVinculado(amigo) {
       return;
     }
     vivo.nombre = nombre;
-    vivo.color = inputColor.value;
+    // Solo cuenta como color elegido a mano si lo cambió: si lo deja igual,
+    // sigue el color de la paleta del amigo.
+    if (inputColor.value.toLowerCase() !== String(amigo.color || "").toLowerCase()) {
+      vivo.color = inputColor.value;
+      vivo.color_manual = true;
+    }
     sellarTimestamp(vivo);
     marcarCambioPendiente();
     overlay.remove();
@@ -1042,7 +1124,8 @@ function minutosDesdeHoraAmigo(horaStr) {
 function obtenerListaAmigosParaDiaConjunto(fecha, diaCodigo) {
   const vinculados = estado.datos?.configuracion?.horario_amigos_vinculados || [];
 
-  return vinculados.map((amigo) => {
+  return vinculados.map((amigoBase) => {
+    const amigo = obtenerAmigoConPerfil(amigoBase);
     const entrada = cacheSnapshotsAmigos.get(amigo.file_id);
     if (!entrada || !entrada.snapshot) {
       return { amigo, bloques: [], caida: entrada?.caida === true };
@@ -1082,120 +1165,102 @@ function obtenerListaAmigosParaDiaConjunto(fecha, diaCodigo) {
 
 /* ----------------- Panel "Horarios Activos" (switches + desvincular) ----------------- */
 
+const SVG_ENLACE_ROTO = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m18.84 12.25 1.72-1.71a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="m5.17 11.75-1.71 1.71a5 5 0 0 0 7.07 7.07l1.71-1.71"/><line x1="8" y1="2" x2="8" y2="5"/><line x1="2" y1="8" x2="5" y2="8"/><line x1="16" y1="19" x2="16" y2="22"/><line x1="19" y1="16" x2="22" y2="16"/></svg>';
+const SVG_EDITAR = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>';
+
 function renderizarListaAmigosVinculados() {
   const cont = document.getElementById("lista-amigos-vinculados");
   if (!cont || !estado.datos) return;
 
   const vinculados = estado.datos.configuracion?.horario_amigos_vinculados || [];
+  const ocultos = obtenerFileIdsOcultos();
+  const activos = vinculados.filter((a) => !ocultos.has(a.file_id));
 
-  // "Horario conjunto" solo tiene sentido si hay algo que mezclar - se
-  // oculta/muestra acá porque esta función ya corre cada vez que se abre
-  // el panel de Amigos (fresco, no solo una vez al cargar la app).
   const btnConjunto = document.getElementById("btn-horario-conjunto");
   if (btnConjunto) btnConjunto.classList.toggle("oculto", vinculados.length === 0);
+  const elConteo = document.getElementById("fm2-amigos-conteo");
+  if (elConteo) elConteo.textContent = String(vinculados.length);
 
   if (vinculados.length === 0) {
     cont.innerHTML = `<p class="muted" style="font-size:0.82rem;">Todavía no vinculaste el horario de ningún amigo. Pedile que te comparta su enlace.</p>`;
     return;
   }
 
-  const ocultos = obtenerFileIdsOcultos();
   cont.innerHTML = "";
-  vinculados.forEach((amigo) => {
+  vinculados.forEach((amigoBase) => {
+    const amigo = obtenerAmigoConPerfil(amigoBase);
     const entrada = cacheSnapshotsAmigos.get(amigo.file_id);
     const caida = entrada?.caida === true;
     const oculto = ocultos.has(amigo.file_id);
 
-    const fila = document.createElement("div");
-    fila.className = "row-between";
-    fila.style.cssText = "padding:8px 10px; border-radius:10px; background:rgba(150,150,170,0.08); gap:8px;";
-    fila.innerHTML = `
-      <div class="row" style="align-items:center; gap:8px; min-width:0;">
-        <span style="width:12px; height:12px; border-radius:50%; flex-shrink:0; background:${amigo.color};"></span>
-        <span style="font-size:0.85rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${amigo.nombre}</span>
-        ${caida ? `<span class="badge badge-danger" style="font-size:0.68rem;" title="El enlace ya no responde, puede que lo hayan revocado">Enlace caído</span>` : ""}
-      </div>
-    `;
-    const controles = document.createElement("div");
-    controles.className = "row";
-    controles.style.cssText = "align-items:center; gap:8px; flex-shrink:0;";
+    const tarjeta = document.createElement("div");
+    tarjeta.className = "fm2-card" + (oculto ? " fm2-off" : "");
+    tarjeta.style.setProperty("--c", amigo.color);
+    tarjeta.setAttribute("role", "button");
+    tarjeta.tabIndex = 0;
+    tarjeta.setAttribute("aria-label", `Ver el horario de ${amigo.nombre}`);
 
-    // Click en TODA la tarjeta del amigo (2026-09): abre su horario
-    // individual SIN pantalla completa (antes la única forma era el botón
-    // ⛶, que siempre entra en pantalla completa y obliga a salir para verlo
-    // normal). Los controles de la propia tarjeta (⛶, ✎, switch,
-    // Desvincular) quedan excluidos con closest(): siguen haciendo solo lo
-    // suyo. También accesible con teclado (Enter / Espacio).
-    const abrirHorarioDelAmigoNormal = () => {
-      cerrarPanelAmigos();
-      abrirVistaIndividualAmigo(amigo.file_id, { pantallaCompleta: false });
+    // Slot de avatar: acepta amigo.foto (URL) si existe; si no, la inicial.
+    const avatar = document.createElement("span");
+    avatar.className = "fm2-avatar";
+    if (amigo.foto) {
+      const img = document.createElement("img");
+      img.src = amigo.foto;
+      img.alt = "";
+      img.addEventListener("error", () => { img.remove(); avatar.textContent = (amigo.nombre || "?").trim().charAt(0).toUpperCase(); });
+      avatar.appendChild(img);
+    } else {
+      avatar.textContent = (amigo.nombre || "?").trim().charAt(0).toUpperCase();
+    }
+    tarjeta.appendChild(avatar);
+
+    const nombre = document.createElement("span");
+    nombre.className = "fm2-nombre";
+    nombre.textContent = amigo.nombre;
+    if (caida) nombre.title = "El enlace ya no responde, puede que lo hayan revocado";
+    tarjeta.appendChild(nombre);
+
+    const crearIcono = (html, etiqueta, extra, onClick) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "fm2-icono" + (extra ? " " + extra : "");
+      btn.title = etiqueta;
+      btn.setAttribute("aria-label", etiqueta);
+      btn.innerHTML = html;
+      btn.addEventListener("click", (e) => { e.stopPropagation(); onClick(); });
+      btn.addEventListener("keydown", (e) => e.stopPropagation());
+      return btn;
     };
-    fila.style.cursor = "pointer";
-    fila.tabIndex = 0;
-    fila.title = `Ver el horario de ${amigo.nombre}`;
-    fila.addEventListener("click", (e) => {
-      if (e.target.closest("button, label, input, a, select")) return;
-      abrirHorarioDelAmigoNormal();
-    });
-    fila.addEventListener("keydown", (e) => {
-      if (e.target !== fila) return;
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        abrirHorarioDelAmigoNormal();
-      }
-    });
+    tarjeta.appendChild(crearIcono(SVG_EDITAR, `Editar nombre/color de ${amigo.nombre}`, "", () => abrirModalEditarAmigoVinculado(amigo)));
+    tarjeta.appendChild(crearIcono(SVG_ENLACE_ROTO, `Desvincular a ${amigo.nombre}`, "fm2-peligro", () => confirmarDesvincularAmigo(amigo.file_id, amigo.nombre)));
 
-    // Punto 2 del prompt: ver el horario de ESTE amigo solo, en pantalla
-    // completa (no mezclado con los demás en el modo conjunto). Se cierra
-    // el panel de Amigos antes de entrar, mismo patrón que "Horario
-    // conjunto" un poco más abajo en este mismo archivo.
-    const btnVerIndividual = document.createElement("button");
-    btnVerIndividual.type = "button";
-    btnVerIndividual.className = "btn-icono-fantasma";
-    btnVerIndividual.title = `Ver el horario de ${amigo.nombre} en pantalla completa`;
-    btnVerIndividual.setAttribute("aria-label", `Ver el horario de ${amigo.nombre} en pantalla completa`);
-    btnVerIndividual.style.cssText = "font-size:1.05rem; padding:2px 6px;";
-    btnVerIndividual.textContent = "⛶";
-    btnVerIndividual.addEventListener("click", () => {
-      cerrarPanelAmigos();
-      abrirVistaIndividualAmigo(amigo.file_id, { pantallaCompleta: true });
-    });
-    controles.appendChild(btnVerIndividual);
-
-    // Punto 3 del ajuste chico (Wagner): editar nombre/color de un amigo ya
-    // vinculado - botón nuevo, mismo estilo/tamaño que btnVerIndividual de
-    // arriba, ubicado justo al lado.
-    const btnEditarAmigo = document.createElement("button");
-    btnEditarAmigo.type = "button";
-    btnEditarAmigo.className = "btn-icono-fantasma";
-    btnEditarAmigo.title = `Editar nombre/color de ${amigo.nombre}`;
-    btnEditarAmigo.setAttribute("aria-label", `Editar nombre/color de ${amigo.nombre}`);
-    btnEditarAmigo.style.cssText = "font-size:1.05rem; padding:2px 6px;";
-    btnEditarAmigo.textContent = "✎";
-    btnEditarAmigo.addEventListener("click", () => abrirModalEditarAmigoVinculado(amigo));
-    controles.appendChild(btnEditarAmigo);
-
-    const labelSwitch = document.createElement("label");
-    labelSwitch.className = "switch switch-tema";
-    labelSwitch.title = oculto ? "Mostrar en el horario" : "Ocultar del horario";
-    labelSwitch.innerHTML = `<input type="checkbox" ${oculto ? "" : "checked"}><span class="track"><span class="thumb"></span></span>`;
-    labelSwitch.querySelector("input").addEventListener("change", () => {
+    const sw = document.createElement("button");
+    sw.type = "button";
+    sw.className = "fm2-switch";
+    sw.setAttribute("role", "switch");
+    sw.setAttribute("aria-pressed", String(!oculto));
+    sw.setAttribute("aria-label", `${oculto ? "Mostrar" : "Ocultar"} a ${amigo.nombre} en el horario conjunto`);
+    sw.addEventListener("click", (e) => {
+      e.stopPropagation();
       alternarVisibilidadAmigo(amigo.file_id);
       renderizarListaAmigosVinculados();
       if (typeof window.renderizarHorario === "function") window.renderizarHorario();
     });
-    controles.appendChild(labelSwitch);
+    sw.addEventListener("keydown", (e) => e.stopPropagation());
+    tarjeta.appendChild(sw);
 
-    const btnQuitar = document.createElement("button");
-    btnQuitar.type = "button";
-    btnQuitar.className = "btn btn-danger";
-    btnQuitar.style.cssText = "padding:6px 10px; font-size:0.75rem;";
-    btnQuitar.textContent = "Desvincular";
-    btnQuitar.addEventListener("click", () => confirmarDesvincularAmigo(amigo.file_id, amigo.nombre));
-    controles.appendChild(btnQuitar);
+    // Tocar la tarjeta abre el horario del amigo (antes: fila + botón ⛶).
+    const abrir = () => {
+      cerrarPanelAmigos();
+      abrirVistaIndividualAmigo(amigo.file_id, { pantallaCompleta: false });
+    };
+    tarjeta.addEventListener("click", abrir);
+    tarjeta.addEventListener("keydown", (e) => {
+      if (e.target !== tarjeta) return;
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrir(); }
+    });
 
-    fila.appendChild(controles);
-    cont.appendChild(fila);
+    cont.appendChild(tarjeta);
   });
 }
 
@@ -1249,4 +1314,5 @@ export {
   obtenerDiasConClaseAmigosVinculados,
   calcularNumeroSemanaAmigo,
   obtenerFileIdsOcultos,
+  obtenerAmigoConPerfil,
 };

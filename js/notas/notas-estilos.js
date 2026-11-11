@@ -65,6 +65,11 @@ const CSS = `
 .nt-tinta-canvas[data-modo="lapiz"]{cursor:crosshair}
 .nt-tinta-canvas.nt-edicion-figuras{pointer-events:auto!important;cursor:move}
 .nt-tinta-canvas[data-redimensionando="true"]{cursor:nwse-resize}
+/* v3.28.0 D1: la tinta nunca pinta fondo propio; el lienzo vacío se oculta; el editor declara su esquema de color. */
+.nt-tinta-canvas,.nota-tinta-mini{background:transparent!important;mix-blend-mode:normal}
+.nt-tinta-canvas.nt-tinta-vacia{visibility:hidden}
+html[data-mode="light"] .notas-editor{color-scheme:light}
+html[data-mode="dark"] .notas-editor,html[data-mode="true-dark"] .notas-editor{color-scheme:dark}
 .nota-composicion{position:relative;min-width:0;max-height:220px;overflow:hidden}.nota-composicion>.nota-preview{position:relative;max-height:none!important;overflow:visible!important;-webkit-line-clamp:unset!important;line-clamp:unset!important}.nota-tinta-mini{display:block;width:100%;height:auto;margin-top:8px;pointer-events:none}.nota-tinta-mini.nota-tinta-alineada{position:absolute;z-index:2;left:0;top:0;width:100%;height:auto;margin:0;pointer-events:none}
 .nota-expand{display:grid;place-items:center;align-self:center;width:30px;height:24px;padding:0;border:0;border-radius:8px;background:transparent;color:inherit;opacity:.72;cursor:pointer}
 .nota-expand:hover{opacity:1;background:rgba(255,255,255,.12)}
@@ -228,6 +233,9 @@ body.nota-arrastrando-body{user-select:none;-webkit-user-select:none;cursor:grab
 html[data-rendimiento="reducido"] .glass-card.nota-card{background-color:var(--nota-color,#fff594);background-image:none;border-color:color-mix(in srgb,var(--nota-color,#fff594),#111 18%);box-shadow:0 2px 6px rgba(0,0,0,.28)}
 html[data-rendimiento="reducido"] .nt-sticky,html[data-rendimiento="reducido"] .nt-flotante{backdrop-filter:none;-webkit-backdrop-filter:none}
 html[data-rendimiento="reducido"] .nt-sticky-overlay{background:rgba(0,0,0,.85);backdrop-filter:none;-webkit-backdrop-filter:none}
+/* v3.28.0 D4: modo Optimizado sin desenfoque en las capas de Notas que aún lo tenían (confirmar cierre, compartir, stickers). */
+html[data-rendimiento="reducido"] .nt-confirmar-cierre,html[data-rendimiento="reducido"] .nt-sticker-confirmar{background:rgba(0,0,0,.8);backdrop-filter:none;-webkit-backdrop-filter:none}
+html[data-rendimiento="reducido"] .nt-share-overlay,html[data-rendimiento="reducido"] .nt-stickers-overlay{background:rgba(0,0,0,.85);backdrop-filter:none;-webkit-backdrop-filter:none}
 
 /* ===== Ancho de nota (arrastrar el borde derecho) ===== */
 .nota-card{position:relative}

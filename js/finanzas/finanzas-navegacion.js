@@ -22,6 +22,10 @@
 
 import { traducirTextoInterfaz } from "../core/i18n.js";
 import { fijarFinanzasAbierta } from "../ui/layout-lateral.js";
+import { estado } from "../core/storage/storage.js";
+import { sellarTimestamp } from "../core/schema.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { mostrarToast } from "../ui/componentes.js";
 
 const NS = "http://www.w3.org/2000/svg";
 
@@ -35,6 +39,7 @@ const ICONOS = {
   metas: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
   semestres: '<path d="M12 5 2.5 9.5 12 14l9.5-4.5z"/><path d="M6.5 12v4.2c0 1.2 2.4 2.8 5.5 2.8s5.5-1.6 5.5-2.8V12"/>',
   "gastos-estudiantiles": '<path d="m12 3.5 2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.6-4.8 2.6.9-5.4-3.9-3.8 5.4-.8z"/>',
+  ajustes: '<circle cx="12" cy="5.5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="18.5" r="1.5" fill="currentColor"/>',
   mas: '<circle cx="6" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="18" cy="12" r="1.4" fill="currentColor"/>',
   anadir: '<path d="M12 5v14M5 12h14"/>',
   matricula: '<path d="M6 4h9l3 3v13H6z"/><path d="M9 11h6M9 15h6"/>',
@@ -75,6 +80,45 @@ const GRUPOS = [
 const PRIORIDAD_BARRA = ["resumen", "gastos-u", "plan", "metas", "presupuesto", "semestres"];
 
 const T = (texto) => traducirTextoInterfaz(texto);
+
+/* ------------------------- Favoritos de la barra inferior (fix10) ------------------------- */
+
+const CLAVE_FAVORITOS = "finanzas_barra_favoritos";
+// PATCH 14: exactamente 3 favoritos (2 a la izquierda del «＋», 1 a la derecha, y «Más» al final).
+const MAX_FAVORITOS = 3;
+const FAVORITOS_DEFAULT = ["resumen", "gastos-u", "plan"];
+
+/** Orden en que se recorren las secciones al deslizar: el mismo de la lista «Más» (solo las visibles). */
+function idsEnOrden() {
+  return gruposVisibles().flatMap((g) => g.ids);
+}
+
+/** Los (hasta 3) favoritos válidos (visibles) de la barra; si faltan, se completan con los predeterminados. */
+function leerFavoritos() {
+  const visibles = new Set(config.visibles);
+  const guardados = estado.datos && estado.datos.configuracion ? estado.datos.configuracion[CLAVE_FAVORITOS] : null;
+  const salida = [];
+  [...(Array.isArray(guardados) ? guardados : []), ...FAVORITOS_DEFAULT, ...PRIORIDAD_BARRA].forEach((id) => {
+    if (salida.length < MAX_FAVORITOS && visibles.has(id) && !salida.includes(id)) salida.push(id);
+  });
+  return salida;
+}
+
+/** PATCH 14: si alguien guardó más de 3 favoritos, conserva los 3 primeros y avisa una sola vez (el guardado deja ya 3). */
+function migrarFavoritosExcedidos() {
+  const cfg = estado.datos && estado.datos.configuracion;
+  const guardados = cfg ? cfg[CLAVE_FAVORITOS] : null;
+  if (!Array.isArray(guardados) || guardados.length <= MAX_FAVORITOS) return;
+  guardarFavoritos(guardados.slice(0, MAX_FAVORITOS));
+  mostrarToast(T("La barra ahora admite hasta 3 favoritos. Conservamos tus 3 primeros."), 5000);
+}
+
+function guardarFavoritos(ids) {
+  if (!estado.datos.configuracion) estado.datos.configuracion = {};
+  estado.datos.configuracion[CLAVE_FAVORITOS] = ids.slice(0, MAX_FAVORITOS);
+  sellarTimestamp(estado.datos.configuracion);
+  marcarCambioPendiente();
+}
 
 let config = null; // última configuración recibida de finanzas.js
 let shellListo = false; // false en onboarding / paso de saldo inicial: ahí no hay navegación
@@ -172,10 +216,11 @@ function construirBarra() {
   const barra = elBarra;
   barra.replaceChildren();
   barra.setAttribute("data-finanzas-nav", "");
-  const visibles = new Set(config.visibles);
-  const elegidas = PRIORIDAD_BARRA.filter((id) => visibles.has(id)).slice(0, 3);
+  migrarFavoritosExcedidos();
+  const elegidas = leerFavoritos();
+  // PATCH 14: [Fav 1] [Fav 2] [＋] [Fav 3] [Más]
   const izquierda = elegidas.slice(0, 2);
-  const derecha = elegidas.slice(2);
+  const derecha = elegidas.slice(2, 3);
 
   izquierda.forEach((id) => barra.appendChild(crearBotonNav(id, { clase: "finanzas-bar-item" })));
   if (config.anadir) {
@@ -205,10 +250,23 @@ function construirHoja() {
   asa.className = "finanzas-hoja-asa";
   asa.setAttribute("aria-hidden", "true");
   hoja.appendChild(asa);
+  const cabecera = document.createElement("div");
+  cabecera.className = "finanzas-hoja-cab";
   const h = document.createElement("h2");
   h.className = "finanzas-hoja-titulo texto-encabezado-seccion";
-  h.textContent = T("Finanzas");
-  hoja.appendChild(h);
+  h.textContent = modoAjustesHoja ? T("Ajustes de Finanzas") : T("Finanzas");
+  const btnAjustes = document.createElement("button");
+  btnAjustes.type = "button";
+  btnAjustes.className = "finanzas-hoja-ajustes";
+  btnAjustes.setAttribute("aria-label", modoAjustesHoja ? T("Volver") : T("Ajustes de Finanzas"));
+  btnAjustes.title = btnAjustes.getAttribute("aria-label");
+  if (modoAjustesHoja) btnAjustes.textContent = "✕";
+  else btnAjustes.appendChild(crearIcono("ajustes"));
+  btnAjustes.addEventListener("click", () => { modoAjustesHoja = !modoAjustesHoja; construirHoja(); });
+  cabecera.append(h, btnAjustes);
+  hoja.appendChild(cabecera);
+
+  if (modoAjustesHoja) { construirPanelAjustes(hoja); return; }
 
   gruposVisibles().forEach((g) => {
     const grupo = document.createElement("div");
@@ -239,6 +297,125 @@ function construirHoja() {
     grupo.appendChild(rejilla);
     hoja.appendChild(grupo);
   }
+}
+
+let modoAjustesHoja = false;
+
+/** Panel «Ajustes de Finanzas»: elegir los 3 favoritos de la barra inferior y reabrir la guía. */
+function construirPanelAjustes(hoja) {
+  const intro = document.createElement("p");
+  intro.className = "muted";
+  intro.style.margin = "0";
+  intro.textContent = T("Elige 3 favoritos para la barra de abajo. El resto sigue en «Más» y también puedes llegar deslizando a los lados.");
+  hoja.appendChild(intro);
+
+  const rejilla = document.createElement("div");
+  rejilla.className = "finanzas-hoja-rejilla";
+  const pintar = () => {
+    rejilla.replaceChildren();
+    const favs = leerFavoritos();
+    idsEnOrden().forEach((id) => {
+      const info = INFO_SECCIONES_FINANZAS[id];
+      const btn = document.createElement("button");
+      btn.type = "button";
+      const elegido = favs.includes(id);
+      btn.className = "finanzas-nav-item finanzas-hoja-item finanzas-fav-opcion" + (elegido ? " active" : "");
+      btn.setAttribute("aria-pressed", String(elegido));
+      const et = document.createElement("span");
+      et.className = "finanzas-nav-texto";
+      et.textContent = T(info.etiqueta);
+      btn.append(crearIcono(id), et);
+      btn.addEventListener("click", () => {
+        let nuevos = leerFavoritos();
+        if (nuevos.includes(id)) {
+          if (nuevos.length <= 1) return; // siempre quedan 3 (o menos si hay pocas secciones visibles)
+          nuevos = nuevos.filter((x) => x !== id);
+          // se completa con el siguiente predeterminado para mantener 3
+          const relleno = [...FAVORITOS_DEFAULT, ...PRIORIDAD_BARRA].find((x) => x !== id && !nuevos.includes(x) && new Set(config.visibles).has(x));
+          if (relleno) nuevos.push(relleno);
+        } else {
+          nuevos = [...nuevos, id].slice(-MAX_FAVORITOS); // con 3 llenos, el más viejo sale y entra el nuevo
+        }
+        guardarFavoritos(nuevos.filter(Boolean));
+        pintar();
+        construirBarra();
+      });
+      rejilla.appendChild(btn);
+    });
+  };
+  pintar();
+  hoja.appendChild(rejilla);
+
+  const acciones = document.createElement("div");
+  acciones.className = "row";
+  acciones.style.cssText = "gap:8px; flex-wrap:wrap; margin-top:8px;";
+  const restablecer = document.createElement("button");
+  restablecer.type = "button";
+  restablecer.className = "btn btn-secondary";
+  restablecer.textContent = T("Restablecer");
+  restablecer.addEventListener("click", () => { guardarFavoritos(FAVORITOS_DEFAULT.filter((id) => new Set(config.visibles).has(id))); pintar(); construirBarra(); });
+  const guia = document.createElement("button");
+  guia.type = "button";
+  guia.className = "btn btn-secondary";
+  guia.textContent = T("Cómo funciona Finanzas");
+  guia.addEventListener("click", () => { cerrarHoja(); modoAjustesHoja = false; construirHoja(); config.alAbrirGuia && config.alAbrirGuia(); });
+  const listo = document.createElement("button");
+  listo.type = "button";
+  listo.className = "btn btn-primary";
+  listo.textContent = T("Listo");
+  listo.addEventListener("click", () => { modoAjustesHoja = false; construirHoja(); });
+  acciones.append(restablecer, guia, listo);
+  hoja.appendChild(acciones);
+}
+
+/* ------------------------- Gesto de deslizar entre secciones (teléfono) ------------------------- */
+
+let gestoInstalado = false;
+function hayCapaAbierta() {
+  return Boolean(
+    (elHoja && elHoja.classList.contains("abierta")) ||
+    document.querySelector(".modal-overlay:not(.oculto):not([hidden]), .onboarding-overlay, .app-sidebar.abierta, .drawer-enlaces-movil.abierta")
+  );
+}
+function dentroDeScrollHorizontal(el) {
+  for (let n = el; n && n !== document.body; n = n.parentElement) {
+    if (n.matches && n.matches("input, textarea, select, canvas, [contenteditable='true'], .select-custom-lista, [data-no-deslizar]")) return true;
+    const cs = n.nodeType === 1 ? getComputedStyle(n) : null;
+    if (cs && /(auto|scroll)/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 2) return true;
+  }
+  return false;
+}
+function instalarGestoDeslizar() {
+  if (gestoInstalado) return;
+  gestoInstalado = true;
+  let ini = null;
+  document.addEventListener("touchstart", (e) => {
+    ini = null;
+    if (esEscritorio() || !config || !shellListo || window.__appSeccionActiva !== "finanzas" || e.touches.length !== 1) return;
+    const t = e.touches[0];
+    if (t.clientX < 28 || t.clientX > window.innerWidth - 28) return; // bordes: gestos del sistema
+    if (hayCapaAbierta() || dentroDeScrollHorizontal(e.target)) return;
+    ini = { x: t.clientX, y: t.clientY, t: Date.now() };
+  }, { passive: true });
+  document.addEventListener("touchend", (e) => {
+    if (!ini) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - ini.x, dy = t.clientY - ini.y, dt = Date.now() - ini.t;
+    ini = null;
+    if (Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx) * 0.55 || dt > 700) return;
+    const ids = idsEnOrden();
+    const i = ids.indexOf(config.activa);
+    if (i < 0) return;
+    const j = dx < 0 ? i + 1 : i - 1; // deslizar a la izquierda = siguiente
+    if (j < 0 || j >= ids.length) return;
+    config.alElegir(ids[j]);
+    const sec = document.getElementById("seccion-finanzas");
+    if (sec && !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      sec.classList.remove("finanzas-desliza-sig", "finanzas-desliza-ant");
+      void sec.offsetWidth;
+      sec.classList.add(dx < 0 ? "finanzas-desliza-sig" : "finanzas-desliza-ant");
+    }
+  }, { passive: true });
 }
 
 function asegurarElementos() {
@@ -276,6 +453,7 @@ function asegurarElementos() {
 
 function abrirHoja() {
   if (!elHoja) return;
+  if (modoAjustesHoja) { modoAjustesHoja = false; construirHoja(); }
   elHoja.classList.add("abierta");
   elHojaOverlay.classList.add("abierta");
 }
@@ -339,6 +517,7 @@ export function configurarNavegacionFinanzas(nueva) {
   config = { ...nueva, atajos: nueva.atajos || [] };
   shellListo = true;
   asegurarElementos();
+  instalarGestoDeslizar();
   construirSubnav();
   construirBarra();
   construirHoja();

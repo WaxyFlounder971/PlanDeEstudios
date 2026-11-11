@@ -1,5 +1,5 @@
-import { estado } from "./storage.js";
-import { marcarCambioPendiente } from "./storage-sync.js";
+import { estado } from "./storage/storage.js";
+import { marcarCambioPendiente } from "./storage/storage-sync.js";
 import { sellarTimestamp, PALETAS_DISPONIBLES, MONEDAS_DISPONIBLES, OFFSETS_RECORDATORIO_AGENDA, LIMITE_ENLACES_RAPIDOS, crearEnlaceRapido } from "./schema.js";
 import { convertirImagenABase64Comprimida } from "./utils.js";
 import { activarSincronizacionCalendario, desactivarSincronizacionCalendario, sincronizacionCalendarActiva, sincronizarResumenDiario } from "./notificaciones-calendario.js";
@@ -8,6 +8,17 @@ import { traducirTextoInterfaz } from "./i18n.js";
 import { iniciarFlujoPaletaPersonalizada } from "../ui/paleta-personalizada.js";
 import { aplicarLogoApp, prepararImagenLogo } from "./marca.js";
 import { MODO_DEMO, PREVIEW_DEMO } from "./demo-mode.js";
+import { elegirYGuardarFotoPerfil } from "./foto-perfil.js";
+import { crearIconoSeccion } from "../ui/icono-seccion.js";
+
+/* Emojis de «Todo conectado, paso a paso». Cámbialos aquí (o pon un <img>/texto corto) si haces logos personalizados. */
+const ICONOS_FLUJO = {
+  plan: "📚",       // paso 1: Plan de estudios
+  semestres: "📅",  // paso 2: Semestres
+  horario: "⏱️",    // paso 3: Horario, Agenda y Tiempo
+  wapper: "✨",     // paso 4 (opcional): Wapper
+  ayuda: "👆",      // aviso de doble toque
+};
 
 const SECCIONES_TUTORIAL = [
   { id:"resumen", nombre:"Resumen", puntos:["Semana actual del semestre y días que faltan.","Avance de estudio del día.","Clases, entregas y exámenes próximos."] },
@@ -16,13 +27,27 @@ const SECCIONES_TUTORIAL = [
   { id:"tiempo-estudio", nombre:"Tiempo de estudio", puntos:["Abre una materia y empieza una sesión de estudio.","Usa materias aunque no estén en tu plan: toca «Nueva Materia» al final de la lista.","Consulta historial, estadísticas y competencias de todos tus semestres."] },
   { id:"semestres", nombre:"Semestres", puntos:["Matricula materias de tu plan.","Registra criterios, asignaciones y notas."] },
   { id:"comunidad", nombre:"Comunidad", puntos:["Organiza compañeros y docentes relacionados con tus materias.","Cada docente lleva tu propia valoración, según tu experiencia."] },
-  { id:"finanzas", nombre:"Finanzas", puntos:["Registra ingresos y gastos desde el inicio.","Clasifica movimientos por categoría.","Asociarlos a un semestre es opcional."] },
+  { id:"finanzas", nombre:"Finanzas", puntos:[
+    "Inicio resume tu Disponible, los compromisos próximos y el avance de tus metas.",
+    "Semestres y Beneficios siguen pagos, becas y apoyos universitarios; Plan anticipa ingresos y pagos futuros.",
+    "Movimientos registra gastos, ingresos, ahorros, ajustes y traspasos; Metas y Presupuesto ayudan a organizar objetivos y límites.",
+    "Cuentas y Deudas son módulos opcionales: separan tu dinero por cuenta y llevan préstamos o gastos divididos.",
+    "En Ajustes eliges módulos, moneda y herramientas de datos. Apagar un módulo solo lo oculta; asociar movimientos a semestres también es opcional."
+  ] },
   { id:"plan-estudios", nombre:"Plan de estudios", puntos:["Añade una o varias carreras.","Pega o importa la malla completa.","El plan alimenta la matrícula de Semestres."] },
+  { id:"notas", nombre:"Notas rápidas", puntos:[
+    "Crea notas para ideas, pendientes y listas. Los cambios se guardan mientras editas y se sincronizan cuando vuelve la conexión.",
+    "Busca por texto y usa filtros de color o vencimiento; también puedes cambiar entre cuadrícula y lista y ordenar las notas.",
+    "Fija las notas importantes, reordena las fijadas y abre una nota como flotante o en una ventana PiP compatible.",
+    "Selecciona varias para fijarlas, enviarlas a Wapper o moverlas a la Papelera. En móvil, mantén pulsada una tarjeta.",
+    "Comparte texto, imagen o un archivo Wapper Note. En Ajustes puedes importar archivos Wapper Note y configurar la sección.",
+    "La Papelera permite restaurar notas durante 30 días o eliminarlas definitivamente. Compartir desde otras apps requiere la PWA instalada en Android."
+  ] },
   { id:"asistente", nombre:"Wapper", puntos:["Convierte mensajes en tareas, exámenes o eventos de Agenda.","Consulta fechas y pendientes con lenguaje natural.","Actívalo con tu clave personal de Gemini desde Ajustes."] },
-  { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras.","Toca dos veces el título de cualquier sección para ver de nuevo la guía solo de esa sección."] },
+  { id:"configuracion", nombre:"Ajustes", puntos:["Cambia idioma, apariencia, paleta y tamaño de texto.","Aquí ordenas y ocultas las secciones de la navegación.","Con este botón vuelves a ver la bienvenida y el mini tutorial cuando quieras.","Toca dos veces el título de cualquier sección para ver qué hace y, si quieres, su guía paso a paso."] },
 ];
 
-const TEXTO_FLUJO = "El orden recomendado es: 1) agrega uno o más planes; 2) crea un semestre y matricula materias del plan; 3) con esas materias arma Horario y vincula actividades en Agenda; 4) inicia sesiones desde materias para tener estadísticas ordenadas por periodo. Tiempo también admite bloques personalizados. Wapper necesita Agenda y una clave de Gemini para automatizar tareas. Comunidad y Finanzas funcionan por separado; en Finanzas, el semestre es una clasificación opcional.";
+const TEXTO_FLUJO = "El orden recomendado es: 1) agrega uno o más planes; 2) crea un semestre y matricula materias del plan; 3) con esas materias arma Horario y vincula actividades en Agenda; 4) opcional: Wapper trabaja sobre tu Agenda y además conoce tu Horario (necesita una clave de Gemini). Tiempo también admite bloques personalizados. Comunidad y Finanzas funcionan por separado.";
 let cerrarGuiaPlanActiva = null;
 /* ── Retomar lo que se quedó a medias ──────────────────────────────────────
    · El avance del onboarding se guarda en este dispositivo en cada pantalla y se retoma donde quedó.
@@ -36,7 +61,7 @@ function guardarProgresoOnb(o) { try { if (o) localStorage.setItem(CLAVE_PROGRES
    El texto vive en archivos .md por idioma: TermsOfUse/TermsES.md, TermsEN.md, TermsIT.md, TermsFR.md.
    Al aceptar se guarda en la cuenta: configuracion.terminos_aceptados = { version, fecha, idioma }.
    Si algún día cambian los términos, sube VERSION_TERMINOS y se volverán a pedir. */
-const VERSION_TERMINOS = "1";
+const VERSION_TERMINOS = "3";
 const ARCHIVOS_TERMINOS = { es: "TermsES", en: "TermsEN", it: "TermsIT", fr: "TermsFR" };
 const TEXTOS_TERMINOS = {
   es: { titulo: "Términos y condiciones", lema: "Antes de seguir, lee cómo usamos tus datos y acepta los términos.", cargando: "Cargando…", error: "No se pudo cargar el texto. Revisa tu conexión e inténtalo de nuevo.", reintentar: "Reintentar", acepto: "He leído y acepto los términos y condiciones y el tratamiento de mis datos.", requerido: "Debes aceptar los términos para continuar.", atras: "Atrás", continuar: "Aceptar y continuar" },
@@ -61,7 +86,7 @@ function mdEnLinea(el, t) {
     else if (p) el.append(document.createTextNode(p));
   });
 }
-function renderizarMarkdownSimple(md) {
+export function renderizarMarkdownSimple(md) {
   const frag = document.createDocumentFragment(); let lista = null, parr = [];
   const cerrar = () => { if (parr.length) { const p = document.createElement("p"); mdEnLinea(p, parr.join(" ")); frag.append(p); parr = []; } };
   for (const linea of String(md).replace(/\r/g, "").split("\n")) {
@@ -109,6 +134,13 @@ function inyectarEstilosOnboarding() {
 .onboarding-nota-error{margin:.5rem 0 0;font-size:.9rem;color:var(--danger,#e5484d)}
 .onboarding-nota-error[hidden]{display:none}
 .guia-plan-flotante{z-index:2147483001}
+.guia-plan-cabecera{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px}
+.guia-plan-cabecera strong{font-size:1rem;letter-spacing:.01em}
+.guia-plan-contador{flex:none;padding:.2rem .55rem;border-radius:999px;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent);font-size:.78rem;font-weight:700;color:var(--text-primary)}
+.guia-plan-progreso{height:5px;overflow:hidden;border-radius:99px;background:color-mix(in srgb,currentColor 12%,transparent);margin:0 0 12px}
+.guia-plan-progreso span{display:block;height:100%;border-radius:inherit;background:var(--gradient-accent,var(--accent-1,#8b5cf6));transition:width .25s ease}
+.guia-plan-flotante .row{gap:8px}
+@media(max-width:520px){.guia-plan-flotante{right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:calc(100vw - 24px);padding:16px}}
 .guia-resaltador{position:fixed;inset:0;z-index:2147483000;pointer-events:none}
 .guia-resaltador-lado{position:fixed;background:rgba(0,0,0,.58);pointer-events:auto}
 .guia-resaltador-anillo{position:fixed;border-radius:12px;pointer-events:none;box-shadow:0 0 0 3px var(--accent-1,#8b5cf6),0 0 0 8px color-mix(in srgb,var(--accent-1,#8b5cf6) 30%,transparent),0 0 26px color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent)}
@@ -379,7 +411,8 @@ function inyectarEstilosOnboarding() {
 .onb-moneda-vacio{opacity:.65;cursor:default}
 .onb-enlaces-lista{display:flex;flex-direction:column;gap:8px}.onb-enlace-fila{display:flex;align-items:center;gap:10px}.onb-enlace-ico{width:28px;height:28px;display:grid;place-items:center;flex-shrink:0;font-size:1.2rem}.onb-enlace-ico img{width:100%;height:100%;object-fit:cover;border-radius:6px}.onb-enlace-nombre{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .onb-nav-fila{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:.7rem .9rem;border-radius:14px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 4%,transparent)}
-.onb-nav-fila span{display:flex;align-items:center;gap:10px}
+.onb-nav-fila span{display:flex;align-items:center;gap:10px}.onb-nav-fila[draggable="true"]{cursor:grab}.onb-nav-fila.arrastrando{opacity:.5;border-color:var(--accent-1,#8b5cf6)}.onb-nav-arrastre{opacity:.55;font-size:1.2rem;cursor:grab;touch-action:none}
+.onb-notas-demo{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;padding:clamp(14px,3vw,32px)}.onb-notas-demo>.onb-bloque{min-height:150px;padding:16px;border-radius:18px;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 20%,var(--onb-izq,#111));border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 24%,transparent)}.onb-notas-demo .onb-r-fila{margin-bottom:14px}@media(max-width:700px){.onb-notas-demo{grid-template-columns:1fr;gap:8px;padding:12px}.onb-notas-demo>.onb-bloque{min-height:100px}}
 .onb-gemini-pasos{margin:0 0 14px;padding-left:1.25rem;display:flex;flex-direction:column;gap:6px;font-size:.88rem;line-height:1.45}
 .onb-gemini-campo{display:flex;flex-direction:column;gap:8px;margin-top:14px}
 .onb-wapper-ok{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:16px;border-radius:16px;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 12%,transparent)}
@@ -398,7 +431,7 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"]){background:var(--onb-izq,#080808)!important;background-image:none!important}
 .onboarding-panel:not([data-etapa="tour"]):not([data-etapa="personalizar"])>.onboarding-acciones{position:static!important;inset:auto!important;transform:none!important;flex:none;width:100%!important;max-width:none!important;min-width:0!important;align-self:stretch;justify-self:stretch;grid-column:1/-1;box-sizing:border-box;margin:0;padding:12px 20px calc(12px + env(safe-area-inset-bottom,0px));z-index:2;display:flex;flex-wrap:wrap;align-items:center;gap:10px}
 /* Términos y condiciones: el texto ocupa todo el espacio disponible; título y lema compactos. */
-.onboarding-panel[data-etapa="terminos"] .onboarding-copy{text-align:center}
+.onboarding-panel[data-etapa="terminos"] .onboarding-copy{text-align:center;justify-content:flex-start!important;padding-top:4px!important}
 .onboarding-panel[data-etapa="terminos"] .onboarding-copy h1{font-size:clamp(1.3rem,3.4vh,1.8rem)!important;margin:0 0 4px!important;animation:none}
 .onb-terminos-lema{margin:0 0 6px;font-size:.92rem;opacity:.8}
 .onb-terminos-caja{text-align:left;height:clamp(280px,56dvh,720px);overflow-y:auto;overscroll-behavior:contain;padding:16px 18px;margin:.6rem 0;border-radius:16px;border:1px solid rgba(128,128,128,.35);background:rgba(128,128,128,.08);font-size:.95rem;line-height:1.55}
@@ -409,6 +442,7 @@ function inyectarEstilosOnboarding() {
 .onb-luz:disabled{opacity:.5;cursor:not-allowed}
 .onb-luz:focus-visible{outline:2px solid var(--accent-1,#8b5cf6);outline-offset:2px}
 .onb-luz-led{flex:none;width:22px;height:22px;border-radius:50%;background:rgba(128,128,128,.35);box-shadow:inset 0 2px 4px rgba(0,0,0,.45);transition:background .25s,box-shadow .3s}
+
 .onb-luz.on{border-color:var(--accent-1,#8b5cf6);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
 .onb-luz.on .onb-luz-led{background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.85),transparent 45%),var(--gradient-accent,var(--accent-1,#8b5cf6));box-shadow:0 0 6px 2px color-mix(in srgb,var(--accent-1,#8b5cf6) 90%,transparent),0 0 18px 6px color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent)}
 @media (prefers-reduced-motion:reduce){.onb-luz,.onb-luz-led{transition:none}}
@@ -460,15 +494,25 @@ function inyectarEstilosOnboarding() {
 .onboarding-panel[data-etapa="flujo"]>.onboarding-acciones .btn-primary{flex:0 1 280px}
 }
 .onb-flujo{display:flex;flex-direction:column;gap:26px;width:100%;margin-top:18px}
-.onb-flujo-pasos{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px}
+.onb-flujo-pasos{display:grid;grid-template-columns:repeat(var(--onb-pasos,4),minmax(0,1fr));gap:18px}
+.onb-flujo-card b,.onb-flujo-card span{overflow-wrap:normal;word-break:normal;hyphens:none}
+.onb-flujo-paso.opcional .onb-flujo-nodo{border-style:dashed}
+.onb-flujo-opc{align-self:flex-start;font-size:.7rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:2px 9px;border-radius:999px;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
+/* Vertical: solo cuando en horizontal no cabe bien (lo decide ajustarFlujo). Círculo a la izquierda, tarjeta a la derecha. */
+.onb-flujo-pasos.vertical{grid-template-columns:minmax(0,1fr);gap:16px}
+.onb-flujo-pasos.vertical .onb-flujo-paso{flex-direction:row;align-items:flex-start;gap:14px;text-align:left}
+.onb-flujo-pasos.vertical .onb-flujo-nodo{width:60px;height:60px;font-size:1.6rem}
+.onb-flujo-pasos.vertical .onb-flujo-num{top:-5px;right:-5px;width:24px;height:24px;font-size:.78rem}
+.onb-flujo-pasos.vertical .onb-flujo-card{flex:1 1 auto;width:auto;min-width:0;padding:12px 14px;align-items:flex-start;text-align:left}
+.onb-flujo-pasos.vertical .onb-flujo-paso:not(:last-child)::after{top:68px;left:29px;width:3px;height:calc(100% - 68px + 16px - 8px);background:linear-gradient(180deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8));transform-origin:top;animation-name:onbFlujoLineaV}
 .onb-flujo-paso{position:relative;display:flex;flex-direction:column;align-items:center;gap:16px;animation:onbSube .65s cubic-bezier(.22,.8,.3,1) both;animation-delay:calc(.2s + var(--i)*.25s)}
-.onb-flujo-paso:not(:last-child)::after{content:"";position:absolute;top:36px;left:calc(50% + 50px);width:calc(100% + 22px - 100px);height:3px;border-radius:2px;background:linear-gradient(90deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8));transform-origin:left;animation:onbFlujoLinea .6s ease-out both;animation-delay:calc(.55s + var(--i)*.25s)}
+.onb-flujo-paso:not(:last-child)::after{content:"";position:absolute;top:36px;left:calc(50% + 50px);width:calc(100% + 18px - 100px);height:3px;border-radius:2px;background:linear-gradient(90deg,var(--accent-1,#8b5cf6),var(--accent-2,#38bdf8));transform-origin:left;animation:onbFlujoLinea .6s ease-out both;animation-delay:calc(.55s + var(--i)*.25s)}
 .onb-flujo-nodo{position:relative;flex:none;width:76px;height:76px;border-radius:50%;display:grid;place-items:center;font-size:2rem;background:color-mix(in srgb,var(--accent-1,#8b5cf6) 16%,var(--onb-izq,#080808));border:2px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 70%,transparent);box-shadow:0 0 0 7px color-mix(in srgb,var(--accent-1,#8b5cf6) 10%,transparent),0 12px 32px color-mix(in srgb,var(--accent-1,#8b5cf6) 38%,transparent)}
 .onb-flujo-num{position:absolute;top:-6px;right:-6px;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:.85rem;font-weight:800;color:#fff;background:var(--gradient-accent,var(--accent-1,#8b5cf6));border:3px solid var(--onb-izq,#080808)}
 .onb-flujo-card{box-sizing:border-box;width:100%;flex:1;display:flex;flex-direction:column;gap:6px;padding:16px 14px;border-radius:18px;border:1px solid color-mix(in srgb,currentColor 14%,transparent);background:color-mix(in srgb,currentColor 5%,transparent)}
 .onb-flujo-card b{font-size:1.08rem}
 .onb-flujo-card span{font-size:.92rem;line-height:1.4;opacity:.75}
-.onb-flujo-aparte{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;text-align:left;padding:16px 18px;border-radius:18px;border:1px dashed color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 8%,transparent);animation:onbSube .65s 1.05s cubic-bezier(.22,.8,.3,1) both}
+.onb-flujo-aparte{display:none;;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;text-align:left;padding:16px 18px;border-radius:18px;border:1px dashed color-mix(in srgb,var(--accent-1,#8b5cf6) 55%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 8%,transparent);animation:onbSube .65s 1.05s cubic-bezier(.22,.8,.3,1) both}
 .onb-flujo-aparte>span{flex:1 1 280px;font-size:.95rem;line-height:1.4}
 .onb-flujo-chips{display:flex;gap:8px;flex-wrap:wrap}
 .onb-flujo-chip{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;font-size:.9rem;font-weight:700;border:1px solid color-mix(in srgb,var(--accent-1,#8b5cf6) 50%,transparent);background:color-mix(in srgb,var(--accent-1,#8b5cf6) 14%,transparent)}
@@ -479,6 +523,7 @@ function inyectarEstilosOnboarding() {
 @keyframes onbToque{0%,60%,100%{transform:translateY(0)}15%,45%{transform:translateY(-6px)}30%{transform:translateY(0)}}
 @media (prefers-reduced-motion:reduce){.onb-ayuda-tip,.onb-ayuda-tip-ico{animation:none!important}}
 @keyframes onbFlujoLinea{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes onbFlujoLineaV{from{transform:scaleY(0)}to{transform:scaleY(1)}}
 @media (prefers-reduced-motion:reduce){.onb-flujo-paso,.onb-flujo-paso::after,.onb-flujo-aparte{animation:none!important}}
 /* Nunca se ve una barra de scroll en el onboarding (el scroll sigue funcionando, invisible). */
 .onboarding-overlay,.onboarding-overlay *{scrollbar-width:none;-ms-overflow-style:none}
@@ -1117,9 +1162,21 @@ function contenidoEsquema(id) {
         [hilo, burb("yo", "Mueve el quiz para el lunes")], [hilo, burb("", "Listo, moví el quiz al lunes.")]);
       break;
     }
+    case "notas": {
+      const nota1=rCard(rFila("onb-r-sp",rTit("Ideas para el proyecto"),rPildora("Fijada",PURPURA)),rSuave("Guardar una idea al instante"),rSuave("☑ Revisar materiales de clase"),rSuave("☐ Anotar preguntas para el equipo"),rFila("onb-r-sp",rBoton("Editar"),rBoton("Compartir")));
+      const nota2=rCard(rFila("onb-r-sp",rTit("Pendientes"),rPildora("Vence mañana",NARANJA)),rSuave("Preparar los materiales de clase"),rSuave("Puedes añadir una fecha y cambiar el color."),rFila("onb-r-sp",rBoton("Wapper"),rBoton("Flotante")));
+      const barra=rFila("onb-r-sp onb-r-botonesh",rBoton("＋ Nueva nota",true),rBoton("⚙ Ajustes"));
+      const buscar=nodo("div","onb-r-buscar","Buscar notas por título o contenido...");
+      const filtros=nodo("div","onb-r-chips centro",null,[rPildora("Color",PURPURA),rPildora("Con vencimiento",NARANJA),rPildora("Cuadrícula",AZUL),rPildora("Lista",TEAL)]);
+      base.push(nodo("div","onb-r onb-notas-demo",null,[barra,buscar,filtros,nota1,nota2]));
+      extras.push(rCard(rTit("Una idea en segundos"),rSuave("Edita texto, listas y casillas; dibuja, usa figuras y stickers, y guarda cambios mientras escribes.")),
+        rCard(rTit("Organiza como te sirva"),rSuave("Busca, filtra, fija, cambia la vista y mueve las tarjetas importantes.")),
+        rCard(rTit("Tus notas te acompañan"),rSuave("Compártelas, envíalas a Wapper o déjalas flotando mientras estudias.")));
+      break;
+    }
     case "configuracion": {
       base.push(rFilaAjuste("Ajustes generales"), rFilaAjuste("Asistente IA (Gemini)"), rFilaAjuste("Notificaciones"), rFilaAjuste("Personalizar"),
-        rFilaAjuste("Horario"), rFilaAjuste("Plan de Estudios activo"), rFilaAjuste("Enlaces rápidos"), rFilaAjuste("Datos"));
+        rFilaAjuste("Horario"), rFilaAjuste("Enlaces rápidos"), rFilaAjuste("Datos"));
       extras.push(rFilaAjuste("Créditos"));
       break;
     }
@@ -1319,6 +1376,7 @@ const SECCIONES_NAV = [
   { id: "semestres", etiqueta: "Semestres", icono: "📅" }, { id: "comunidad", etiqueta: "Comunidad", icono: "👥" },
   { id: "finanzas", etiqueta: "Finanzas", icono: "💰" }, { id: "plan-estudios", etiqueta: "Plan de Estudios", icono: "📚" },
   { id: "tiempo-estudio", etiqueta: "Tiempo", icono: "⏱️" }, { id: "asistente", etiqueta: "Asistente", icono: "✨" },
+  { id: "notas", etiqueta: "Notas rápidas", icono: "🗒️" },
 ];
 // Pantalla «Llévala contigo»: cuadrícula tipo pantalla de inicio. El progreso NO es un temporizador fijo:
 // avanza despacio (una instalación real tarda) y solo llega a 100 % cuando el navegador avisa con «appinstalled».
@@ -1367,27 +1425,59 @@ function construirTipAyuda() {
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const raiz = el("div", "onb-ayuda-tip"); raiz.setAttribute("role", "note");
   const cuerpo = document.createElement("div");
-  cuerpo.append(el("b", "", T("¿Necesitas ayuda más adelante?")), el("span", "", T("Toca dos veces seguidas el título de cualquier sección (Agenda, Horario, Finanzas…) y se abre su guía paso a paso. No es un truco escondido: está para cuando se te olvide cómo funciona algo.")));
-  raiz.append(el("span", "onb-ayuda-tip-ico", "👆"), cuerpo); return raiz;
+  cuerpo.append(el("b", "", T("¿Necesitas ayuda más adelante?")), el("span", "", T("Toca dos veces seguidas el título de cualquier sección (Agenda, Horario, Finanzas…) y se abre una ventana con lo que puede hacer; desde ahí eliges ver su guía paso a paso o quedarte con eso. No es un truco escondido: está para cuando se te olvide cómo funciona algo.")));
+  raiz.append(el("span", "onb-ayuda-tip-ico", ICONOS_FLUJO.ayuda), cuerpo); return raiz;
 }
-// Pantalla «Todo conectado» (PC): tres pasos encadenados + una franja aparte para lo que funciona por separado.
+function construirTipNotas() {
+  const T = traducirTextoInterfaz;
+  const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
+  const raiz = el("div", "onb-ayuda-tip"); raiz.setAttribute("role", "note");
+  const cuerpo = document.createElement("div");
+  cuerpo.append(el("b", "", T("Notas rápidas")), el("span", "", T("Guarda ideas y pendientes al instante, incluso sin conexión.")), el("span", "", T("Envía una nota a Wapper para convertirla en actividades de Agenda.")));
+  raiz.append(el("span", "onb-ayuda-tip-ico", "🗒️"), cuerpo); return raiz;
+}
+// Pantalla «Todo conectado»: cuatro pasos encadenados (el 4.º, Wapper, es opcional). Se ve en horizontal y pasa a vertical solo si no cabe.
 function construirFlujo() {
   const T = traducirTextoInterfaz;
   const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
   const raiz = el("div", "onb-flujo"), fila = el("div", "onb-flujo-pasos");
-  [["📚", "Plan de estudios", "Agrega tu plan de estudios."], ["📅", "Semestres", "Crea un semestre y matricula tus materias."], ["⏱️", "Horario, Agenda y Tiempo", "Usa esas materias en Horario, Agenda y Tiempo."]].forEach(([ico, t, d], i) => {
-    const paso = el("div", "onb-flujo-paso"); paso.style.setProperty("--i", String(i));
-    const nodo = el("div", "onb-flujo-nodo", ico); nodo.append(el("span", "onb-flujo-num", String(i + 1)));
-    const card = el("div", "onb-flujo-card"); card.append(el("b", "", T(t)), el("span", "", T(d)));
+  const PASOS = [
+    ["plan-estudios", "Plan de estudios", "Agrega tu plan de estudios.", false],
+    ["semestres", "Semestres", "Crea un semestre y matricula tus materias.", false],
+    ["tiempo-estudio", "Horario, Agenda y Tiempo", "Usa esas materias en Horario, Agenda y Tiempo.", false],
+    ["asistente", "Wapper", "Tu asistente trabaja sobre la Agenda y además conoce tu Horario. Necesita una clave de Gemini.", true],
+  ];
+  fila.style.setProperty("--onb-pasos", String(PASOS.length));
+  PASOS.forEach(([ico, t, d, opcional], i) => {
+    const paso = el("div", "onb-flujo-paso" + (opcional ? " opcional" : "")); paso.style.setProperty("--i", String(i));
+    const nodo = el("div", "onb-flujo-nodo"); nodo.append(crearIconoSeccion(ico) || el("span", "", ico), el("span", "onb-flujo-num", String(i + 1)));
+    const card = el("div", "onb-flujo-card");
+    if (opcional) card.append(el("span", "onb-flujo-opc", T("Opcional")));
+    card.append(el("b", "", T(t)), el("span", "", T(d)));
     paso.append(nodo, card); fila.append(paso);
   });
-  const aparte = el("div", "onb-flujo-aparte");
-  const chips = el("div", "onb-flujo-chips");
-  [["✨", "Wapper"], ["👥", "Comunidad"], ["💰", "Finanzas"]].forEach(([i, t]) => chips.append(el("span", "onb-flujo-chip", `${i} ${T(t)}`)));
-  aparte.append(el("span", "", T("Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado.")), chips);
-  raiz.append(fila, aparte, construirTipAyuda()); return raiz;
+  raiz.append(fila, construirTipNotas());
+  ajustarFlujo(raiz, fila); return raiz;
+}
+// Horizontal si cabe; vertical si el ancho es corto o alguna palabra se desbordaría (nada de cortes tipo «estudio/s»).
+function ajustarFlujo(raiz, fila) {
+  let anchoPrevio = -1;
+  const medir = () => {
+    if (!fila.isConnected) return;
+    const ancho = raiz.clientWidth; if (!ancho || ancho === anchoPrevio) return; anchoPrevio = ancho;
+    fila.classList.remove("vertical");
+    const textos = [...fila.querySelectorAll(".onb-flujo-card b, .onb-flujo-card span")];
+    const noCabe = ancho < 560 || textos.some((n) => n.scrollWidth > n.clientWidth + 1) || [...fila.querySelectorAll(".onb-flujo-card")].some((c) => c.scrollWidth > c.clientWidth + 1);
+    fila.classList.toggle("vertical", noCabe);
+  };
+  if (typeof ResizeObserver === "function") { const ro = new ResizeObserver(() => { if (!fila.isConnected) { ro.disconnect(); return; } medir(); }); ro.observe(raiz); }
+  requestAnimationFrame(() => { anchoPrevio = -1; medir(); });
+  window.addEventListener("resize", () => { anchoPrevio = -1; medir(); }, { passive: true });
 }
 function fotoPerfilGoogle() {
+  // 2026-11-04: si la persona ya eligió una foto propia, esa tiene prioridad sobre la de Google.
+  const propia = estado.datos?.perfil?.foto_personalizada;
+  if (propia) return propia;
   const src = document.getElementById("perfil-foto")?.getAttribute("src") || "";
   if (src.trim()) return src;
   const p = estado.datos?.perfil || {};
@@ -1425,7 +1515,11 @@ function contenedorOpcionesPlan() {
   let n = a.parentElement; while (n && !n.contains(g)) n = n.parentElement;
   return n || g;
 }
-function grupoMetodosImportar() { const g = [...document.querySelectorAll("#seccion-plan-estudios .pill-group")]; return g.find((x) => x.querySelectorAll("button").length >= 3) || g.find((x) => x.querySelectorAll("button").length >= 2); }
+function grupoMetodosImportar() { return document.querySelector("#seccion-plan-estudios .importacion-metodos") || (() => { const g = [...document.querySelectorAll("#seccion-plan-estudios .pill-group")]; return g.find((x) => x.querySelectorAll("button").length >= 3) || g.find((x) => x.querySelectorAll("button").length >= 2); })(); }
+function botonTutorialAjustes() {
+  return document.getElementById("btn-repetir-tutorial")
+    || [...document.querySelectorAll("#seccion-configuracion button")].find((b) => /tutorial|bienvenida|onboarding/i.test(`${b.textContent} ${b.id}`)) || null;
+}
 function seccionNavegacionAjustes() {
   const lista = document.getElementById("lista-nav-oculta"), sec = lista?.closest(".ajuste-seccion");
   if (sec?.classList.contains("colapsada")) sec.querySelector(".ajuste-seccion-cabecera")?.click();
@@ -1494,7 +1588,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
   const cfg = estado.datos.configuracion;
   const secciones = SECCIONES_TUTORIAL.filter(({id}) => id !== "configuracion" && document.getElementById(`seccion-${id}`));
   // «Últimos ajustes»: se guardan en este borrador y se aplican AL TERMINAR el onboarding.
-  const borrador = { tocado: false, navTocada: false, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, recordatorios: null, resumen: null, enlaces: [] };
+  const borrador = { tocado: false, navTocada: false, ordenNav: null, moneda: null, ocultas: new Set(cfg.navegacion_oculta || []), recordatorio: null, recordatorios: null, resumen: null, enlaces: [] };
   let claveRecien = false;
   const cuentaConDatos = !MODO_DEMO && Object.entries(estado.datos).some(([clave, valor]) =>
     Array.isArray(valor) && valor.length > 0 && clave !== "planes_estudio_demo"
@@ -1737,11 +1831,12 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     if(!borrador.tocado)return;
     if(borrador.moneda)cfg.moneda_preferida=borrador.moneda;
     if(borrador.navTocada)cfg.navegacion_oculta=[...borrador.ocultas];
+    if(borrador.ordenNav)cfg.navegacion_orden=[...borrador.ordenNav];
     if(borrador.recordatorios){const previo=cfg.notificaciones_recordatorios&&typeof cfg.notificaciones_recordatorios==="object"?cfg.notificaciones_recordatorios:{};cfg.notificaciones_recordatorios={feriado:["1_dia"],...previo,...borrador.recordatorios};}
     if(borrador.enlaces.length){
       if(!Array.isArray(cfg.enlaces_rapidos))cfg.enlaces_rapidos=[];
       borrador.enlaces.forEach((e)=>{if(cfg.enlaces_rapidos.length>=(LIMITE_ENLACES_RAPIDOS||20))return;const nuevo=crearEnlaceRapido(e);sellarTimestamp(nuevo);cfg.enlaces_rapidos.push(nuevo);});
-      import("./js/config/config-enlaces.js").then((m)=>m.renderizarEnlacesRapidos()).catch(()=>{});
+      import("../config/config-enlaces.js").then((m)=>m.renderizarEnlacesRapidos()).catch(()=>{});
     }
     if(borrador.resumen)cfg.notificaciones_resumen_diario={activo:borrador.resumen.activo,hora:borrador.resumen.hora};
     guardar();window.aplicarVisibilidadNavegacion?.();
@@ -1789,7 +1884,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     iframeListo=false;preview.style.transition="none";preview.style.opacity="0";preview.dataset.seccion=seccion;preview.src=u.href;
   };
   const pintar=()=>{
-    if(!MODO_DEMO&&!repetir)guardarProgreso({etapa:etapa==="wapper-config"?"tour":etapa,indice});
+    if(!MODO_DEMO)guardarProgreso({etapa:etapa==="wapper-config"?"tour":etapa,indice});
     ctrlTour?.abort();ctrlTour=null;timersChat.forEach(clearTimeout);timersChat=[];
     contenido.replaceChildren();acciones.replaceChildren();panel.querySelector(".onboarding-copy").scrollTop=0;
     const esTour=etapa==="tour";panel.classList.toggle("onboarding-con-tour",esTour||etapa==="personalizar");panel.dataset.etapa=etapa;panel.querySelectorAll(".onb-bienvenida-avatar").forEach((e)=>e.remove());
@@ -1807,8 +1902,20 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
     if(etapa==="nombre"){
       const nombreGoogle=(estado.datos.perfil?.nombre||estado.datos.perfil?.nombre_preferido||"").trim();
       const valorInicial=MODO_DEMO?"":(estado.datos.perfil?.nombre_preferido||estado.datos.perfil?.nombre||"");
-      titulo.before(construirAvatarBienvenida(valorInicial||nombreGoogle));
+      let avatarBienvenida=construirAvatarBienvenida(valorInicial||nombreGoogle);
+      titulo.before(avatarBienvenida);
       contenido.append(texto("p","onb-bienvenida-lema","Tu carrera, tu agenda y tu tiempo, en un solo lugar."));
+      // 2026-11-04: por defecto sale la foto de la cuenta de Google, pero se puede reemplazar por otra.
+      if(!MODO_DEMO){
+        const cambiarFoto=boton("Cambiar foto","btn-discreto onb-bienvenida-cambiar-foto",()=>{
+          elegirYGuardarFotoPerfil((ok)=>{
+            if(!ok)return;
+            const nuevo=construirAvatarBienvenida(input.value.trim()||valorInicial||nombreGoogle);
+            avatarBienvenida.replaceWith(nuevo);avatarBienvenida=nuevo;
+          });
+        });
+        contenido.append(cambiarFoto);
+      }
       const input=document.createElement("input");input.className="form-input onb-bienvenida-campo";input.maxLength=60;input.autocomplete="given-name";input.value=valorInicial;input.placeholder=traducirTextoInterfaz("Tu nombre");input.setAttribute("aria-label",traducirTextoInterfaz("¿Cómo quieres que te llamemos?"));
       const etiqueta=texto("label","onb-bienvenida-etiqueta","¿Cómo quieres que te llamemos?");etiqueta.append(input);
       const aviso=texto("p","onboarding-nota-error","Escribe cómo quieres que te llamemos para continuar.");aviso.hidden=true;aviso.setAttribute("role","alert");
@@ -1873,7 +1980,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       PALETAS_DISPONIBLES.forEach((p)=>{const b=document.createElement("button");b.type="button";b.className="onboarding-color";b.title=traducirTextoInterfaz(p);b.setAttribute("aria-label",traducirTextoInterfaz(p));b.dataset.paleta=p;b.setAttribute("aria-pressed",String(paletaActual()===p));const colors=COLORES_PREVIEW_PALETA[p]||[];b.style.background=p==="azucarado"?FONDO_PREVIEW_AZUCARADO:`linear-gradient(135deg,${colors.join(",")})`;b.addEventListener("click",()=>{cfg.paleta=p;aplicarTemaAhora();guardar();actualizarPreview();marcarPaletas();});colores.append(b);});
       const paletaPersonal=document.createElement("button");paletaPersonal.type="button";paletaPersonal.dataset.paleta="personalizada";paletaPersonal.setAttribute("aria-pressed",String(paletaActual()==="personalizada"));paletaPersonal.className="onboarding-color onboarding-paleta-nueva";paletaPersonal.setAttribute("aria-label",traducirTextoInterfaz("Crear mi paleta"));paletaPersonal.title=traducirTextoInterfaz("Crear mi paleta");paletaPersonal.textContent="+";paletaPersonal.onclick=()=>iniciarFlujoPaletaPersonalizada({alGuardar:()=>{cfg.paleta="personalizada";cfg.paleta_personalizada=estado.datos.configuracion.paleta_personalizada;guardar();aplicarTemaAhora();actualizarPreview();marcarPaletas();}});
       colores.append(paletaPersonal);
-      const logos=document.createElement("div");logos.className="onboarding-logos";const marcarLogos=()=>logos.querySelectorAll(".onboarding-logo").forEach(x=>x.setAttribute("aria-pressed",String(cfg.logo_app===x.dataset.logo&&!cfg.logo_app_url)));[["folder","imagenes/LogoAppFolder.png","Carpeta"],["birrete","imagenes/LogoAppBirrete.png","Birrete"]].forEach(([v,src,alt])=>{const b=document.createElement("button");b.type="button";b.className="onboarding-logo";b.dataset.logo=v;b.setAttribute("aria-pressed",String(cfg.logo_app===v&&!cfg.logo_app_url));const img=document.createElement("img");img.src=src;img.alt=alt;b.append(img);b.onclick=()=>{cfg.logo_app=v;cfg.logo_app_url=null;guardar();aplicarLogoApp();actualizarPreview();marcarLogos();};logos.append(b);});
+      const logos=document.createElement("div");logos.className="onboarding-logos";const marcarLogos=()=>logos.querySelectorAll(".onboarding-logo").forEach(x=>x.setAttribute("aria-pressed",String(cfg.logo_app===x.dataset.logo&&!cfg.logo_app_url)));[["folder","imagenes/LogoAppFolder-512.png","Carpeta"],["birrete","imagenes/LogoAppBirrete.png","Birrete"]].forEach(([v,src,alt])=>{const b=document.createElement("button");b.type="button";b.className="onboarding-logo";b.dataset.logo=v;b.setAttribute("aria-pressed",String(cfg.logo_app===v&&!cfg.logo_app_url));const img=document.createElement("img");img.src=src;img.alt=alt;b.append(img);b.onclick=()=>{cfg.logo_app=v;cfg.logo_app_url=null;guardar();aplicarLogoApp();actualizarPreview();marcarLogos();};logos.append(b);});
       const etiquetaArchivo=document.createElement("label");etiquetaArchivo.className="btn btn-secondary onboarding-file-picker";etiquetaArchivo.append(texto("span","","Personalizado"));
       const archivo=document.createElement("input");archivo.type="file";archivo.accept="image/png,image/jpeg,image/webp";archivo.className="onboarding-file-input";archivo.setAttribute("aria-label",traducirTextoInterfaz("Elegir logo desde archivos"));archivo.onchange=async()=>{let url=null;try{url=await prepararImagenLogo(archivo.files?.[0]);}catch(_){}if(url){cfg.logo_app="personalizado";cfg.logo_app_url=url;guardar();aplicarLogoApp();actualizarPreview();marcarLogos();}else if(archivo.files?.length)toast?.(traducirTextoInterfaz("No se pudo usar esa imagen. Prueba con PNG, JPG o WebP."));archivo.value="";};etiquetaArchivo.append(archivo);
       const toggleLogos=boton("Logos de la app  ⌄","btn-secondary",()=>{const abierto=toggleLogos.getAttribute("aria-expanded")==="true";toggleLogos.setAttribute("aria-expanded",String(!abierto));toggleLogos.textContent=traducirTextoInterfaz(`Logos de la app  ${abierto?"⌄":"⌃"}`);logos.hidden=abierto;});toggleLogos.setAttribute("aria-expanded","false");logos.hidden=true;
@@ -1882,7 +1989,7 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa=MODO_DEMO?"nombre":"terminos";pintar();}),boton("Continuar","btn-primary",()=>{cfg.personalizacion_inicial_completada=true;guardar();etapa=etapaTrasPersonalizar();indice=0;pintar();}));return;
     }
     if(etapa==="instalar"){
-      const logoSrc=cfg.logo_app_url||(cfg.logo_app==="birrete"?"imagenes/LogoAppBirrete.png":"imagenes/LogoAppFolder.png");
+      const logoSrc=cfg.logo_app_url||(cfg.logo_app==="birrete"?"imagenes/LogoAppBirrete.png":"imagenes/LogoAppFolder-512.png");
       const ui=construirInstalacion({logoSrc});contenido.append(ui.raiz);
       const T=traducirTextoInterfaz;
       const alTour=()=>{ui.detener();etapa="tour";indice=0;pintar();};
@@ -2033,30 +2140,43 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="tour";indice=Math.max(0,secciones.length-1);pintar();}),boton("Continuar","btn-primary",()=>{etapa="ajustes2";pintar();}));return;
     }
     if(etapa==="ajustes2"){
-      contenido.append(texto("p","onboarding-lead","Desactiva las secciones que no vayas a utilizar. Puedes volver a activarlas cuando quieras en Ajustes > Personalizar > Navegación."));
+      contenido.append(texto("p","onboarding-lead","Arrastra las secciones para cambiar su orden. Desactiva las que no vayas a utilizar; puedes volver a activarlas en Ajustes > Personalizar > Navegación."));
       const lista=document.createElement("div");lista.className="onb-ajustes";
       const orden=typeof window.obtenerOrdenNavegacion==="function"?window.obtenerOrdenNavegacion():SECCIONES_NAV.map((x)=>x.id);
+      let arrastrada=null;
+      const guardarOrdenNav=()=>{const vistos=[...lista.querySelectorAll(".onb-nav-fila")].map((n)=>n.dataset.seccion);borrador.ordenNav=[...vistos,...orden.filter((x)=>!vistos.includes(x))];borrador.tocado=true;borrador.navTocada=true;};
       orden.forEach((id)=>{
         const sec=SECCIONES_NAV.find((x)=>x.id===id);if(!sec)return;
         if(id==="asistente"&&!cfg.gemini_api_key)return;
-        const fila=document.createElement("div");fila.className="onb-nav-fila";
-        const izq=document.createElement("span");izq.append(texto("span","",sec.icono),texto("span","",sec.etiqueta));
+        const fila=document.createElement("div");fila.className="onb-nav-fila";fila.draggable=true;fila.dataset.seccion=id;fila.setAttribute("aria-label",traducirTextoInterfaz("Arrastra para cambiar el orden"));
+        const izq=document.createElement("span");const asa=texto("span","onb-nav-arrastre","⠿");asa.setAttribute("aria-hidden","true");izq.append(asa,crearIconoSeccion(sec.id)||texto("span","",sec.icono),texto("span","",sec.etiqueta));
         const sw=construirInterruptor(!borrador.ocultas.has(id),(activa)=>{if(activa)borrador.ocultas.delete(id);else borrador.ocultas.add(id);borrador.tocado=true;borrador.navTocada=true;},`${sec.etiqueta}`);
+        fila.addEventListener("dragstart",(ev)=>{arrastrada=fila;fila.classList.add("arrastrando");ev.dataTransfer.effectAllowed="move";});
+        fila.addEventListener("dragend",()=>{fila.classList.remove("arrastrando");arrastrada=null;});
+        fila.addEventListener("dragover",(ev)=>{ev.preventDefault();if(arrastrada&&arrastrada!==fila){const r=fila.getBoundingClientRect();lista.insertBefore(arrastrada,ev.clientY<r.top+r.height/2?fila:fila.nextSibling);}});
+        fila.addEventListener("drop",(ev)=>{ev.preventDefault();guardarOrdenNav();});
+        // En pantallas táctiles el navegador no implementa de forma uniforme
+        // el drag HTML; el asa usa Pointer Events y conserva el desplazamiento.
+        asa.addEventListener("pointerdown",(ev)=>{if(ev.pointerType==="mouse")return;ev.preventDefault();arrastrada=fila;fila.classList.add("arrastrando");asa.setPointerCapture?.(ev.pointerId);});
+        asa.addEventListener("pointermove",(ev)=>{if(arrastrada!==fila||!asa.hasPointerCapture?.(ev.pointerId))return;const destino=document.elementFromPoint(ev.clientX,ev.clientY)?.closest(".onb-nav-fila");if(destino&&destino!==fila){const r=destino.getBoundingClientRect();lista.insertBefore(fila,ev.clientY<r.top+r.height/2?destino:destino.nextSibling);}});
+        const soltarPuntero=(ev)=>{if(arrastrada!==fila||ev.pointerType==="mouse")return;fila.classList.remove("arrastrando");arrastrada=null;guardarOrdenNav();};
+        asa.addEventListener("pointerup",soltarPuntero);asa.addEventListener("pointercancel",soltarPuntero);
         fila.append(izq,sw.label);lista.append(fila);
       });
       contenido.append(lista);
       acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes1";pintar();}),boton("Continuar","btn-primary",()=>{etapa="flujo";pintar();}));return;
     }
-    if(esMovil()){const pasos=document.createElement("ol");pasos.className="onboarding-dependencias";["Agrega tu plan de estudios.","Crea un semestre y matricula tus materias.","Usa esas materias en Horario, Agenda y Tiempo.","Wapper trabaja con tu Agenda; Comunidad y Finanzas funcionan por separado."].forEach(t=>pasos.append(texto("li","",t)));contenido.append(pasos,construirTipAyuda());}else contenido.append(construirFlujo());
-    acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Agregar plan y ver la guía","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
+    contenido.append(construirFlujo());
+    acciones.append(boton("Atrás","btn-secondary",()=>{etapa="ajustes2";pintar();}),boton("Lo haré después","btn-secondary",()=>fin(false)));colocarPrimario(boton(tienePlanArmado?"Continuar":"Importar mi plan","btn-primary",()=>tienePlanArmado?preguntarPorOtroPlan():fin(true)));
   };
   const siguiente=()=>{indice++;if(indice>=secciones.length)etapa="ajustes1";pintar();};
-  panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>{if(repetir||MODO_DEMO)fin(false);else preguntarSalir();});
+  panel.querySelector(".onboarding-cerrar").addEventListener("click",()=>{if(MODO_DEMO)fin(false);else preguntarSalir();});
   // Retoma donde se quedó (solo en el primer recorrido, en este dispositivo).
   if(!MODO_DEMO&&!repetir){
     const g=cfg.onboarding_progreso||leerProgresoOnb();
     if(g&&["terminos","personalizar","instalar","tour","ajustes1","ajustes2","flujo"].includes(g.etapa)){
-      etapa=g.etapa;if(!aceptadoTerminos())etapa="terminos"; // nadie se salta los términos al retomarindice=Math.max(0,Math.min(Math.max(0,secciones.length-1),Number(g.indice)||0));
+      etapa=g.etapa;if(!aceptadoTerminos())etapa="terminos"; // nadie se salta los términos al retomar
+      indice=Math.max(0,Math.min(Math.max(0,secciones.length-1),Number(g.indice)||0));
       if(etapa==="instalar"&&instalarYa())etapa="tour";
     }
   }
@@ -2065,6 +2185,21 @@ function mostrarOnboardingNuevoUsuario({ navegar, toast, repetir = false } = {})
 
 function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres = false } = {}){
   const yaTienePlan = Boolean(estado.datos?.planes_estudio?.some((plan) => plan.materias?.length || plan.optativas_disponibles?.length));
+  // La importación inicial ahora tiene su propio flujo guiado, incluido
+  // Picture-in-Picture. No dibujar encima el tutorial antiguo: registra la
+  // continuación aquí para llevar a Semestres cuando el import real termine.
+  if (!posteriorImportacion && !yaTienePlan) {
+    window.continuarTutorialDespuesDeImportarPlan = () => {
+      const cfg = estado.datos?.configuracion;
+      if (cfg?.guia_plan_pendiente !== "plan") return;
+      cfg.onboarding_plan_en_blanco_pendiente = false;
+      cfg.guia_plan_pendiente = "semestres";
+      guardar();
+      navegar?.("semestres");
+      setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350);
+    };
+    return;
+  }
   const semestresIniciales = new Set((estado.datos?.semestres || []).map((s) => s.id));
   let semestreCreadoEnGuia = false, esperandoAlta = false, pasoAlta = -1;
   const marcarSemestresVisto = () => {
@@ -2087,11 +2222,11 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     { selector: botonGestionPlan, texto: "Ya tienes un plan. Para añadir otra carrera toca «Gestionar plan» (el botón resaltado)." },
     ...pasosSemestre,
   ] : [
-    { selector: contenedorOpcionesPlan, etiqueta: "Importar mi plan", blanco: true, texto: "Tienes dos caminos: empezar en blanco y agregar tus materias a mano, una por una, o importar un plan que ya tengas hecho. Elige el que prefieras." },
-    { selector: grupoMetodosImportar, blanco: true, texto: "Importa tu plan ya hecho: elige Pegar link, Adjuntar PDF/Imagen o Tomar foto (los botones resaltados) y luego envíalo a Claude para que lo convierta al formato CSV. Si prefieres hacerlo a mano, toca «Empezar en blanco»." },
-    { selector: () => document.getElementById("btn-enviar-import-claude"), texto: "Pulsa Enviar a Claude y sigue la guía para adjuntar tu plan. Cuando Claude devuelva el CSV, vuelve a esta app." },
-    { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia el bloque CSV completo, desde CARRERA hasta la última materia, y pégalo aquí. Luego toca Importar." },
-    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^(importar|importa|import)$/i.test(b.textContent.trim())), texto: "Pulsa Importar para guardar y revisar las materias. Cuando termine, la guía te llevará a Semestres para continuar." },
+    { selector: contenedorOpcionesPlan, etiqueta: "Importar mi plan", blanco: true, texto: "Elige cómo tienes tu plan: puedes usar un enlace público, un PDF o fotos. Si todavía no tienes el documento, también puedes empezar en blanco. Te acompaño en cada paso." },
+    { selector: grupoMetodosImportar, blanco: true, texto: "Para una página pública, elige «Pegar link». Si tienes un archivo, elige «Adjuntar PDF/Imagen». Si tienes fotos o capturas, usa «Tomar capturas»: Wapper las reúne en un PDF para que Claude pueda leerlas." },
+    { selector: () => estado.modoImportacion === "capturas" ? [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /convertir imágenes a pdf|convert images to pdf|convertir les images en pdf|converti.*pdf/i.test(b.textContent)) : document.getElementById("btn-enviar-import-claude"), texto: "Ahora prepararás el plan con Claude. Copia la instrucción, abre Claude y adjunta el PDF o envíale el enlace. Sigue los pasos con calma; al terminar, vuelve aquí con la respuesta." },
+    { selector: () => document.getElementById("textarea-csv-importar"), texto: "Copia la respuesta completa de Claude y pégala aquí. Incluye las líneas de carrera, el encabezado CSV y todas las materias para que no falte información." },
+    { selector: () => [...document.querySelectorAll("#seccion-plan-estudios button")].find((b) => /^(importar|importa|import)$/i.test(b.textContent.trim())), texto: "Toca «Importar» para guardar el plan y revisar las materias. Después te guiaré a Semestres para que matricules lo que cursas ahora." },
   ];
   let i = 0;
   const pop = document.createElement("aside"); pop.className = "guia-plan-flotante"; pop.setAttribute("role", "dialog"); document.body.append(pop);
@@ -2128,7 +2263,7 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
   };
   const pintar = () => {
     if (i >= pasos.length) { cerrar({ continuarSemestres: flujoSemestre }); return; }
-    if (!posteriorImportacion && !yaTienePlan && i >= 2 && !document.getElementById("textarea-csv-importar")) {
+    if (!posteriorImportacion && !yaTienePlan && i >= 2 && !document.getElementById("textarea-csv-importar") && estado.modoImportacion !== "capturas") {
       const link = grupoMetodosImportar()?.querySelector("button");
       if (link) link.click(); setTimeout(pintar, 80); return;
     }
@@ -2138,14 +2273,20 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     resaltado?.scrollIntoView({ behavior: "smooth", block: "center" });
     resaltador.apuntar(resaltado, paso.selector); // anillo + bloqueo de todo lo demás (solo si hay objetivo)
     pop.replaceChildren();
-    const titulo = document.createElement("strong"); titulo.textContent = `${i + 1} / ${pasos.length}`;
-    const p = document.createElement("p"); p.textContent = traducirTextoInterfaz(paso.texto);
-    pop.append(titulo, p);
+    const cabecera = document.createElement("div"); cabecera.className = "guia-plan-cabecera";
+    const titulo = document.createElement("strong"); titulo.textContent = traducirTextoInterfaz(paso.etiqueta || "Importar tu plan");
+    const contador = document.createElement("span"); contador.className = "guia-plan-contador"; contador.textContent = `${i + 1} / ${pasos.length}`;
+    cabecera.append(titulo, contador);
+    const progreso = document.createElement("div"); progreso.className = "guia-plan-progreso"; progreso.setAttribute("role", "progressbar"); progreso.setAttribute("aria-label", traducirTextoInterfaz("Progreso de importación")); progreso.setAttribute("aria-valuemin", "0"); progreso.setAttribute("aria-valuemax", String(pasos.length)); progreso.setAttribute("aria-valuenow", String(i + 1));
+    const avance = document.createElement("span"); avance.style.width = `${((i + 1) / pasos.length) * 100}%`; progreso.append(avance);
+    const p = document.createElement("p"); p.textContent = traducirTextoInterfaz(i === 2 && estado.modoImportacion === "capturas" ? "Primero convierte tus fotos a PDF. Toca «Convertir imágenes a PDF», elige las capturas y confirma. Al volver aquí, continúa para preparar el archivo con Claude." : paso.texto);
+    pop.append(cabecera, progreso, p);
     const acciones = document.createElement("div"); acciones.className = "row";
     const seguir = document.createElement("button"); seguir.className = "btn btn-primary";
     seguir.textContent = traducirTextoInterfaz(paso.etiqueta || (paso.accion === "abrirAlta" ? "Abrir formulario" : i === pasos.length - 1 ? "Entendido" : "Siguiente"));
     seguir.onclick = () => {
       if (paso.accion === "navegar") { marcarSemestresVisto(); navegar?.("semestres"); i++; setTimeout(pintar, 350); return; }
+      if (i === 2 && estado.modoImportacion === "capturas" && !document.getElementById("textarea-csv-importar")) { return; }
       if (paso.accion === "abrirAlta") {
         marcarSemestresVisto(); pasoAlta = i; resaltador.ocultar();
         (resaltado || botonRegistrarSemestre())?.click(); pop.classList.add("oculto"); esperandoAlta = true;
@@ -2157,13 +2298,23 @@ function iniciarGuiaPlan({ navegar, posteriorImportacion = false, yaEnSemestres 
     acciones.append(seguir);
     if (paso.blanco) {
       const enBlanco = document.createElement("button"); enBlanco.className = "btn btn-secondary"; enBlanco.textContent = traducirTextoInterfaz("Empezar en blanco");
-      enBlanco.onclick = () => { const b = botonDesdeCero(); cerrar(); b?.click(); };
+      enBlanco.onclick = () => {
+        const c = estado.datos?.configuracion;
+        // Solo el recorrido inicial deja una continuación pendiente. Si la
+        // persona eligió un plan vacío, la guia de Semestres arranca al crear
+        // su primera materia manual; las visitas desde Ajustes no redirigen.
+        if (c?.onboarding_v1_completado === true && c.guia_plan_pendiente === "plan") {
+          c.onboarding_plan_en_blanco_pendiente = true;
+          guardar();
+        }
+        const b = botonDesdeCero(); cerrar(); b?.click();
+      };
       acciones.append(enBlanco);
     }
     acciones.append(saltar); pop.append(acciones); pop.classList.remove("oculto"); evitarSolape(pop, resaltado);
   };
   pintar();
-  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); { const c = estado.datos?.configuracion; if (c) { c.guia_plan_pendiente = "semestres"; guardar(); } } navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
+  window.continuarTutorialDespuesDeImportarPlan = () => { if (!cerrarGuiaPlanActiva) return; marcarSemestresVisto(); cerrar(); { const c = estado.datos?.configuracion; if (c) { c.onboarding_plan_en_blanco_pendiente = false; c.guia_plan_pendiente = "semestres"; guardar(); } } navegar?.("semestres"); setTimeout(() => iniciarGuiaPlan({ navegar, posteriorImportacion: true, yaEnSemestres: true }), 350); };
 }
 
 function inicializarTutorialDesdeAjustes({ navegar, toast } = {}) {
@@ -2204,8 +2355,8 @@ const SELECTORES_GUIA_SECCION = {
     () => filaDocenteComunidad() || [...document.querySelectorAll("#seccion-comunidad .pill-group")][2] || document.getElementById("seccion-comunidad"),
   ],
  finanzas: [
-    () => document.querySelector("#seccion-finanzas .finanzas-tabs-contenedor") || document.getElementById("seccion-finanzas"),
-    () => [...document.querySelectorAll("#seccion-finanzas button")].find(b => /agregar|nuevo|gasto|ingreso/i.test(b.textContent)) || document.getElementById("seccion-finanzas"),
+    () => [...document.querySelectorAll("[data-finanzas-nav]")].find((n) => n.getClientRects().length) || document.getElementById("seccion-finanzas"),
+    () => [...document.querySelectorAll(".finanzas-nav-cta,.finanzas-bar-fab")].find((b) => b.getClientRects().length) || document.getElementById("seccion-finanzas"),
     () => document.getElementById("finanzas-contenido") || document.getElementById("seccion-finanzas"),
   ],
   asistente: [
@@ -2216,14 +2367,14 @@ const SELECTORES_GUIA_SECCION = {
   configuracion: [
     () => document.getElementById("ajuste-tamano-texto"),
     () => seccionNavegacionAjustes(),
-    () => document.getElementById("btn-repetir-tutorial"),
-    () => document.getElementById("btn-repetir-tutorial"),
+    () => botonTutorialAjustes(),
+    () => document.querySelector("#seccion-configuracion h1, #seccion-configuracion h2") || null,
   ],
 };
 
 function iniciarGuiaSeccion(info) {
   const objetivos=SELECTORES_GUIA_SECCION[info.id]||[];
-  let indice=0,resaltado=null;const resaltador=crearResaltador();
+  let indice=0,resaltado=null;const tarjetasAbiertas=new WeakSet();const resaltador=crearResaltador();
   const pop=document.createElement("aside");pop.className="guia-plan-flotante guia-seccion-flotante";pop.setAttribute("role","dialog");pop.setAttribute("aria-live","polite");pop.setAttribute("aria-label",`${traducirTextoInterfaz("Tutorial")}: ${traducirTextoInterfaz(info.nombre)}`);document.body.append(pop);
   const cerrar=()=>{resaltador.quitar();pop.remove();};
   const total=info.puntos.length+(info.id==="asistente"?1:0);
@@ -2249,6 +2400,9 @@ function iniciarGuiaSeccion(info) {
   const pintar=()=>{
     if(indice>=info.puntos.length){cerrar();return;}
     const buscar=objetivos[indice];resaltado=buscar?.()||document.getElementById(`seccion-${info.id}`);
+    // Si el control está dentro de una tarjeta de Ajustes colapsada, se abre y se vuelve a intentar (si no, no hay dónde hacer scroll).
+    const tarjeta=resaltado?.closest?.(".ajuste-seccion.colapsada");
+    if(tarjeta&&!tarjetasAbiertas.has(tarjeta)){tarjetasAbiertas.add(tarjeta);tarjeta.querySelector(".ajuste-seccion-cabecera")?.click();setTimeout(pintar,380);return;}
     resaltado?.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});resaltador.apuntar(resaltado,()=>buscar?.()||document.getElementById(`seccion-${info.id}`));
     const esUltimoWapper=info.id==="asistente"&&indice===info.puntos.length-1;
     const botones=[];
@@ -2259,17 +2413,122 @@ function iniciarGuiaSeccion(info) {
   pintar();
 }
 
+/* Recorrido específico de Finanzas 2.0. Cambia de pestaña por el control real,
+   omite módulos opcionales apagados y también enlaza los ajustes relacionados. */
+const PASOS_GUIA_FINANZAS = [
+  { tab:"resumen", target:()=>document.querySelector("#finanzas-contenido .resumen-hero")||document.getElementById("finanzas-contenido"), texto:"Inicio resume cuánto tienes, lo que viene pronto y tus metas. Disponible considera el horizonte elegido y los compromisos configurados; abre su desglose si quieres ver qué se cuenta." },
+  { tab:"semestres", target:()=>document.getElementById("finanzas-contenido"), texto:"Semestres reúne matrícula y becas por periodo. Puedes repartir el total en cuotas, ajustar fechas y confirmar cada una cuando se realice; asociar el semestre no es obligatorio para los movimientos cotidianos." },
+  { tab:"plan", target:()=>document.getElementById("finanzas-contenido"), texto:"Plan sirve para anticipar pagos e ingresos con fecha. Lo pendiente alimenta los próximos días de Inicio; al confirmar, se registra el movimiento para evitar contarlo dos veces." },
+  { tab:"gastos-u", target:()=>document.querySelector("#finanzas-contenido h3")?.parentElement||document.getElementById("finanzas-contenido"), texto:"Movimientos es el registro central: gastos, ingresos, ahorros, ajustes de saldo, préstamos y traspasos. Añade fecha, categoría y cuenta cuando aplique; usa las vistas por tipo o cronológica para revisar el historial." },
+  { tab:"gastos-u", target:()=>[...document.querySelectorAll(".finanzas-nav-cta,.finanzas-bar-fab")].find((b)=>b.getClientRects().length)||document.getElementById("finanzas-contenido"), texto:"Añadir movimiento abre el registro rápido. Para más campos, abre el formulario completo: puedes indicar categoría, cuenta, semestre, meta o recurrencia. Las plantillas usan tus registros recientes como atajos." },
+  { tab:"metas", target:()=>document.getElementById("finanzas-contenido"), texto:"Metas separa objetivos de ahorro y límites de gasto por categorías. Los aportes programados son recordatorios o planes: no mueven dinero automáticamente. Si configuras un reparto de ingresos para una meta, la app propone cuánto separar y tú confirmas el aporte." },
+  { tab:"presupuesto", target:()=>document.getElementById("finanzas-contenido"), texto:"Presupuesto crea límites para categorías y periodos. El gasto registrado consume el presupuesto y puedes consultar el resumen mensual para ajustar tus topes." },
+  { tab:"gastos-estudiantiles", target:()=>document.getElementById("finanzas-contenido"), texto:"Beneficios reúne apoyos y gastos estudiantiles vinculados a tu vida académica. Usa Semestres para pagos de matrícula y becas; aquí encuentras el seguimiento de beneficios relacionados." },
+  { tab:"cuentas", target:()=>document.getElementById("finanzas-contenido"), texto:"Cuentas separa tu efectivo, bancos y tarjetas, incluso en distintas divisas. Los traspasos mueven saldo entre cuentas sin contarse como ingreso o gasto. Activa el módulo desde Ajustes > Finanzas." },
+  { tab:"deudas", target:()=>document.getElementById("finanzas-contenido"), texto:"Deudas registra lo que prestas o te prestan y el saldo pendiente. También puedes dividir un gasto para saber qué parte te corresponde y qué parte debe otra persona. Es un módulo opcional de Ajustes > Finanzas." },
+  { ajustes:"finanzas", target:()=>document.getElementById("ajustes-finanzas-modulos"), texto:"Aquí eliges un perfil o combinas módulos. Apagar uno solo lo oculta: conserva sus datos. Cuentas, Deudas y los consejos al activar funciones son opcionales. La moneda preferida define el símbolo general; cada cuenta conserva su propia divisa." },
+  { ajustes:"datos", target:()=>{const s=[...document.querySelectorAll("#seccion-configuracion .ajuste-seccion")].find(x=>/^datos$/i.test(x.querySelector("h2")?.textContent.trim()||""));return s?.querySelector(".ajuste-seccion-cuerpo")||s;}, texto:"En Ajustes > Datos de Finanzas puedes importar desde archivo o texto, exportar CSV o respaldo, y administrar formatos para leer mensajes del banco. Revisa la vista previa y confirma la importación; los formatos ayudan a interpretar, no conectan tu banco." },
+];
+
+function iniciarGuiaFinanzas() {
+  const tabs = [...document.querySelectorAll(".finanzas-nav-item[data-valor]")];
+  if (!tabs.length || document.querySelector(".guia-seccion-flotante,.guia-plan-flotante,.tutorial-seccion-overlay")) return false;
+  const idsVisibles = new Set(tabs.map((b)=>b.dataset.valor));
+  const pasos = PASOS_GUIA_FINANZAS.filter((p)=>!p.tab||idsVisibles.has(p.tab));
+  let indice=0, resaltado=null, cerrarTimer=0;
+  const resaltador=crearResaltador();
+  const pop=document.createElement("aside");pop.className="guia-plan-flotante guia-seccion-flotante";pop.setAttribute("role","dialog");pop.setAttribute("aria-live","polite");pop.setAttribute("aria-label",`${traducirTextoInterfaz("Tutorial")}: Finanzas`);document.body.append(pop);
+  const cerrar=()=>{clearTimeout(cerrarTimer);marcarVista();resaltador.quitar();pop.remove();};
+  const marcarVista=()=>{const c=estado.datos?.configuracion;if(!c)return;c.tutoriales_secciones_vistas=c.tutoriales_secciones_vistas||{};c.tutoriales_secciones_vistas.finanzas=true;guardar();};
+  const btn=(txt,clase,fn)=>{const b=document.createElement("button");b.type="button";b.className=`btn ${clase}`;b.textContent=traducirTextoInterfaz(txt);b.onclick=fn;return b;};
+  const mostrar=(paso)=>{
+    resaltado=paso.target?.()||document.getElementById("seccion-finanzas");
+    resaltado?.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});
+    resaltador.apuntar(resaltado,()=>paso.target?.()||document.getElementById("seccion-finanzas"));
+    pop.replaceChildren();
+    const titulo=document.createElement("strong");titulo.textContent=`Finanzas · ${indice+1}/${pasos.length}`;
+    const texto=document.createElement("p");texto.textContent=traducirTextoInterfaz(paso.texto);
+    const acciones=document.createElement("div");acciones.className="guia-seccion-acciones";
+    if(indice>0)acciones.append(btn("Anterior","btn-secondary",()=>{indice--;pintar();}));
+    acciones.append(btn(indice===pasos.length-1?"Terminar":"Siguiente","btn-primary",()=>{indice++;pintar();}),btn("Saltar guía","btn-secondary",cerrar));
+    pop.append(titulo,texto,acciones);evitarSolape(pop,resaltado);
+  };
+  const abrirAjustes=(paso)=>{
+    window.mostrarSeccion?.("configuracion");
+    cerrarTimer=setTimeout(()=>{
+      const selector=paso.ajustes==="datos"
+        ? [...document.querySelectorAll("#seccion-configuracion .ajuste-seccion")].find(x=>/^datos$/i.test(x.querySelector("h2")?.textContent.trim()||""))
+        : [...document.querySelectorAll("#seccion-configuracion .ajuste-seccion")].find(x=>/^finanzas$/i.test(x.querySelector("h2")?.textContent.trim()||""));
+      if(selector?.classList.contains("colapsada")){selector.querySelector(".ajuste-seccion-cabecera")?.click();cerrarTimer=setTimeout(()=>mostrar(paso),300);return;}
+      mostrar(paso);
+    },300);
+  };
+  const pintar=()=>{
+    if(indice>=pasos.length){marcarVista();cerrar();return;}
+    const paso=pasos[indice];
+    if(paso.ajustes){abrirAjustes(paso);return;}
+    window.mostrarSeccion?.("finanzas");
+    const tab=tabs.find((b)=>b.dataset.valor===paso.tab);
+    if(tab&&!tab.classList.contains("active")){tab.click();cerrarTimer=setTimeout(()=>mostrar(paso),450);return;}
+    mostrar(paso);
+  };
+  marcarVista();pintar();return true;
+}
+
+/* Mini recorrido de Notas rápidas, anclado a sus controles visibles. */
+const PASOS_GUIA_NOTAS = [
+  { target:()=>document.querySelectorAll("#seccion-notas .notas-cab-acciones .nt-btn-circulo")[0]||document.querySelector("#seccion-notas .notas-vacio"), texto:"Toca + para crear una nota. Escribe una idea o pendiente: los cambios se guardan mientras editas y se sincronizan cuando vuelve la conexión; también puedes seguir trabajando sin internet." },
+  { target:()=>document.querySelector("#seccion-notas .notas-grupos .nota-card")||document.querySelector("#seccion-notas .notas-vacio"), texto:"Al editar una nota puedes usar negrita y listas con casillas, dibujar y añadir figuras o stickers. En Herramientas puedes deshacer cambios y convertir escritura a texto si el navegador o Gemini lo permiten." },
+  { target:()=>document.querySelectorAll("#seccion-notas .notas-cab-acciones .nt-btn-circulo")[0], texto:"En el editor puedes cambiar el color, fijar una nota y agregar un vencimiento. Al vencer, la nota pasa a la Papelera; en Ajustes puedes elegir si las nuevas notas reciben una fecha por defecto." },
+  { target:()=>document.getElementById("notas-busqueda")||document.getElementById("seccion-notas"), texto:"Busca palabras en títulos y contenido. Los resultados se actualizan mientras escribes." },
+  { target:()=>document.querySelector("#seccion-notas .notas-filtros")||document.getElementById("seccion-notas"), texto:"Filtra por color o por notas con vencimiento. Los filtros se pueden combinar con la búsqueda." },
+  { target:()=>document.querySelector("#seccion-notas .nt-filtros-der")||document.querySelector("#seccion-notas .notas-filtros"), texto:"Cambia entre cuadrícula y lista, ordena por fecha o de forma manual. Las notas fijadas aparecen arriba y puedes arrastrarlas para acomodarlas." },
+  { target:()=>document.querySelector("#seccion-notas .nota-card .nota-card-top")||document.querySelector("#seccion-notas .notas-grupos"), texto:"Toca una tarjeta para verla como nota flotante y elige Editar para abrir el editor. Sus acciones también permiten fijarla, duplicarla, compartirla, enviarla a Wapper, eliminarla o dejarla flotante; PiP abre una ventana aparte si el navegador lo admite." },
+  { target:()=>document.querySelector("#seccion-notas .notas-grupos")||document.getElementById("seccion-notas"), texto:"Para seleccionar varias, mantén pulsada una tarjeta en el teléfono; en computadora puedes arrastrar sobre un espacio vacío. Clic derecho abre las acciones de una nota. La barra de selección permite aplicar acciones en grupo." },
+  { target:()=>document.querySelector("#seccion-notas .nota-card .nota-card-actions")||document.querySelector("#seccion-notas .notas-cab-acciones"), texto:"Compartir ofrece texto, imagen o un archivo Wapper Note; puedes importar archivos Wapper Note desde Ajustes. Para compartir desde otras apps necesitas la PWA instalada en Android. Enviar a Wapper requiere configurar tu clave de Gemini." },
+  { target:()=>document.querySelectorAll("#seccion-notas .notas-cab-acciones .nt-btn-circulo")[1]||document.getElementById("seccion-notas"), texto:"En Ajustes personalizas colores, vista, fechas y el comportamiento de las notas, importas archivos Wapper Note y abres la Papelera. Allí puedes restaurar notas durante 30 días o eliminarlas definitivamente." },
+];
+
+function iniciarGuiaNotas() {
+  const raiz=document.getElementById("seccion-notas");
+  if(!raiz||document.querySelector(".guia-seccion-flotante,.guia-plan-flotante,.tutorial-seccion-overlay"))return false;
+  let indice=0,resaltado=null;
+  const resaltador=crearResaltador();
+  const pop=document.createElement("aside");pop.className="guia-plan-flotante guia-seccion-flotante";pop.setAttribute("role","dialog");pop.setAttribute("aria-live","polite");pop.setAttribute("aria-label",`${traducirTextoInterfaz("Tutorial")}: Notas rápidas`);document.body.append(pop);
+  const marcarVista=()=>{const c=estado.datos?.configuracion;if(!c)return;c.tutoriales_secciones_vistas=c.tutoriales_secciones_vistas||{};c.tutoriales_secciones_vistas.notas=true;guardar();};
+  const cerrar=()=>{marcarVista();resaltador.quitar();pop.remove();};
+  const btn=(txt,clase,fn)=>{const b=document.createElement("button");b.type="button";b.className=`btn ${clase}`;b.textContent=traducirTextoInterfaz(txt);b.onclick=fn;return b;};
+  const pintar=()=>{
+    if(indice>=PASOS_GUIA_NOTAS.length){cerrar();return;}
+    const paso=PASOS_GUIA_NOTAS[indice];resaltado=paso.target()||raiz;
+    resaltado.scrollIntoView({behavior:"smooth",block:"center",inline:"nearest"});
+    resaltador.apuntar(resaltado,()=>paso.target()||document.getElementById("seccion-notas"));
+    pop.replaceChildren();
+    const titulo=document.createElement("strong");titulo.textContent=`Notas rápidas · ${indice+1}/${PASOS_GUIA_NOTAS.length}`;
+    const texto=document.createElement("p");texto.textContent=traducirTextoInterfaz(paso.texto);
+    const acciones=document.createElement("div");acciones.className="guia-seccion-acciones";
+    if(indice>0)acciones.append(btn("Anterior","btn-secondary",()=>{indice--;pintar();}));
+    acciones.append(btn(indice===PASOS_GUIA_NOTAS.length-1?"Terminar":"Siguiente","btn-primary",()=>{indice++;pintar();}),btn("Saltar guía","btn-secondary",cerrar));
+    pop.append(titulo,texto,acciones);evitarSolape(pop,resaltado);
+  };
+  marcarVista();pintar();return true;
+}
+
 function mostrarTutorialPrimeraVez(seccion) {
   if(reanudarGuiaPendiente(window.mostrarSeccion))return true;
   const cfg=estado.datos?.configuracion;
   const info=SECCIONES_TUTORIAL.find(s=>s.id===seccion);
   if(PREVIEW_DEMO||!cfg||cfg.onboarding_v1_completado===false||!info||cfg.tutoriales_secciones_vistas?.[seccion]||document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante"))return false;
   cfg.tutoriales_secciones_vistas=cfg.tutoriales_secciones_vistas||{};cfg.tutoriales_secciones_vistas[seccion]=true;guardar();
+  return mostrarVentanaSeccion(info);
+}
+// Ventana «Conoce <sección>»: qué hace la sección + «Guía» (paso a paso) o «Entendido». La usan el aviso de primera vez y el doble toque.
+function mostrarVentanaSeccion(info) {
   const overlay=document.createElement("div");overlay.className="modal-overlay tutorial-seccion-overlay";overlay.setAttribute("role","dialog");overlay.setAttribute("aria-modal","true");
   const card=document.createElement("section");card.className="glass-card modal-card stack tutorial-seccion-card";const h=document.createElement("h2");h.textContent=`${traducirTextoInterfaz("Conoce")} ${traducirTextoInterfaz(info.nombre)}`;card.append(h);
   const lista=document.createElement("ul");lista.className="onboarding-lista";info.puntos.forEach(p=>lista.append(textoTutorial("li",p)));card.append(lista);
   const acciones=document.createElement("div");acciones.className="tutorial-seccion-acciones";
-  const tutorial=document.createElement("button");tutorial.type="button";tutorial.className="btn btn-secondary";tutorial.textContent=traducirTextoInterfaz("Guía");tutorial.title=traducirTextoInterfaz("Guía paso a paso para conocer esta sección");tutorial.onclick=()=>{overlay.remove();if(info.id==="plan-estudios")iniciarGuiaPlan({navegar:window.mostrarSeccion});else iniciarGuiaSeccion(info);};
+  const tutorial=document.createElement("button");tutorial.type="button";tutorial.className="btn btn-secondary";tutorial.textContent=traducirTextoInterfaz("Guía");tutorial.title=traducirTextoInterfaz("Guía paso a paso para conocer esta sección");tutorial.onclick=()=>{overlay.remove();if(info.id==="plan-estudios")iniciarGuiaPlan({navegar:window.mostrarSeccion});else if(info.id==="finanzas")iniciarGuiaFinanzas();else if(info.id==="notas")iniciarGuiaNotas();else iniciarGuiaSeccion(info);};
   const cerrar=document.createElement("button");cerrar.type="button";cerrar.className="btn btn-primary";cerrar.textContent=traducirTextoInterfaz("Entendido");cerrar.onclick=()=>overlay.remove();
   acciones.append(tutorial,cerrar);card.append(acciones);overlay.append(card);document.body.append(overlay);tutorial.focus();return true;
 }function textoTutorial(tag,value){const e=document.createElement(tag);e.textContent=traducirTextoInterfaz(value);return e;}
@@ -2280,7 +2539,7 @@ if (MODO_DEMO) {
   new MutationObserver(() => { if (!pendiente) pendiente = requestAnimationFrame(ocultarControlesDemo); }).observe(document.documentElement, { childList: true, subtree: true });
   ocultarControlesDemo();
 }
-/* ── Ayuda: doble toque en el título de una sección = volver a abrir la guía SOLO de esa sección ──
+/* ── Ayuda: doble toque en el título de una sección = abrir la ventana de esa sección (con el botón «Guía» para el paso a paso) ──
    Se instala sola al cargar el módulo. Detecta el doble toque por tiempo y distancia (con el dedo, «dblclick» no es fiable). */
 function seccionVisibleActual() {
   return SECCIONES_TUTORIAL.find((s) => { const n = document.getElementById(`seccion-${s.id}`); return n && !n.classList.contains("oculto") && n.getClientRects().length > 0; }) || null;
@@ -2302,10 +2561,11 @@ function infoSeccionPorEncabezado(el) {
   return null;
 }
 function abrirGuiaDeSeccion(info) {
-  if (document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante,.modal-overlay")) return;
+  // Ojo: index.html trae muchos .modal-overlay SIEMPRE en el DOM (con la clase «oculto»); solo cuentan los que están abiertos.
+  const modalAbierto = [...document.querySelectorAll(".modal-overlay")].some((m) => !m.classList.contains("oculto") && m.getClientRects().length > 0);
+  if (modalAbierto || document.querySelector(".onboarding-overlay,.tutorial-seccion-overlay,.guia-seccion-flotante,.guia-plan-flotante")) return;
   try { getSelection()?.removeAllRanges(); } catch (_) {}
-  if (info.id === "plan-estudios") iniciarGuiaPlan({ navegar: window.mostrarSeccion });
-  else iniciarGuiaSeccion(info);
+  mostrarVentanaSeccion(info);   // primero la ventana con lo que hace la sección; desde ahí se elige «Guía» o «Entendido»
 }
 if (!PREVIEW_DEMO && !window.__guiaEncabezadoInicializada) {
   window.__guiaEncabezadoInicializada = true;
@@ -2331,4 +2591,5 @@ if (!PREVIEW_DEMO && !window.__guiaEncabezadoInicializada) {
     previo = { t: ahora, x: ev.clientX, y: ev.clientY, id: info.id };
   }, true);
 }
-export { mostrarOnboardingNuevoUsuario, inicializarTutorialDesdeAjustes, mostrarTutorialPrimeraVez };
+window.iniciarGuiaFinanzas = iniciarGuiaFinanzas;
+export { mostrarOnboardingNuevoUsuario, inicializarTutorialDesdeAjustes, mostrarTutorialPrimeraVez, iniciarGuiaFinanzas };

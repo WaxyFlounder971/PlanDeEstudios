@@ -13,12 +13,13 @@ import { hoyIso } from "../core/finanzas/finanzas-modelo.js";
 import { MONEDAS_DISPONIBLES } from "../core/schema.js";
 import { monedaPrincipal } from "../core/finanzas/finanzas-cuentas-base.js";
 import { parsearMontoTexto as parsearMonto } from "../core/finanzas/finanzas-texto.js";
-import { quitarMovimiento } from "../core/finanzas/finanzas-registro.js";
+import { crearGuardReentrada, quitarMovimiento } from "../core/finanzas/finanzas-registro.js";
 import {
   archivarCuenta, buscarCuenta, crearCuenta, crearTraspaso, editarCuenta, eliminarCuenta, listarCuentas, movimientosDeCuenta, resumirCuentas,
 } from "../core/finanzas/finanzas-cuentas.js";
 import { formatearFechaLarga, renderizarFinanzas } from "./finanzas.js";
-import { abrirCapaNombrada, boton, campo, entrada, filaBotones, insignia, lineaError, mostrar, parrafo, selector } from "./finanzas-ui-basico.js";
+import { abrirCapaNombrada, boton, campo, entrada, filaBotones, hacerTarjetaTocable, insignia, lineaError, mostrar, parrafo, selector } from "./finanzas-ui-basico.js";
+import { crearAvisoRepararTraspasos } from "./finanzas-reparar-traspasos-ui.js";
 
 const TIPOS = [["efectivo", "Efectivo"], ["banco", "Cuenta de banco o débito"], ["credito", "Tarjeta de crédito"], ["otra", "Otra"]];
 const ICONO = { efectivo: "💵", banco: "🏦", credito: "💳", otra: "👛" };
@@ -28,6 +29,7 @@ const MOTIVOS = {
   moneda_bloqueada: "La divisa no se puede cambiar si la cuenta ya tiene movimientos. Crea otra cuenta.", tiene_movimientos: "Tiene movimientos: archívala en lugar de eliminarla.",
   tiene_saldo: "Tiene un saldo inicial: ponlo en cero o archívala.", misma_cuenta: "Elige dos cuentas distintas.", monto: "Escribe un monto mayor que cero.",
   monto_destino: "Escribe cuánto llegó a la otra cuenta (la app no convierte).", fecha: "La fecha no es válida.", no_existe: "Esa cuenta ya no existe.", modulo_apagado: "Enciende Cuentas en Ajustes.",
+  sin_asignar_insuficiente: "En Sin asignar no hay ese dinero para pasar. Si está en negativo, asigna esos movimientos a su cuenta en lugar de pasar dinero.",
 };
 const textoMotivo = (r) => t(MOTIVOS[r.motivo] || "No se pudo guardar.");
 const refrescar = () => { renderizarFinanzas(); };
@@ -58,10 +60,10 @@ function tarjetaCuenta(x, alCambiar) {
   const der = document.createElement("div"); der.className = "row"; der.style.cssText = "gap:8px; align-items:center; flex-shrink:0; flex-wrap:nowrap;";
   der.append(
     x.saldo === null ? insignia(`${t("Gastado")}: ${formatearEn(x.gastado, c.moneda)}`, "neutral") : insignia(formatearEn(x.saldo, c.moneda), x.saldo < 0 ? "warning" : "info"),
-    boton(t("Abrir"), "btn btn-secondary", () => abrirDetalleCuenta(c.id, { alCambiar })),
+    (() => { const chevron = document.createElement("span"); chevron.className = "fin-chevron"; chevron.setAttribute("aria-hidden", "true"); return chevron; })(),
   );
   tarjeta.append(izq, der);
-  return tarjeta;
+  return hacerTarjetaTocable(tarjeta, () => abrirDetalleCuenta(c.id, { alCambiar }));
 }
 
 function renderizarPestanaCuentas(contenedor) {
@@ -85,10 +87,10 @@ function renderizarPestanaCuentas(contenedor) {
   );
   contenedor.append(cab, acciones);
 
-  const sin = document.createElement("div"); sin.className = "glass-card row-between"; sin.style.cssText = "gap:10px; align-items:center;";
+  const sin = document.createElement("div"); sin.className = "glass-card row-between fin-sin-asignar"; sin.style.cssText = "gap:10px; align-items:center;";
   const txt = document.createElement("div"); txt.style.minWidth = "0";
   const sn = document.createElement("p"); sn.style.cssText = "margin:0; font-weight:600;"; sn.textContent = "📥 " + t("Sin asignar"); txt.appendChild(sn);
-  txt.appendChild(parrafo("Lo que tenías y los movimientos sin cuenta. Reparte este dinero con Pasar dinero.", { tamano: "0.78rem" }));
+  txt.appendChild(parrafo(r.sinAsignar < 0 ? "Gastos sin cuenta que superan lo que tenías. Edita esos movimientos y asígnalos a su cuenta para dejarlo en 0." : "Lo que tenías y los movimientos sin cuenta. Reparte este dinero con Pasar dinero.", { tamano: "0.78rem" }));
   sin.append(txt, insignia(formatearEn(r.sinAsignar, r.principal), r.sinAsignar < 0 ? "warning" : "info"));
   contenedor.appendChild(sin);
 
@@ -102,6 +104,7 @@ function renderizarPestanaCuentas(contenedor) {
     archivadas.forEach((x) => det.appendChild(tarjetaCuenta(x, alCambiar)));
     contenedor.appendChild(det);
   }
+  const avisoReparar = crearAvisoRepararTraspasos(); if (avisoReparar) contenedor.appendChild(avisoReparar);
 }
 
 /* ===================== Cuenta nueva o editada ===================== */
@@ -155,20 +158,26 @@ function abrirTraspaso({ alGuardar, origenId = null, destinoId = null, monto = "
   const etiquetaMonto = campo("Monto", montoEl);
   const fecha = entrada(hoyIso(), "", 0, "date"); const nota = entrada("", t("Opcional"), 120);
   const ayuda = parrafo("Pasar dinero entre tus cuentas no es un gasto ni un ingreso.", { tamano: "0.78rem" });
+  const ayudaNoAfecta = parrafo("Esa cuenta no afecta tu saldo: el dinero que pases a ella sale de Mi dinero.", { tamano: "0.78rem" });
+  const guardTraspaso = crearGuardReentrada();
   const error = lineaError();
   const pintar = () => {
     const distinta = monedaDe(de.value) !== monedaDe(a.value);
     campoLlega.style.display = distinta ? "" : "none";
     campoLlega.querySelector(".form-label").textContent = `${t("Cuánto llegó")} (${monedaDe(a.value)})`;
     etiquetaMonto.querySelector(".form-label").textContent = `${t("Monto")} (${monedaDe(de.value)})`;
+    const destino = a.value ? buscarCuenta(estado.datos, a.value) : null;
+    ayudaNoAfecta.classList.toggle("oculto", !(destino && destino.afecta_saldo === false));
   };
   de.addEventListener("change", pintar); a.addEventListener("change", pintar); pintar();
   const guardar = boton(t("Guardar"), "btn btn-primary", () => {
-    const r = crearTraspaso(estado.datos, { origenId: de.value || null, destinoId: a.value || null, monto: parsearMonto(montoEl.value), montoDestino: parsearMonto(llega.value), fecha: fecha.value, nota: nota.value, nombre });
-    if (!r.ok) { mostrar(error, textoMotivo(r)); return; }
-    guardado(); cerrar(); mostrarToast(t("Guardado")); (alGuardar || refrescar)();
+    guardTraspaso(() => {
+      const r = crearTraspaso(estado.datos, { origenId: de.value || null, destinoId: a.value || null, monto: parsearMonto(montoEl.value), montoDestino: parsearMonto(llega.value), fecha: fecha.value, nota: nota.value, nombre });
+      if (!r.ok) { mostrar(error, textoMotivo(r)); return; }
+      guardado(); cerrar(); mostrarToast(t("Guardado")); (alGuardar || refrescar)();
+    });
   });
-  caja.append(campo("De", de), campo("Para", a), etiquetaMonto, campoLlega, campo("Fecha", fecha), campo("Nota", nota), ayuda, error, filaBotones(boton(t("Cancelar"), "btn btn-secondary", cerrar), guardar));
+  caja.append(campo("De", de), campo("Para", a), etiquetaMonto, campoLlega, campo("Fecha", fecha), campo("Nota", nota), ayuda, ayudaNoAfecta, error, filaBotones(boton(t("Cancelar"), "btn btn-secondary", cerrar), guardar));
   montoEl.focus();
 }
 

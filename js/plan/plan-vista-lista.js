@@ -201,7 +201,7 @@ function construirEncabezadoPlan(planPrincipal) {
   // construirBarraAcciones) — Añadir materia ahora solo aparece ahí y solo
   // mientras el modo edición está activo.
   const botones = document.createElement("div");
-  botones.className = "row";
+  botones.className = "row encabezado-plan-botones";
   botones.style.flexWrap = "wrap";
 
   const btnPlanes = document.createElement("button");
@@ -249,7 +249,7 @@ function construirBarraAcciones() {
   sec.className = "glass-card stack";
 
   const grupoOrden = document.createElement("div");
-  grupoOrden.className = "pill-group";
+  grupoOrden.className = "pill-group grupo-orden-plan"; // PATCH 9c: altura compartida con los botones del encabezado
   [
     { valor: "bloque", texto: "Ordenar por bloque" },
     { valor: "categoria", texto: "Ordenar por categoría" },

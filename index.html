@@ -1741,26 +1741,73 @@
 
 <!-- ===================== MODAL: Horario entre Amigos — panel principal (botón "Amigos" del header de Horario) ===================== -->
 <div id="modal-panel-amigos" class="modal-overlay oculto">
-  <div class="glass-card modal-card stack">
+  <div class="glass-card modal-card stack fm2-panel">
     <h2 style="margin:0;">Horario entre Amigos</h2>
-    <p class="muted">Compartí tu horario por un enlace de solo lectura, o gestioná lo que ya compartiste.</p>
-    <button type="button" id="btn-horario-conjunto" class="btn btn-primary btn-block oculto">Abrir Horario Conjunto</button>
-    <div class="row-between" style="width:100%; align-items:center;">
-      <button type="button" id="btn-ir-enlaces-generados" class="btn-icono-fantasma" title="Ver mis enlaces compartidos" aria-label="Ver mis enlaces compartidos" style="width:42px; height:42px;">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 2.93l-1.72 1.72"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.72-1.72"/></svg>
+
+    <button type="button" id="btn-horario-conjunto" class="fm2-conjunto oculto">
+      <span class="fm2-conjunto-top">
+        <span class="fm2-conjunto-icono" aria-hidden="true"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        <span class="fm2-conjunto-texto">
+          <span class="fm2-conjunto-titulo">Horario conjunto</span>
+          <span class="fm2-conjunto-sub" id="fm2-conjunto-activos"></span>
+        </span>
+        <svg class="fm2-conjunto-flecha" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+      </span>
+      <span class="fm2-preview" id="fm2-conjunto-preview" aria-hidden="true"></span>
+    </button>
+
+    <div class="fm2-acciones">
+      <button type="button" id="btn-compartir-horario" class="fm2-accion" aria-label="Compartir mi horario">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4"/></svg>
+        <span>Compartir</span>
       </button>
-      <button type="button" id="btn-compartir-horario" class="btn-icono-fantasma" title="Compartir mi horario" aria-label="Compartir mi horario" style="width:42px; height:42px;">
-        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.7 10.7 6.6-4.4M8.7 13.3l6.6 4.4"/></svg>
+      <button type="button" id="btn-ir-enlaces-generados" class="fm2-accion" aria-label="Ver mis enlaces compartidos">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.07 0l3-3A5 5 0 0 0 13 2.93l-1.72 1.72"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3A5 5 0 0 0 11 21.07l1.72-1.72"/></svg>
+        <span>Mis enlaces</span>
       </button>
     </div>
 
-    <div class="stack" style="gap:6px; margin-top:4px;">
-      <span class="form-label">Horarios Activos</span>
-      <p class="muted" style="font-size:0.76rem; margin:0;">Horarios de amigos que vinculaste a tu cuenta. Se superponen al tuyo como franjas de color; podés ocultarlos sin desvincularlos.</p>
-      <div id="lista-amigos-vinculados" class="stack" style="gap:6px;"></div>
+    <div class="stack" style="gap:8px;">
+      <div class="fm2-lista-encabezado"><span>Amigos</span><span id="fm2-amigos-conteo">0</span></div>
+      <div id="lista-amigos-vinculados" class="stack" style="gap:8px;"></div>
     </div>
   </div>
 </div>
+
+<style>
+/* Rediseño modal "Horario entre Amigos" - todo scoped con .fm2- */
+.fm2-panel{--fm2-radio:16px}
+.fm2-conjunto{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:12px;width:100%;padding:14px;border-radius:var(--fm2-radio);cursor:pointer;color:#fff;background:linear-gradient(135deg,var(--accent-1,#6366f1),var(--accent-2,#7c6df0));box-shadow:0 8px 24px rgba(0,0,0,.28)}
+.fm2-conjunto.oculto{display:none}
+.fm2-conjunto:focus-visible,.fm2-accion:focus-visible,.fm2-card:focus-visible,.fm2-icono:focus-visible,.fm2-switch:focus-visible{outline:2px solid var(--text-primary,#fff);outline-offset:2px}
+.fm2-conjunto-top{display:flex;align-items:center;gap:12px}
+.fm2-conjunto-icono{width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.fm2-conjunto-texto{display:flex;flex-direction:column;flex:1;min-width:0}
+.fm2-conjunto-titulo{font-weight:700;font-size:1.02rem}
+.fm2-conjunto-sub{font-size:.78rem;opacity:.85}
+.fm2-preview{display:flex;gap:1px;height:56px;border-radius:10px;overflow:hidden;background:rgba(0,0,0,.22)}
+.fm2-preview:empty{display:none}
+.fm2-preview-col{flex:1;position:relative;border-left:1px solid rgba(255,255,255,.08)}
+.fm2-preview-col:first-child{border-left:0}
+.fm2-preview-bloque{position:absolute;left:4px;right:4px;height:7px;border-radius:4px;box-shadow:0 0 0 1px rgba(255,255,255,.35)}
+.fm2-acciones{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.fm2-accion{display:flex;align-items:center;justify-content:center;gap:8px;padding:12px 8px;border-radius:14px;cursor:pointer;font:inherit;font-weight:600;font-size:.9rem;color:var(--text-primary);background:var(--bg-card,rgba(150,150,170,.08));border:1px solid var(--border-glass,rgba(150,150,170,.25))}
+.fm2-accion svg{color:var(--color-luz,currentColor)}
+.fm2-lista-encabezado{display:flex;justify-content:space-between;font-size:.78rem;color:var(--text-secondary,#999);padding:0 4px}
+.fm2-card{--c:#888;display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:14px;cursor:pointer;border:1.5px solid var(--c);background:color-mix(in srgb,var(--c) 14%,transparent);transition:background .15s,opacity .15s}
+.fm2-card.fm2-off{background:transparent;border-color:color-mix(in srgb,var(--c) 55%,transparent)}
+.fm2-card.fm2-off .fm2-avatar,.fm2-card.fm2-off .fm2-nombre{opacity:.55}
+.fm2-avatar{width:34px;height:34px;border-radius:50%;flex-shrink:0;background:var(--c);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.fm2-avatar img{width:100%;height:100%;object-fit:cover}
+.fm2-nombre{flex:1;min-width:0;font-weight:600;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fm2-icono{all:unset;box-sizing:border-box;width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text-primary)}
+.fm2-icono.fm2-peligro{color:#e05252}
+.fm2-switch{all:unset;box-sizing:border-box;width:42px;height:24px;border-radius:12px;cursor:pointer;position:relative;flex-shrink:0;background:rgba(150,150,170,.4);transition:background .15s}
+.fm2-switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s}
+.fm2-switch[aria-pressed="true"]{background:var(--c)}
+.fm2-switch[aria-pressed="true"]::after{transform:translateX(18px)}
+@media (prefers-reduced-motion:reduce){.fm2-card,.fm2-switch,.fm2-switch::after{transition:none}}
+</style>
 
 <!-- ===================== MODAL: Horario entre Amigos — aviso de privacidad obligatorio ===================== -->
 <div id="modal-aviso-privacidad-horario" class="modal-overlay oculto">

@@ -22,7 +22,7 @@ import { construirAnilloMeta, renderizarPestanaMetas } from "./finanzas-metas.js
 import { renderizarPestanaPlan } from "./finanzas-plan.js";
 import { construirSelectorPerfil } from "./finanzas-modulos-ui.js";
 import { INFO_SECCIONES_FINANZAS, configurarNavegacionFinanzas, ocultarNavegacionFinanzas } from "./finanzas-navegacion.js";
-import { construirBloquesInicio, construirBotonPrivacidad, hayProximos, montoVisible, privacidadActiva } from "./finanzas-inicio.js";
+import { construirBloquesInicio, construirBotonPrivacidad, construirTarjetaGuiaFinanzas, reabrirGuiaFinanzas, hayProximos, montoVisible, privacidadActiva } from "./finanzas-inicio.js";
 import { construirBloqueSobresEnRiesgo, pestanaPresupuestoVisible, renderizarPestanaPresupuesto } from "./finanzas-presupuesto.js";
 import { abrirAjustarSaldo, abrirRegistroRapido, construirPasoSaldoInicial } from "./finanzas-registro-rapido.js";
 import { renderizarPestanaSemestresFinanzas, abrirSelectorSemestreParaFinanzas, iniciarEdicionMovimientoFinanzas } from "./finanzas-semestres.js";
@@ -205,6 +205,12 @@ function actualizarNavegacionFinanzas() {
     activa: estado.finanzasVistaActiva,
     anadir: tiposDisponiblesRegistroRapido(estado.datos).length ? abrirNuevo : null,
     atajos,
+    alAbrirGuia: () => {
+      reabrirGuiaFinanzas();
+      estado.finanzasVistaActiva = "resumen";
+      renderizarFinanzas();
+      window.scrollTo({ top: 0, behavior: "auto" });
+    },
     alElegir: (id) => {
       if (estado.finanzasVistaActiva === id) return;
       estado.finanzasVistaActiva = id;
@@ -294,6 +300,9 @@ function construirResumenFinanzas() {
   const modulos = obtenerModulosFinanzas(estado.datos);
   const sec = document.createElement("section");
   sec.className = "stack";
+  // fix10: guía «Cómo funciona Finanzas» para quien llega por primera vez (se puede cerrar y reabrir desde Ajustes de Finanzas).
+  const guiaNuevos = construirTarjetaGuiaFinanzas();
+  if (guiaNuevos) sec.appendChild(guiaNuevos);
 
   const hayMetas = modulos.ahorros && (estado.datos.metas || []).some((m) => !m.archivada && m.tipo !== "gasto");
   if (totalBecas === 0 && totalGastado === 0 && totalIngresos === 0 && totales.saldoLiquido === 0 && !hayMetas && !hayProximos()) {
