@@ -803,6 +803,8 @@ function sincronizarHorarioAngosto() {
   const sec = document.getElementById("seccion-horario");
   const activo = Boolean(sec && !sec.classList.contains("oculto") && MQ_HORARIO_ANGOSTO.matches);
   document.body.classList.toggle("horario-angosto", activo);
+  const topbarEl = document.querySelector(".mobile-topbar");
+  if (activo && topbarEl) document.documentElement.style.setProperty("--horario-topbar-fin", Math.round(topbarEl.getBoundingClientRect().bottom) + "px");
   const destino = document.getElementById("topbar-horario");
   const header = document.getElementById("horario-header");
   const semestre = document.getElementById("horario-nombre-semestre");
@@ -819,7 +821,8 @@ function sincronizarHorarioAngosto() {
 
 // Barra inferior: marca la pestaña activa y copia el estado del "+" del encabezado (que se oculta en las vistas de amigos).
 function sincronizarBarraHorario() {
-  const enVistaAmigos = Boolean(estado.horarioModoConjunto || estado.horarioVistaIndividualAmigoFileId);
+  const panelAmigosAbierto = !document.getElementById("modal-panel-amigos")?.classList.contains("oculto");
+  const enVistaAmigos = Boolean(estado.horarioModoConjunto || estado.horarioVistaIndividualAmigoFileId || panelAmigosAbierto);
   const tabH = document.getElementById("btn-horario-tab-horario");
   const tabA = document.getElementById("btn-horario-barra-amigos");
   if (tabH) {
@@ -971,7 +974,7 @@ function renderizarHorarioInterno() {
   // se mide la posición real del contenedor y se usa TODO el espacio que
   // queda hasta el fondo - así el cuadro siempre llega hasta el final de la
   // pantalla sin tener que abrir el modo expandido.
-  const paddingInferior = (window.innerWidth <= 768 ? 16 : 28) + (window.innerWidth < 900 ? 80 : 0); // 80: barra inferior anclada (solo pantalla pequeña)
+  const paddingInferior = window.innerWidth < 900 ? (document.getElementById("horario-barra")?.offsetHeight || 64) + 2 : 28; // < 900px: alto de la barra inferior anclada
   const alturaDisponibleReal = window.innerHeight - contenedor.getBoundingClientRect().top - paddingInferior;
   const altoDisponible = Math.max(280, alturaDisponibleReal);
 
@@ -1808,7 +1811,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
   // arriba (switch + zoom), que en este modo NO es parte del área que
   // scrollea internamente.
   const contenedorRef = document.getElementById("horario-grid-contenedor");
-  const paddingInferior = (window.innerWidth <= 768 ? 16 : 28) + (window.innerWidth < 900 ? 80 : 0); // 80: barra inferior anclada (solo pantalla pequeña)
+  const paddingInferior = window.innerWidth < 900 ? (document.getElementById("horario-barra")?.offsetHeight || 64) + 2 : 28; // < 900px: alto de la barra inferior anclada
   const alturaDisponible = contenedorRef
     ? Math.max(240, window.innerHeight - contenedorRef.getBoundingClientRect().top - paddingInferior - 76)
     : 420;
@@ -2428,6 +2431,7 @@ function inicializarHorario() {
     document.getElementById(idBarra)?.addEventListener("click", () => document.getElementById(idOrig)?.click());
   });
   document.getElementById("btn-horario-tab-horario")?.addEventListener("click", () => {
+    if (typeof cerrarPanelAmigos === "function") cerrarPanelAmigos(); // el panel de Amigos es una sección: Horario lo cierra
     if (estado.horarioVistaIndividualAmigoFileId) desactivarVistaIndividualAmigo();
     else if (estado.horarioModoConjunto) desactivarModoConjunto();
   });
@@ -2435,6 +2439,10 @@ function inicializarHorario() {
   const seccionHorarioEl = document.getElementById("seccion-horario");
   if (seccionHorarioEl) new MutationObserver(sincronizarHorarioAngosto).observe(seccionHorarioEl, { attributes: true, attributeFilter: ["class"] });
   MQ_HORARIO_ANGOSTO.addEventListener("change", () => { sincronizarHorarioAngosto(); renderizarHorarioInterno(); });
+  // El panel de Amigos (en pantalla pequeña se ve como sección): al abrirlo/cerrarlo se actualiza la pestaña activa.
+  const panelAmigosEl = document.getElementById("modal-panel-amigos");
+  if (panelAmigosEl) new MutationObserver(() => { sincronizarHorarioAngosto(); sincronizarBarraHorario(); }).observe(panelAmigosEl, { attributes: true, attributeFilter: ["class"] });
+  window.addEventListener("resize", sincronizarHorarioAngosto);
   sincronizarHorarioAngosto();
   if (btnDescargar) {
     btnDescargar.addEventListener("click", descargarHorarioComoImagen);
