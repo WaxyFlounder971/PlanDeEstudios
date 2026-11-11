@@ -767,30 +767,27 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
   const nombreEl = document.getElementById("horario-nombre-semestre");
   const semanaEl = document.getElementById("horario-semana-actual");
   const fechaEl = document.getElementById("horario-fecha-actual");
-  const diasEl = document.getElementById("horario-dias-semana");
-  if (diasEl) diasEl.replaceChildren();
   if (!semestre) {
     if (nombreEl) nombreEl.textContent = "Sin semestres";
     if (semanaEl) semanaEl.textContent = "-";
     if (fechaEl) fechaEl.textContent = "";
-    if (diasEl) diasEl.hidden = true;
     return;
   }
-  if (diasEl) diasEl.hidden = false;
   if (nombreEl) nombreEl.textContent = semestre.nombre || "";
   if (semanaEl) semanaEl.textContent = `Semana ${numeroSemana}`;
   if (fechaEl) fechaEl.textContent = new Date().toLocaleDateString(obtenerLocaleInterfaz(), { day: "numeric", month: "short" });
-  if (diasEl) {
-    obtenerDiasOrdenados().forEach((dia) => {
-      const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
-      const celda = document.createElement("div");
-      celda.className = "muted";
-      celda.style.cssText = "padding:4px 1px; border-radius:8px; font-size:.68rem; line-height:1.25;";
-      if (esHoy(fecha)) { celda.style.color = "var(--color-luz)"; celda.style.background = "var(--accent-1-10)"; }
-      celda.innerHTML = `<span style="display:block;">${dia.abrevDefault}</span><strong style="display:block; color:var(--text-primary);">${fecha ? fecha.getDate() : "–"}</strong>`;
-      diasEl.appendChild(celda);
-    });
+}
+
+// Barra inferior: marca la pestaña activa (Horario = vista propia; Amigos = conjunto o individual de un amigo).
+function sincronizarBarraHorario() {
+  const enVistaAmigos = Boolean(estado.horarioModoConjunto || estado.horarioVistaIndividualAmigoFileId);
+  const tabH = document.getElementById("btn-horario-tab-horario");
+  const tabA = document.getElementById("btn-horario-amigos");
+  if (tabH) {
+    tabH.classList.toggle("on", !enVistaAmigos);
+    if (enVistaAmigos) tabH.removeAttribute("aria-current"); else tabH.setAttribute("aria-current", "page");
   }
+  if (tabA) tabA.classList.toggle("on", enVistaAmigos);
 }
 
 /* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */
@@ -896,6 +893,7 @@ function renderizarHorarioInterno() {
   cacheSemestre = semestre;
   cacheNumeroSemana = numeroSemana;
   renderizarHeaderHorario(semestre, numeroSemana);
+  sincronizarBarraHorario();
   cont.innerHTML = "";
 
   if (!semestre) {
@@ -930,7 +928,8 @@ function renderizarHorarioInterno() {
   // se mide la posición real del contenedor y se usa TODO el espacio que
   // queda hasta el fondo - así el cuadro siempre llega hasta el final de la
   // pantalla sin tener que abrir el modo expandido.
-  const paddingInferior = window.innerWidth <= 768 ? 16 : 28;
+  // + 72: reserva el alto de la barra inferior flotante (#horario-barra)
+  const paddingInferior = (window.innerWidth <= 768 ? 16 : 28) + 72;
   const alturaDisponibleReal = window.innerHeight - contenedor.getBoundingClientRect().top - paddingInferior;
   const altoDisponible = Math.max(280, alturaDisponibleReal);
 
@@ -1023,10 +1022,20 @@ function renderizarHorarioInterno() {
 
     const headerFila = document.createElement("div");
     headerFila.style.cssText = "display:flex;";
+    // Esquina superior izquierda (a nivel del primer día): botón Descargar, solo icono.
     const espaciador = document.createElement("div");
-    // 28px: mismo ancho que .horario-col-horas (ver construirColumnaHoras),
-    // para que este header quede alineado con la columna de horas de abajo.
-    espaciador.style.cssText = "width:28px; flex-shrink:0;";
+    // 28px: mismo ancho que .horario-col-horas (ver construirColumnaHoras).
+    espaciador.style.cssText = "width:28px; flex-shrink:0; display:flex; align-items:center; justify-content:center;";
+    const btnDescargar = document.createElement("button");
+    btnDescargar.type = "button";
+    btnDescargar.id = "btn-horario-descargar";
+    btnDescargar.className = "horario-descargar-icono";
+    btnDescargar.title = "Descargar horario como imagen";
+    btnDescargar.setAttribute("aria-label", "Descargar horario como imagen");
+    btnDescargar.innerHTML =
+      '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg>';
+    btnDescargar.addEventListener("click", descargarHorarioComoImagen);
+    espaciador.appendChild(btnDescargar);
     headerFila.appendChild(espaciador);
     dias.forEach((dia) => {
       const fecha = calcularFechaDelDia(semestre, numeroSemana, dia.abrevDefault);
@@ -1430,11 +1439,12 @@ function desactivarVistaIndividualAmigo() {
 // activarVistaIndividualAmigo() ya se disparan aparte, desde sus propios
 // puntos de entrada (horario-amigos.js).
 function inicializarHorarioConjunto() {
-  const btnSalir = document.getElementById("btn-salir-modo-conjunto");
-  if (btnSalir) {
-    btnSalir.addEventListener("click", () => {
+  // 2026-11-11: la salida ya no es un botón del encabezado: es la pestaña "Horario" de la barra inferior.
+  const tabHorario = document.getElementById("btn-horario-tab-horario");
+  if (tabHorario) {
+    tabHorario.addEventListener("click", () => {
       if (estado.horarioVistaIndividualAmigoFileId) desactivarVistaIndividualAmigo();
-      else desactivarModoConjunto();
+      else if (estado.horarioModoConjunto) desactivarModoConjunto();
     });
   }
 }
@@ -1757,7 +1767,8 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
   // arriba (switch + zoom), que en este modo NO es parte del área que
   // scrollea internamente.
   const contenedorRef = document.getElementById("horario-grid-contenedor");
-  const paddingInferior = window.innerWidth <= 768 ? 16 : 28;
+  // + 72: reserva el alto de la barra inferior flotante (#horario-barra)
+  const paddingInferior = (window.innerWidth <= 768 ? 16 : 28) + 72;
   const alturaDisponible = contenedorRef
     ? Math.max(240, window.innerHeight - contenedorRef.getBoundingClientRect().top - paddingInferior - 76)
     : 420;
@@ -2345,7 +2356,6 @@ function inicializarHorario() {
   const btnAgregar = document.getElementById("btn-horario-agregar");
   const btnAmigos = document.getElementById("btn-horario-amigos");
   const btnPantallaCompleta = document.getElementById("btn-horario-pantalla-completa");
-  const btnDescargar = document.getElementById("btn-horario-descargar");
   const nombreSemestreEl = document.getElementById("horario-nombre-semestre");
 
   if (btnAnterior) {
@@ -2373,9 +2383,6 @@ function inicializarHorario() {
   }
   inicializarHorarioAmigos();
   inicializarHorarioConjunto();
-  if (btnDescargar) {
-    btnDescargar.addEventListener("click", descargarHorarioComoImagen);
-  }
   if (btnPantallaCompleta) {
     const contenedor = document.getElementById("horario-grid-contenedor");
     btnPantallaCompleta.addEventListener("click", () => {

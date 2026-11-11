@@ -267,6 +267,16 @@
   <button id="btn-flotante-enlaces" class="btn-flotante-enlaces" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
   <button id="btn-instalar-app-flotante" class="btn-instalar-app-flotante oculto" aria-label="Instalar App Académica" title="Instalar App Académica"><span class="instalar-app-icono" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.8l4.5 4.5 4.5-4.5M5 20h14"/></svg></span><span class="instalar-app-texto">Instalar app</span></button>
 
+  <!-- 2026-11-11: Horario — barra inferior flotante (Horario | + | Amigos) y botón flotante de pantalla completa.
+       Solo se ven con #seccion-horario abierta (ver "Horario: barra inferior" en design-system.css).
+       Los ids se conservan: los cablea inicializarHorario() en horario.js. -->
+  <nav id="horario-barra" class="horario-barra" aria-label="Horario">
+    <button type="button" class="horario-barra__tab on" id="btn-horario-tab-horario" aria-current="page"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-horario"/></svg><span>Horario</span></button>
+    <button type="button" class="horario-barra__mas" id="btn-horario-agregar" title="Agregar" aria-label="Agregar">+</button>
+    <button type="button" class="horario-barra__tab" id="btn-horario-amigos" title="Amigos" aria-label="Amigos"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Amigos</span></button>
+  </nav>
+  <button type="button" id="btn-horario-pantalla-completa" class="horario-fab-fs" title="Pantalla completa" aria-label="Pantalla completa"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
+
   <!-- Iconos del menú lateral (sprite inline, sin peticiones de red: cargan junto con el HTML y funcionan sin conexión).
        Colores por variables CSS (--nav-c1 trazo principal, --nav-c2 relleno y detalles): ver "Parche 9" en design-system.css. -->
   <svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
@@ -919,30 +929,22 @@
            semanal, y modal de creación/edición de bloque. -->
       <div id="seccion-horario" class="stack oculto">
         <section class="app-encabezado" id="horario-header">
-          <!-- 2026-11-04: misma estructura y medidas que el encabezado de Agenda (semestre arriba; debajo
-               izquierda · "‹ Semana N ›" + fecha · derecha). Izquierda: Descargar y "+". Derecha: Amigos y
-               pantalla completa (solo símbolo, mismo tamaño que el "+"). Solo queda debajo la fila L2 K3 M4... -->
+          <!-- 2026-11-11: encabezado único (igual que Agenda): solo semestre, "‹ Semana N ›" y fecha.
+               Amigos, "+" y pantalla completa viven ahora en la barra inferior / botón flotante (abajo del todo);
+               Descargar es un icono dentro de la cuadrícula, junto al primer día. Sin fila L K M J V S D. -->
           <button type="button" class="btn-discreto app-encabezado__semestre" id="horario-nombre-semestre"></button>
           <div class="app-encabezado__fila">
-            <div class="app-encabezado__izq">
-              <button type="button" class="app-encabezado__icono app-encabezado__descargar" id="btn-horario-descargar" title="Descargar horario como imagen" aria-label="Descargar horario como imagen"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11"/><path d="M7 11l5 5 5-5"/><path d="M5 20h14"/></svg></button>
-              <button type="button" class="app-encabezado__icono app-encabezado__salir oculto" id="btn-salir-modo-conjunto" title="Salir" aria-label="Salir"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg></button>
-              <button type="button" class="btn btn-primary app-encabezado__lado" id="btn-horario-amigos" title="Amigos" aria-label="Amigos"><span class="app-encabezado__lado-icono" aria-hidden="true">👥</span><span class="app-encabezado__lado-texto">Amigos</span></button>
-            </div>
+            <div class="app-encabezado__izq"></div>
             <div class="app-encabezado__centro">
               <div class="row app-encabezado__titulofila" style="align-items:center; justify-content:center;">
-                <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;">‹</button>
+                <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-anterior" style="font-size:1.3rem;" aria-label="Semana anterior">‹</button>
                 <span id="horario-semana-actual" class="texto-encabezado-seccion"></span>
-                <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;">›</button>
+                <button type="button" class="btn-icono-fantasma" id="btn-horario-semestre-siguiente" style="font-size:1.3rem;" aria-label="Semana siguiente">›</button>
               </div>
               <div class="row app-encabezado__rango"><span class="muted" id="horario-fecha-actual" style="font-size:var(--enc-fs-sub);"></span></div>
             </div>
-            <div class="app-encabezado__der">
-              <button type="button" class="btn btn-primary app-encabezado__mas" id="btn-horario-agregar" title="Agregar" aria-label="Agregar">+</button>
-              <button type="button" class="app-encabezado__icono" id="btn-horario-pantalla-completa" title="Pantalla completa" aria-label="Pantalla completa">⛶</button>
-            </div>
+            <div class="app-encabezado__der"></div>
           </div>
-          <div id="horario-dias-semana" style="display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:4px; text-align:center;"></div>
         </section>
 
         <section class="glass-panel" id="horario-grid-contenedor">
