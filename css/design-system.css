@@ -7752,10 +7752,12 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
     align-self: stretch; min-width: 0;
     display: flex; flex-direction: column; align-items: center; gap: var(--enc-gap, 2px);
     text-align: center;
-    /* Centrado respecto a TODO el ancho de la barra: a la izquierda hay 1 botón (☰) y a la derecha 2 (🔗 ⋮);
+    /* Centrado respecto a TODO el ancho de la barra: a la izquierda hay 2 botones (☰ ⋮) y a la derecha 1 (🔗);
        este margen iguala los dos lados (42px = 1 botón) para que el bloque no se corra por los iconos. */
-    margin-left: 42px;
+    margin-right: 42px;
   }
+  /* Lo mismo para el aviso de "Sin conexión" y la línea del timer de estudio: centrados en TODA la barra. */
+  body.agenda-angosta[data-topbar-ctx="agenda"] :is(#pill-sin-conexion, #timer-linea-topbar) { margin-right: 42px; }
   body.agenda-angosta #topbar-agenda #agenda-nombre-semestre {
     height: auto; min-height: 0; max-width: none;
     padding: 3px 8px; margin: -3px 0;            /* zona de toque cómoda sin engordar la barra */
@@ -7771,8 +7773,9 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   }
   body.agenda-angosta #topbar-agenda .app-encabezado__rango { min-height: 0; white-space: nowrap; line-height: 1.2; }
 
-  /* ⋮ (ajustes de Agenda): a la derecha de 🔗 (order:1 lo manda al final de la fila); solo mientras Agenda está abierta. */
-  body.agenda-angosta #btn-agenda-ajustes { display: none; order: 1; }
+  /* ⋮ (ajustes de Agenda): justo a la derecha de ☰ (order lo coloca ahí); solo mientras Agenda está abierta. */
+  body.agenda-angosta #btn-agenda-ajustes { display: none; order: -1; }
+  body.agenda-angosta[data-topbar-ctx="agenda"] #btn-hamburguesa { order: -2; }
   body.agenda-angosta[data-topbar-ctx="agenda"] #btn-agenda-ajustes {
     display: flex; width: 42px; height: 42px; font-size: 1.45rem; color: var(--text-primary);
   }
@@ -7803,17 +7806,8 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
     padding: 4px; gap: 0; overflow: visible;      /* 4px = el margen que usa el thumb para calcular su ancho */
     background: transparent; border-radius: 0;
   }
-  /* Resaltado: sin caja. Una barrita con degradado sobre el borde superior de la barra + un resplandor suave
-     detrás del botón activo; el icono y el texto toman el color de su pestaña. El thumb sigue al dedo igual. */
-  body.agenda-angosta #pills-agenda-vista .pill-switch-thumb {
-    background: radial-gradient(ellipse 70% 90% at 50% 0%, color-mix(in srgb, var(--accent-2) 22%, transparent), transparent 75%);
-    border: 0; border-radius: 0; box-shadow: none; box-sizing: border-box; overflow: visible;
-  }
-  body.agenda-angosta #pills-agenda-vista .pill-switch-thumb::after {
-    content: ""; position: absolute; left: 50%; top: -4px; width: 30px; height: 3px; transform: translateX(-50%);
-    border-radius: 0 0 4px 4px; background: var(--gradient-accent, var(--accent-2));
-    box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-2) 60%, transparent);
-  }
+  /* Resaltado: sin caja, sin barrita ni fondo. El activo se distingue por color más intenso y el texto en negrita. */
+  body.agenda-angosta #pills-agenda-vista .pill-switch-thumb { display: none; }
   /* Separador fino entre los 3 botones y el "+". */
   body.agenda-angosta #pills-agenda-vista::after {
     content: ""; position: absolute; right: 0; top: 16px; bottom: 16px; width: 1px; background: var(--border-glass);
@@ -7835,19 +7829,19 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   body.agenda-angosta #pills-agenda-vista .agenda-nav-ico {
     display: block; width: 24px; height: 24px; flex: none;
     fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
-    color: var(--tab-c); opacity: 0.6; transition: opacity var(--transition-fast), transform var(--transition-fast);
+    color: var(--tab-c); opacity: 0.55; transition: opacity .18s ease, filter .18s ease;
   }
-  body.agenda-angosta #pills-agenda-vista .pill-item.active .agenda-nav-ico { opacity: 1; transform: translateY(-1px) scale(1.06); }
+  body.agenda-angosta #pills-agenda-vista .pill-item.active .agenda-nav-ico { opacity: 1; filter: saturate(1.5) brightness(1.15); stroke-width: 2; }
   [data-rendimiento="reducido"] body.agenda-angosta #pills-agenda-vista .agenda-nav-ico { transition: none; }
 
-  /* ---- "+" dentro de la barra, a la derecha, centrado en altura (46px, esquinas como el resaltado de la barra) ---- */
+  /* ---- "+" dentro de la barra, a la derecha, centrado en altura (círculo de 46px) ---- */
   body.agenda-angosta #btn-agenda-agregar.agenda-fab {
     position: fixed; z-index: 46;
     right: calc(10px + env(safe-area-inset-right, 0px));
     bottom: calc((var(--agenda-nav-alto) - 46px) / 2 + env(safe-area-inset-bottom, 0px));
     width: 46px; height: 46px; min-width: 46px; min-height: 46px; padding: 0;
     display: flex; align-items: center; justify-content: center;
-    font-size: 1.7rem; line-height: 1; border-radius: 16px;
+    font-size: 1.7rem; line-height: 1; border-radius: 50%;
     box-shadow: 0 3px 10px color-mix(in srgb, var(--accent-2) 35%, transparent);
   }
   /* "Instalar app": siempre por encima de la barra y alineado con el "+" (mismo eje vertical: 44px vs 46px → +1px). */
