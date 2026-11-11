@@ -8038,3 +8038,11 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   .horario-barra__ico { opacity: 1; filter: none; }
   .horario-barra__tab.on .horario-barra__ico { filter: none; }
 }
+
+/* Horario (< 900px) — ajuste 5: el botón flotante mostraba los dos iconos a la vez.
+   .app-encabezado__icono svg { display:block } (más arriba) pisaba el display:none del icono de salir; se sube la especificidad. */
+.app-encabezado__icono.horario-fab-fs .horario-fab-fs__salir { display: none; }
+@media (max-width: 899.98px) {
+  body.horario-angosto.horario-inmersivo .app-encabezado__icono.horario-fab-fs .horario-fab-fs__expandir { display: none; }
+  body.horario-angosto.horario-inmersivo .app-encabezado__icono.horario-fab-fs .horario-fab-fs__salir { display: block; }
+}

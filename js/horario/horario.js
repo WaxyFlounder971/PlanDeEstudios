@@ -1419,6 +1419,7 @@ function renderizarVistaIndividualAmigoInterno(cont, semestre, numeroSemana) {
     <span class="texto-encabezado-seccion">${amigo.nombre}</span>
   `;
   anclarBotonSalirFSEnFila(tituloFila);
+  anclarFilaALaVista(tituloFila); // nombre de la persona fijo y centrado en la vista, no se mueve con el horario
   encabezado.appendChild(tituloFila);
 
   if (dias.length === 0) {
