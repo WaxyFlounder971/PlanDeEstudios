@@ -7998,3 +7998,33 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   }
   body.horario-angosto #modal-panel-amigos .modal-x-close { display: none; }
 }
+
+/* =========================================================================
+   Horario (< 900px) — ajuste 3: Amigos sin título ni cuadrícula detrás; "pantalla completa" = modo inmersivo
+   (el encabezado se desliza hacia arriba y la barra inferior hacia abajo; body.horario-inmersivo lo pone horario.js)
+   ========================================================================= */
+.horario-fab-fs__salir { display: none; }
+@media (max-width: 899.98px) {
+  /* Amigos como sección: sin el título grande, sin la cuadrícula ni el botón flotante detrás */
+  body.horario-angosto #modal-panel-amigos .fm2-panel > h2 { display: none; }
+  body.horario-angosto:has(#modal-panel-amigos:not(.oculto)) #horario-grid-contenedor { visibility: hidden; }
+  body.horario-angosto:has(#modal-panel-amigos:not(.oculto)) #btn-horario-barra-fs { display: none !important; }
+
+  /* Modo inmersivo */
+  body.horario-angosto .mobile-topbar { transition: transform .25s ease, margin-bottom .25s ease; }
+  body.horario-angosto #horario-barra { transition: transform .25s ease; }
+  body.horario-angosto.horario-inmersivo .mobile-topbar {
+    transform: translateY(-100%); margin-bottom: calc(-1 * var(--horario-topbar-fin, 64px));
+  }
+  body.horario-angosto.horario-inmersivo #horario-barra { transform: translateY(100%); }
+  body.horario-angosto.horario-inmersivo .horario-fab-fs { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+  body.horario-angosto.horario-inmersivo .btn-instalar-app-flotante { bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important; }
+  body.horario-angosto.horario-inmersivo:has(#btn-instalar-app-flotante:not(.oculto):not(.instalar-ocultando)) .horario-fab-fs {
+    bottom: calc(18px + 46px + 12px + env(safe-area-inset-bottom, 0px));
+  }
+  body.horario-angosto.horario-inmersivo .horario-fab-fs__expandir { display: none; }
+  body.horario-angosto.horario-inmersivo .horario-fab-fs__salir { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.horario-angosto .mobile-topbar, body.horario-angosto #horario-barra { transition: none; }
+}

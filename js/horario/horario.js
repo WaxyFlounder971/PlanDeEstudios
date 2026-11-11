@@ -803,6 +803,7 @@ function sincronizarHorarioAngosto() {
   const sec = document.getElementById("seccion-horario");
   const activo = Boolean(sec && !sec.classList.contains("oculto") && MQ_HORARIO_ANGOSTO.matches);
   document.body.classList.toggle("horario-angosto", activo);
+  if (!activo && document.body.classList.contains("horario-inmersivo")) alternarHorarioInmersivo(false);
   const topbarEl = document.querySelector(".mobile-topbar");
   if (activo && topbarEl) document.documentElement.style.setProperty("--horario-topbar-fin", Math.round(topbarEl.getBoundingClientRect().bottom) + "px");
   const destino = document.getElementById("topbar-horario");
@@ -819,10 +820,31 @@ function sincronizarHorarioAngosto() {
   }
 }
 
+// "Pantalla completa" en pantalla pequeña: oculta el encabezado (se desliza hacia arriba) y la barra inferior (hacia abajo)
+// para ganar espacio. Se sale con el mismo botón flotante.
+function alternarHorarioInmersivo(forzar) {
+  const activo = typeof forzar === "boolean" ? forzar : !document.body.classList.contains("horario-inmersivo");
+  document.body.classList.toggle("horario-inmersivo", activo);
+  const fab = document.getElementById("btn-horario-barra-fs");
+  if (fab) {
+    const texto = activo ? "Salir de pantalla completa" : "Pantalla completa";
+    fab.title = texto;
+    fab.setAttribute("aria-label", texto);
+  }
+  // Al terminar la animación se reajusta la altura de la cuadrícula (sin repintarla, para no perder el scroll).
+  setTimeout(() => {
+    const c = document.getElementById("horario-grid-contenedor");
+    if (!c || estado.horarioExpandido || document.fullscreenElement || window.innerWidth >= 900) return;
+    const reserva = activo ? 2 : (document.getElementById("horario-barra")?.offsetHeight || 64) + 2;
+    c.style.maxHeight = `${Math.max(280, window.innerHeight - c.getBoundingClientRect().top - reserva)}px`;
+  }, 300);
+}
+
 // Barra inferior: marca la pestaña activa y copia el estado del "+" del encabezado (que se oculta en las vistas de amigos).
 function sincronizarBarraHorario() {
   const panelAmigosAbierto = !document.getElementById("modal-panel-amigos")?.classList.contains("oculto");
   const enVistaAmigos = Boolean(estado.horarioModoConjunto || estado.horarioVistaIndividualAmigoFileId || panelAmigosAbierto);
+  if (panelAmigosAbierto && document.body.classList.contains("horario-inmersivo")) alternarHorarioInmersivo(false);
   const tabH = document.getElementById("btn-horario-tab-horario");
   const tabA = document.getElementById("btn-horario-barra-amigos");
   if (tabH) {
@@ -974,7 +996,7 @@ function renderizarHorarioInterno() {
   // se mide la posición real del contenedor y se usa TODO el espacio que
   // queda hasta el fondo - así el cuadro siempre llega hasta el final de la
   // pantalla sin tener que abrir el modo expandido.
-  const paddingInferior = window.innerWidth < 900 ? (document.getElementById("horario-barra")?.offsetHeight || 64) + 2 : 28; // < 900px: alto de la barra inferior anclada
+  const paddingInferior = window.innerWidth < 900 ? (document.body.classList.contains("horario-inmersivo") ? 2 : (document.getElementById("horario-barra")?.offsetHeight || 64) + 2) : 28; // < 900px: alto de la barra inferior anclada
   const alturaDisponibleReal = window.innerHeight - contenedor.getBoundingClientRect().top - paddingInferior;
   const altoDisponible = Math.max(280, alturaDisponibleReal);
 
@@ -1811,7 +1833,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
   // arriba (switch + zoom), que en este modo NO es parte del área que
   // scrollea internamente.
   const contenedorRef = document.getElementById("horario-grid-contenedor");
-  const paddingInferior = window.innerWidth < 900 ? (document.getElementById("horario-barra")?.offsetHeight || 64) + 2 : 28; // < 900px: alto de la barra inferior anclada
+  const paddingInferior = window.innerWidth < 900 ? (document.body.classList.contains("horario-inmersivo") ? 2 : (document.getElementById("horario-barra")?.offsetHeight || 64) + 2) : 28; // < 900px: alto de la barra inferior anclada
   const alturaDisponible = contenedorRef
     ? Math.max(240, window.innerHeight - contenedorRef.getBoundingClientRect().top - paddingInferior - 76)
     : 420;
@@ -2427,9 +2449,10 @@ function inicializarHorario() {
   }
   inicializarHorarioAmigos();
   inicializarHorarioConjunto();
-  [["btn-horario-barra-agregar", "btn-horario-agregar"], ["btn-horario-barra-amigos", "btn-horario-amigos"], ["btn-horario-barra-fs", "btn-horario-pantalla-completa"]].forEach(([idBarra, idOrig]) => {
+  [["btn-horario-barra-agregar", "btn-horario-agregar"], ["btn-horario-barra-amigos", "btn-horario-amigos"]].forEach(([idBarra, idOrig]) => {
     document.getElementById(idBarra)?.addEventListener("click", () => document.getElementById(idOrig)?.click());
   });
+  document.getElementById("btn-horario-barra-fs")?.addEventListener("click", () => alternarHorarioInmersivo());
   document.getElementById("btn-horario-tab-horario")?.addEventListener("click", () => {
     if (typeof cerrarPanelAmigos === "function") cerrarPanelAmigos(); // el panel de Amigos es una sección: Horario lo cierra
     if (estado.horarioVistaIndividualAmigoFileId) desactivarVistaIndividualAmigo();
