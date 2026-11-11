@@ -8028,3 +8028,13 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
 @media (prefers-reduced-motion: reduce) {
   body.horario-angosto .mobile-topbar, body.horario-angosto #horario-barra { transition: none; }
 }
+
+/* =========================================================================
+   Horario (< 900px) — ajuste 4: colores de la barra inferior (un solo tono, el acento de la app)
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  .horario-barra__tab[data-tab] { --nav-c1: var(--text-muted); --nav-c2: var(--text-muted); color: var(--text-muted); }
+  .horario-barra__tab[data-tab].on { --nav-c1: var(--accent-2); --nav-c2: var(--accent-2); color: var(--accent-2); }
+  .horario-barra__ico { opacity: 1; filter: none; }
+  .horario-barra__tab.on .horario-barra__ico { filter: none; }
+}

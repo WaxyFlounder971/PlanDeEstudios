@@ -1580,10 +1580,26 @@ function construirColumnaPersonaConjunto(bloques, pxPorMin, altoGrid, minInicioR
 
 /** Switch "Día / Semana" del Horario conjunto (punto 4 del prompt) - el
  *  mismo pill-group visual que ya usa el resto de la app (ver Agenda). */
+// Pantalla pequeña: el horario conjunto es más ancho que la pantalla (scroll horizontal). Las filas de controles
+// (switch Día/Semana, "‹ Día ›", zoom) se fijan a la izquierda con el ancho VISIBLE, para que no se estiren fuera de la pantalla.
+function anclarFilaALaVista(el) {
+  if (window.innerWidth >= 900) return el;
+  const ancho = document.getElementById("horario-grid-contenedor")?.clientWidth || 0;
+  if (ancho > 0) {
+    el.style.position = "sticky";
+    el.style.left = "0";
+    el.style.width = `${ancho}px`;
+    el.style.boxSizing = "border-box";
+  }
+  return el;
+}
+
 function construirSwitchDiaSemanaConjunto() {
   const grupo = document.createElement("div");
   grupo.className = "pill-group";
   grupo.style.cssText = "justify-content:center; margin:0 auto;";
+  const filaSwitch = document.createElement("div");
+  filaSwitch.style.cssText = "padding:0 8px;";
   [["dia", "Día"], ["semana", "Semana"]].forEach(([valor, etiqueta]) => {
     const btn = document.createElement("button");
     btn.type = "button";
@@ -1596,7 +1612,8 @@ function construirSwitchDiaSemanaConjunto() {
     });
     grupo.appendChild(btn);
   });
-  return grupo;
+  filaSwitch.appendChild(grupo);
+  return anclarFilaALaVista(filaSwitch);
 }
 
 /**
@@ -1705,6 +1722,7 @@ function renderizarConjuntoModoDia(cont, semestre, numeroSemana, dias) {
   navFila.appendChild(etiquetaDia);
   navFila.appendChild(btnSig);
   anclarBotonSalirFSEnFila(navFila);
+  anclarFilaALaVista(navFila); // después de anclarBotonSalirFSEnFila (que fija position:relative)
 
   const headerFila = document.createElement("div");
   headerFila.style.cssText = "display:flex; border-bottom:1px solid rgba(150,150,170,0.15);";
@@ -1824,7 +1842,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
   zoomControles.appendChild(btnMas);
   controlesFila.appendChild(zoomControles);
   anclarBotonSalirFSEnFila(controlesFila);
-  encabezado.appendChild(controlesFila);
+  encabezado.appendChild(anclarFilaALaVista(controlesFila));
   cont.appendChild(encabezado);
 
   // Alto disponible: mismo criterio que el resto del grid (medir la
@@ -2454,9 +2472,12 @@ function inicializarHorario() {
   });
   document.getElementById("btn-horario-barra-fs")?.addEventListener("click", () => alternarHorarioInmersivo());
   document.getElementById("btn-horario-tab-horario")?.addEventListener("click", () => {
-    if (typeof cerrarPanelAmigos === "function") cerrarPanelAmigos(); // el panel de Amigos es una sección: Horario lo cierra
+    // El panel de Amigos es una sección: Horario lo cierra (se cierra directo, ya que cerrarPanelAmigos no se importa aquí).
+    document.getElementById("modal-panel-amigos")?.classList.add("oculto");
     if (estado.horarioVistaIndividualAmigoFileId) desactivarVistaIndividualAmigo();
     else if (estado.horarioModoConjunto) desactivarModoConjunto();
+    else renderizarHorarioInterno();
+    sincronizarBarraHorario();
   });
   // Encabezado en la barra superior: se actualiza al abrir/cerrar la sección y al cruzar los 900px.
   const seccionHorarioEl = document.getElementById("seccion-horario");
