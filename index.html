@@ -234,6 +234,8 @@
       </div>
       <!-- Encabezado de Agenda (solo <900px): js/agenda/agenda-angosta.js mueve aquí el semestre y "Semana N · rango · Hoy". -->
       <div id="topbar-agenda" class="topbar-agenda"></div>
+      <!-- Encabezado de Horario (solo <900px): horario.js mueve aquí el semestre y "‹ Semana N › · fecha" (mismos nodos, con sus listeners). -->
+      <div id="topbar-horario" class="topbar-horario"></div>
       <div id="timer-linea-topbar" class="timer-indicador timer-indicador--linea oculto"></div>
     </div>
     <!-- Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes solo se
@@ -267,13 +269,14 @@
   <button id="btn-flotante-enlaces" class="btn-flotante-enlaces" aria-label="Enlaces rápidos" title="Enlaces rápidos">🔗</button>
   <button id="btn-instalar-app-flotante" class="btn-instalar-app-flotante oculto" aria-label="Instalar App Académica" title="Instalar App Académica"><span class="instalar-app-icono" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7.5 10.8l4.5 4.5 4.5-4.5M5 20h14"/></svg></span><span class="instalar-app-texto">Instalar app</span></button>
 
-  <!-- Horario, SOLO pantalla pequeña (<900px): barra inferior y botón flotante de pantalla completa.
-       En pantalla grande no se ven (display:none) y el encabezado de Horario queda como siempre.
-       Sus botones delegan en los del encabezado (mismos handlers de inicializarHorario). Estilos: design-system.css. -->
-  <nav id="horario-barra" class="glass-panel horario-barra" aria-label="Horario" style="display:none">
-    <button type="button" class="btn-discreto horario-barra__tab on" id="btn-horario-tab-horario" aria-current="page"><svg class="nav-ico" aria-hidden="true" focusable="false"><use href="#ni-horario"/></svg><span>Horario</span></button>
+  <!-- Horario, SOLO pantalla pequeña (<900px): barra inferior anclada (Horario · Amigos · +) y botón flotante de pantalla completa
+       sobre el horario. En pantalla grande no se ven. Sus botones delegan en los del encabezado (mismos handlers). Estilos: design-system.css. -->
+  <nav id="horario-barra" class="horario-barra" aria-label="Horario" style="display:none">
+    <div class="horario-barra__tabs">
+      <button type="button" class="horario-barra__tab on" id="btn-horario-tab-horario" data-tab="horario" aria-current="page"><svg class="nav-ico horario-barra__ico" aria-hidden="true" focusable="false"><use href="#ni-horario"/></svg><span>Horario</span></button>
+      <button type="button" class="horario-barra__tab" id="btn-horario-barra-amigos" data-tab="amigos" title="Amigos"><svg class="nav-ico horario-barra__ico" aria-hidden="true" focusable="false"><use href="#ni-comunidad"/></svg><span>Amigos</span></button>
+    </div>
     <button type="button" class="btn btn-primary horario-barra__mas" id="btn-horario-barra-agregar" title="Agregar" aria-label="Agregar">+</button>
-    <button type="button" class="btn-discreto horario-barra__tab" id="btn-horario-barra-amigos" title="Amigos" aria-label="Amigos"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9.5" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Amigos</span></button>
   </nav>
   <button type="button" id="btn-horario-barra-fs" class="app-encabezado__icono horario-fab-fs" title="Pantalla completa" aria-label="Pantalla completa" style="display:none"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5"/><path d="M20 9V4h-5"/><path d="M4 15v5h5"/><path d="M20 15v5h-5"/></svg></button>
 

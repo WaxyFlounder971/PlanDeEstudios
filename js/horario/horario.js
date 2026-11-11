@@ -793,8 +793,31 @@ function renderizarHeaderHorario(semestre, numeroSemana) {
   }
 }
 
-// Barra inferior (solo se ve en pantalla pequeña, ver design-system.css): marca la pestaña activa y
-// copia el estado del "+" del encabezado (que se oculta en las vistas de amigos).
+/* ===================== Pantalla pequeña (< 900px): encabezado en la barra superior + barra inferior ===================== */
+
+const MQ_HORARIO_ANGOSTO = window.matchMedia("(max-width: 899.98px)");
+
+// Igual que Agenda: con Horario abierto en pantalla pequeña, el semestre y "‹ Semana N › · fecha" se MUEVEN (no se
+// clonan, así conservan ids y listeners) a #topbar-horario, dentro de la barra superior móvil. Al salir vuelven a su sitio.
+function sincronizarHorarioAngosto() {
+  const sec = document.getElementById("seccion-horario");
+  const activo = Boolean(sec && !sec.classList.contains("oculto") && MQ_HORARIO_ANGOSTO.matches);
+  document.body.classList.toggle("horario-angosto", activo);
+  const destino = document.getElementById("topbar-horario");
+  const header = document.getElementById("horario-header");
+  const semestre = document.getElementById("horario-nombre-semestre");
+  const centro = document.querySelector("#horario-header .app-encabezado__centro, #topbar-horario .app-encabezado__centro");
+  if (!destino || !header || !semestre || !centro) return;
+  if (activo) {
+    if (semestre.parentElement !== destino) destino.append(semestre, centro);
+  } else if (semestre.parentElement === destino) {
+    const fila = header.querySelector(".app-encabezado__fila");
+    header.insertBefore(semestre, fila);
+    fila.insertBefore(centro, fila.querySelector(".app-encabezado__der"));
+  }
+}
+
+// Barra inferior: marca la pestaña activa y copia el estado del "+" del encabezado (que se oculta en las vistas de amigos).
 function sincronizarBarraHorario() {
   const enVistaAmigos = Boolean(estado.horarioModoConjunto || estado.horarioVistaIndividualAmigoFileId);
   const tabH = document.getElementById("btn-horario-tab-horario");
@@ -912,6 +935,7 @@ function renderizarHorarioInterno() {
   cacheSemestre = semestre;
   cacheNumeroSemana = numeroSemana;
   renderizarHeaderHorario(semestre, numeroSemana);
+  sincronizarHorarioAngosto();
   sincronizarBarraHorario();
   cont.innerHTML = "";
 
@@ -947,7 +971,7 @@ function renderizarHorarioInterno() {
   // se mide la posición real del contenedor y se usa TODO el espacio que
   // queda hasta el fondo - así el cuadro siempre llega hasta el final de la
   // pantalla sin tener que abrir el modo expandido.
-  const paddingInferior = (window.innerWidth <= 768 ? 16 : 28) + (window.innerWidth < 900 ? 72 : 0); // 72: barra inferior (solo pantalla pequeña)
+  const paddingInferior = (window.innerWidth <= 768 ? 16 : 28) + (window.innerWidth < 900 ? 80 : 0); // 80: barra inferior anclada (solo pantalla pequeña)
   const alturaDisponibleReal = window.innerHeight - contenedor.getBoundingClientRect().top - paddingInferior;
   const altoDisponible = Math.max(280, alturaDisponibleReal);
 
@@ -1784,7 +1808,7 @@ function renderizarConjuntoModoSemana(cont, semestre, numeroSemana, dias) {
   // arriba (switch + zoom), que en este modo NO es parte del área que
   // scrollea internamente.
   const contenedorRef = document.getElementById("horario-grid-contenedor");
-  const paddingInferior = (window.innerWidth <= 768 ? 16 : 28) + (window.innerWidth < 900 ? 72 : 0); // 72: barra inferior (solo pantalla pequeña)
+  const paddingInferior = (window.innerWidth <= 768 ? 16 : 28) + (window.innerWidth < 900 ? 80 : 0); // 80: barra inferior anclada (solo pantalla pequeña)
   const alturaDisponible = contenedorRef
     ? Math.max(240, window.innerHeight - contenedorRef.getBoundingClientRect().top - paddingInferior - 76)
     : 420;
@@ -2407,6 +2431,11 @@ function inicializarHorario() {
     if (estado.horarioVistaIndividualAmigoFileId) desactivarVistaIndividualAmigo();
     else if (estado.horarioModoConjunto) desactivarModoConjunto();
   });
+  // Encabezado en la barra superior: se actualiza al abrir/cerrar la sección y al cruzar los 900px.
+  const seccionHorarioEl = document.getElementById("seccion-horario");
+  if (seccionHorarioEl) new MutationObserver(sincronizarHorarioAngosto).observe(seccionHorarioEl, { attributes: true, attributeFilter: ["class"] });
+  MQ_HORARIO_ANGOSTO.addEventListener("change", () => { sincronizarHorarioAngosto(); renderizarHorarioInterno(); });
+  sincronizarHorarioAngosto();
   if (btnDescargar) {
     btnDescargar.addEventListener("click", descargarHorarioComoImagen);
   }
