@@ -7860,3 +7860,59 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   body.agenda-angosta #seccion-agenda:has(#agenda-busqueda-input:focus)::after,
   body.agenda-angosta #seccion-agenda:has(#agenda-busqueda-input:focus) :is(#pills-agenda-vista, #btn-agenda-agregar) { display: none; }
 }
+
+/* =========================================================================
+   Horario — SOLO pantalla pequeña (misma frontera que el menú móvil: < 900px)
+   Barra inferior (Horario | + | Amigos), botón flotante de pantalla completa e icono de descarga en la
+   cuadrícula. En pantalla grande nada de esto se ve y el encabezado de Horario no cambia.
+   ========================================================================= */
+#horario-barra, #btn-horario-barra-fs { display: none !important; }
+.horario-descargar-icono { display: none; }
+@media (max-width: 899.98px) {
+  /* encabezado: solo semestre · semana · fecha (sin botones ni fila L K M J V S D) */
+  #horario-header .app-encabezado__izq > *,
+  #horario-header .app-encabezado__der > *,
+  #horario-dias-semana { display: none !important; }
+
+  body:has(#seccion-horario:not(.oculto)) #horario-barra { display: flex !important; }
+  body:has(#seccion-horario:not(.oculto)) #btn-horario-barra-fs { display: inline-flex !important; }
+  body:has(#seccion-horario:not(.oculto)) #seccion-horario { padding-bottom: 84px; }
+
+  .horario-barra {
+    position: fixed; z-index: 60; left: 50%; transform: translateX(-50%);
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    align-items: center; justify-content: space-between; gap: 6px;
+    height: 58px; padding: 0 8px; border-radius: 999px; box-shadow: var(--shadow-float);
+    background: var(--bg-header-solido);
+  }
+  .horario-barra__tab {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    width: 72px; height: auto; padding: 6px 0; font-size: 0.68rem; font-weight: 600; color: var(--text-muted);
+  }
+  .horario-barra__tab .nav-ico { width: 22px; height: 22px; }
+  .horario-barra__tab.on { color: var(--accent-2); }
+  .horario-barra__mas {
+    flex: none; width: 52px; height: 52px; min-width: 52px; margin-top: -16px; padding: 0; border-radius: 50%;
+    border: 4px solid var(--bg-header-solido); font-size: 1.6rem; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* en vistas de amigos el "+" se oculta pero conserva su hueco */
+  #horario-barra .horario-barra__mas.oculto { display: flex !important; visibility: hidden; pointer-events: none; }
+
+  /* pantalla completa: flota abajo a la derecha y SUBE cuando existe el botón de instalar app */
+  .horario-fab-fs {
+    position: fixed; z-index: 60; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid var(--border-glass); background: var(--bg-header-solido); box-shadow: var(--shadow-float);
+    transition: bottom .3s cubic-bezier(.22, 1, .36, 1), transform var(--transition-fast);
+  }
+  body:has(#btn-instalar-app-flotante:not(.oculto):not(.instalar-ocultando)) .horario-fab-fs {
+    bottom: calc(74px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Descargar: solo icono, en la esquina de la cuadrícula, a nivel del primer día */
+  .horario-descargar-icono {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer;
+    color: var(--text-secondary);
+  }
+}
