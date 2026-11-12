@@ -43,7 +43,7 @@
 //      y main.js NUNCA hardcodean el número — siempre lo leen de acá, así
 //      que actualizar la versión en toda la app es cambiar ESTA línea y
 //      nada más.
-const VERSION = "v3.29.2"; // v3.29.2: fix del bucle del panel de Amigos (Horario), borde de Enlaces rápidos.
+const VERSION = "v3.29.5"; // v3.29.2: fix del bucle del panel de Amigos (Horario), borde de Enlaces rápidos.
 const CACHE_NAME = `app-academica-${VERSION}`;
 const PREFIJO_CACHE = "app-academica-";
 
