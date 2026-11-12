@@ -799,6 +799,14 @@ const MQ_HORARIO_ANGOSTO = window.matchMedia("(max-width: 899.98px)");
 
 // Igual que Agenda: con Horario abierto en pantalla pequeña, el semestre y "‹ Semana N › · fecha" se MUEVEN (no se
 // clonan, así conservan ids y listeners) a #topbar-horario, dentro de la barra superior móvil. Al salir vuelven a su sitio.
+// Cierra el panel de Amigos SOLO si está abierto. Importante: classList.add("oculto") sobre un elemento que ya la tiene
+// igualmente registra una mutación de atributo; como #modal-panel-amigos tiene un MutationObserver que vuelve a llamar a
+// sincronizarHorarioAngosto(), hacerlo sin esta guarda genera un bucle infinito de microtareas que congela la pestaña (v3.29.1).
+function ocultarPanelAmigosSiAbierto() {
+  const panel = document.getElementById("modal-panel-amigos");
+  if (panel && !panel.classList.contains("oculto")) panel.classList.add("oculto");
+}
+
 function sincronizarHorarioAngosto() {
   const sec = document.getElementById("seccion-horario");
   const activo = Boolean(sec && !sec.classList.contains("oculto") && MQ_HORARIO_ANGOSTO.matches);
@@ -807,7 +815,7 @@ function sincronizarHorarioAngosto() {
   // En pantalla pequeña el panel de Amigos es una sección de Horario: al cambiar a otra sección se cierra
   // (si no, sin body.horario-angosto reaparecería como ventana modal). Se cierra directo: cerrarPanelAmigos no se importa aquí.
   if (!activo && sec && sec.classList.contains("oculto") && MQ_HORARIO_ANGOSTO.matches) {
-    document.getElementById("modal-panel-amigos")?.classList.add("oculto");
+    ocultarPanelAmigosSiAbierto();
   }
   const destino = document.getElementById("topbar-horario");
   const header = document.getElementById("horario-header");
@@ -2510,7 +2518,7 @@ function inicializarHorario() {
   document.getElementById("btn-horario-barra-fs")?.addEventListener("click", () => alternarHorarioInmersivo());
   document.getElementById("btn-horario-tab-horario")?.addEventListener("click", () => {
     // El panel de Amigos es una sección: Horario lo cierra (se cierra directo, ya que cerrarPanelAmigos no se importa aquí).
-    document.getElementById("modal-panel-amigos")?.classList.add("oculto");
+    ocultarPanelAmigosSiAbierto();
     if (estado.horarioVistaIndividualAmigoFileId) desactivarVistaIndividualAmigo();
     else if (estado.horarioModoConjunto) desactivarModoConjunto();
     else renderizarHorarioInterno();
