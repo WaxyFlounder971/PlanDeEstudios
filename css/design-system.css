@@ -8046,3 +8046,149 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   body.horario-angosto.horario-inmersivo .app-encabezado__icono.horario-fab-fs .horario-fab-fs__expandir { display: none; }
   body.horario-angosto.horario-inmersivo .app-encabezado__icono.horario-fab-fs .horario-fab-fs__salir { display: block; }
 }
+
+/* =========================================================================
+   Horario (< 900px) — ajuste 6: encabezado siempre por encima, esquinas del panel de Amigos y estilo de Amigos
+   · La cuadrícula forma su propio nivel de apilado (z 30) por debajo de la barra superior (40), el menú lateral (55) y la
+     barra inferior (45): sus filas sticky internas (z 50) ya no pueden pasar por encima del encabezado ni de la barra.
+   · En modo expandido scrollea la página (no la cuadrícula): las filas sticky se pegan justo debajo de la barra superior.
+   · El panel de Amigos arranca en el borde superior, por debajo de la barra, con el mismo fondo de la app; así las esquinas
+     redondeadas de la barra se ven iguales que en las demás secciones.
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  body.horario-angosto #horario-grid-contenedor { position: relative; z-index: 30; }
+  body.horario-angosto #horario-grid-contenedor.horario-expandido [style*="position:sticky"][style*="top:0"] {
+    top: var(--horario-topbar-fin, 64px) !important;
+  }
+  body.horario-angosto.horario-inmersivo #horario-grid-contenedor.horario-expandido [style*="position:sticky"][style*="top:0"] {
+    top: 0 !important;
+  }
+
+  /* Panel de Amigos: de borde a borde, bajo la barra superior (z 40) y sobre la cuadrícula (z 30) */
+  body.horario-angosto #modal-panel-amigos:not(.oculto) {
+    top: 0; z-index: 35; box-sizing: border-box;
+    padding: var(--horario-topbar-fin, 64px) 0 0;
+    background: transparent;
+  }
+
+  /* Amigos con el lenguaje de la app: tarjetas de vidrio con borde fino y un solo acento (--accent-2) */
+  body.horario-angosto #modal-panel-amigos .fm2-conjunto {
+    color: var(--text-primary); border-radius: var(--radius-md); box-shadow: none;
+    background: color-mix(in srgb, var(--accent-2) 12%, var(--bg-header-solido));
+    border: 1px solid color-mix(in srgb, var(--accent-2) 40%, var(--border-glass));
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-conjunto-icono {
+    color: var(--accent-2); border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent-2) 20%, transparent);
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-conjunto-sub { color: var(--text-secondary); opacity: 1; }
+  body.horario-angosto #modal-panel-amigos .fm2-conjunto-flecha { color: var(--accent-2); }
+  body.horario-angosto #modal-panel-amigos .fm2-preview {
+    background: color-mix(in srgb, var(--bg-header-solido) 70%, transparent); border: 1px solid var(--border-glass);
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-accion {
+    border-radius: var(--radius-md); color: var(--text-primary);
+    background: var(--bg-header-solido); border: 1px solid var(--border-glass);
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-accion svg { color: var(--accent-2); }
+  body.horario-angosto #modal-panel-amigos .fm2-lista-encabezado { color: var(--text-muted); font-weight: 600; }
+  body.horario-angosto #modal-panel-amigos .fm2-card {
+    border-radius: var(--radius-md); background: var(--bg-header-solido);
+    border: 1px solid color-mix(in srgb, var(--c) 38%, var(--border-glass));
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-card.fm2-off { background: transparent; border-color: var(--border-glass); }
+  body.horario-angosto #modal-panel-amigos .fm2-switch[aria-pressed="true"] { background: var(--accent-2); }
+  body.horario-angosto #modal-panel-amigos .fm2-icono { color: var(--text-secondary); border-radius: var(--radius-sm); }
+  body.horario-angosto #modal-panel-amigos .fm2-icono.fm2-peligro { color: #e05252; }
+}
+
+/* =========================================================================
+   Horario (< 900px) — ajuste 7: "+" ↔ "Salir", pestañita de extender fija y modo inmersivo
+   · En el horario compartido el "+" central pasa a "Salir" (horario.js cambia su icono y su destino; es el mismo botón).
+   · La pestañita de extender/contraer 24 h deja de ir dentro del scroll: queda fija, centrada, justo sobre la barra inferior.
+     No se ve en modo inmersivo ni con el panel de Amigos abierto.
+   · Modo inmersivo: el contenido sube junto con la barra superior (alto medido antes de entrar) y la barra inferior baja
+     lo suficiente para que el "+", que sobresale de ella, tampoco se vea.
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  .horario-barra__mas svg { display: block; width: 26px; height: 26px; flex: none; }
+
+  /* !important: la pestañita trae position:sticky, z-index y fondo en línea desde horario.js */
+  body.horario-angosto .horario-barra-expandir {
+    position: fixed !important; z-index: 44 !important;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--horario-nav-alto) + env(safe-area-inset-bottom, 0px));
+    width: 56px; padding: 0 !important; opacity: .85;
+    border: 1px solid var(--border-glass); border-bottom: 0; border-radius: 14px 14px 0 0;
+  }
+  body.horario-angosto .horario-barra-expandir-icono { font-size: 1.3rem; line-height: 1.5; }
+  body.horario-angosto.horario-inmersivo .horario-barra-expandir,
+  body.horario-angosto:has(#modal-panel-amigos:not(.oculto)) .horario-barra-expandir { display: none !important; }
+
+  /* como la pestañita ya no ocupa lugar en el scroll, se deja aire para que no tape la última fila */
+  body.horario-angosto #horario-grid { padding-bottom: 34px; }
+  /* en modo expandido scrollea la página: la cuadrícula no debe terminar detrás de la barra inferior */
+  body.horario-angosto #horario-grid-contenedor.horario-expandido {
+    margin-bottom: calc(var(--horario-nav-alto) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Modo inmersivo */
+  body.horario-angosto #horario-grid-contenedor { transition: max-height .25s ease; }
+  body.horario-angosto.horario-inmersivo #horario-barra { transform: translateY(calc(100% + 52px)); }
+}
+
+/* =========================================================================
+   Asistente: iconos propios en la fila de entrada (todas las pantallas) + botón "Instalar app" por encima de esa fila
+   (< 900px) + icono de enlace en Enlaces rápidos
+   ========================================================================= */
+.asistente-btn-icono {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex-shrink: 0;
+  padding: 6px; line-height: 1; cursor: pointer;
+  background: none; border: none; border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  transition: color .2s ease, background .2s ease, transform .15s ease;
+}
+.asistente-btn-icono svg { width: 22px; height: 22px; display: block; flex: none; }
+.asistente-btn-icono:hover:not(:disabled) { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 8%, transparent); }
+.asistente-btn-icono:active:not(:disabled) { transform: scale(.94); }
+.asistente-btn-enviar, .asistente-btn-enviar:hover:not(:disabled) { color: var(--accent-2); }
+.asistente-btn-voz--grabando, .asistente-btn-voz--grabando:hover:not(:disabled) { color: #e05252; }
+.asistente-btn-voz--grabando svg { animation: asistente-pulso 1.4s ease-in-out infinite; }
+.asistente-btn-voz__tiempo { font-size: .8rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.asistente-icono-giro { animation: asistente-giro .9s linear infinite; }
+@keyframes asistente-pulso { 50% { opacity: .55; } }
+@keyframes asistente-giro { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .asistente-btn-voz--grabando svg, .asistente-icono-giro { animation: none; }
+}
+
+.drawer-enlaces-titulo { display: flex; align-items: center; gap: 8px; }
+.drawer-enlaces-titulo svg { width: 20px; height: 20px; flex: none; color: var(--accent-2); }
+.btn-flotante-enlaces svg { width: 20px; height: 20px; display: block; }
+
+@media (max-width: 899.98px) {
+  /* asistente.js publica --asistente-compositor-tope (borde inferior de pantalla → borde superior de la
+     fila de entrada). El botón flotante se coloca justo encima, así no tapa el micrófono ni el botón de enviar. */
+  body[data-topbar-ctx="asistente"] .btn-instalar-app-flotante {
+    bottom: calc(var(--asistente-compositor-tope, 84px) + 12px);
+  }
+}
+
+/* =========================================================================
+   Modales: bloqueo real del scroll de fondo (todas las pantallas; solo actúa con un modal abierto)
+   · body.modal-abierto ya ponía overflow:hidden en <body>; ahora también en <html> (mismo patrón que el onboarding) y la
+     tarjeta del modal no encadena el scroll hacia la página al llegar a su tope. js/ui/modal-scroll.js suma un respaldo táctil.
+   ========================================================================= */
+html:has(body.modal-abierto) { overflow: hidden !important; overscroll-behavior: none; }
+body.modal-abierto { overflow: hidden !important; }
+.modal-overlay, .modal-card { overscroll-behavior: contain; }
+
+/* =========================================================================
+   Panel de Amigos: lista de "Mis enlaces" desplegada dentro del panel (antes vivía en Ajustes → Horario compartido)
+   ========================================================================= */
+.fm2-enlaces { display: grid; gap: 8px; }
+.fm2-enlaces-sub { margin: 2px 2px 4px; font-size: .8rem; line-height: 1.45; }
+#btn-ir-enlaces-generados[aria-expanded="true"] { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--border-glass)); }
+/* cada enlace pasa a dos líneas si no cabe: textos, estado y botones sin cortarse (antes "Activo" se partía en 3 líneas) */
+#lista-horario-enlaces-compartidos .row-between { flex-wrap: wrap; gap: 8px 10px; }
+#lista-horario-enlaces-compartidos .badge { white-space: nowrap; }

@@ -804,13 +804,16 @@ function sincronizarHorarioAngosto() {
   const activo = Boolean(sec && !sec.classList.contains("oculto") && MQ_HORARIO_ANGOSTO.matches);
   document.body.classList.toggle("horario-angosto", activo);
   if (!activo && document.body.classList.contains("horario-inmersivo")) alternarHorarioInmersivo(false);
-  const topbarEl = document.querySelector(".mobile-topbar");
-  if (activo && topbarEl) document.documentElement.style.setProperty("--horario-topbar-fin", Math.round(topbarEl.getBoundingClientRect().bottom) + "px");
+  // En pantalla pequeña el panel de Amigos es una sección de Horario: al cambiar a otra sección se cierra
+  // (si no, sin body.horario-angosto reaparecería como ventana modal). Se cierra directo: cerrarPanelAmigos no se importa aquí.
+  if (!activo && sec && sec.classList.contains("oculto") && MQ_HORARIO_ANGOSTO.matches) {
+    document.getElementById("modal-panel-amigos")?.classList.add("oculto");
+  }
   const destino = document.getElementById("topbar-horario");
   const header = document.getElementById("horario-header");
   const semestre = document.getElementById("horario-nombre-semestre");
   const centro = document.querySelector("#horario-header .app-encabezado__centro, #topbar-horario .app-encabezado__centro");
-  if (!destino || !header || !semestre || !centro) return;
+  if (!destino || !header || !semestre || !centro) { medirTopbarHorario(); return; }
   if (activo) {
     if (semestre.parentElement !== destino) destino.append(semestre, centro);
   } else if (semestre.parentElement === destino) {
@@ -818,12 +821,23 @@ function sincronizarHorarioAngosto() {
     header.insertBefore(semestre, fila);
     fila.insertBefore(centro, fila.querySelector(".app-encabezado__der"));
   }
+  // Se mide al final: antes se medía con el logo y "Wapper" todavía en la barra (más baja que con el encabezado ya dentro).
+  medirTopbarHorario();
+}
+
+// Alto real de la barra superior (con el encabezado ya dentro): lo usan el panel de Amigos y las filas sticky del modo expandido.
+// En modo inmersivo la barra está desplazada fuera de pantalla, así que ahí no se mide.
+function medirTopbarHorario() {
+  if (!document.body.classList.contains("horario-angosto") || document.body.classList.contains("horario-inmersivo")) return;
+  const topbarEl = document.querySelector(".mobile-topbar");
+  if (topbarEl) document.documentElement.style.setProperty("--horario-topbar-fin", Math.round(topbarEl.getBoundingClientRect().bottom) + "px");
 }
 
 // "Pantalla completa" en pantalla pequeña: oculta el encabezado (se desliza hacia arriba) y la barra inferior (hacia abajo)
 // para ganar espacio. Se sale con el mismo botón flotante.
 function alternarHorarioInmersivo(forzar) {
   const activo = typeof forzar === "boolean" ? forzar : !document.body.classList.contains("horario-inmersivo");
+  if (activo) medirTopbarHorario(); // con la barra aún a la vista: su alto exacto es lo que sube el contenido
   document.body.classList.toggle("horario-inmersivo", activo);
   const fab = document.getElementById("btn-horario-barra-fs");
   if (fab) {
@@ -833,6 +847,7 @@ function alternarHorarioInmersivo(forzar) {
   }
   // Al terminar la animación se reajusta la altura de la cuadrícula (sin repintarla, para no perder el scroll).
   setTimeout(() => {
+    if (!activo) medirTopbarHorario();
     const c = document.getElementById("horario-grid-contenedor");
     if (!c || estado.horarioExpandido || document.fullscreenElement || window.innerWidth >= 900) return;
     const reserva = activo ? 2 : (document.getElementById("horario-barra")?.offsetHeight || 64) + 2;
@@ -854,7 +869,23 @@ function sincronizarBarraHorario() {
   if (tabA) tabA.classList.toggle("on", enVistaAmigos);
   const mas = document.getElementById("btn-horario-barra-agregar");
   const masOrig = document.getElementById("btn-horario-agregar");
-  if (mas && masOrig) mas.classList.toggle("oculto", masOrig.classList.contains("oculto"));
+  // En el horario compartido (modo conjunto o vista individual de un amigo) el "+" del centro pasa a ser "Salir":
+  // es el MISMO botón (no se añade ninguno) y delega en #btn-salir-modo-conjunto. Con el panel de Amigos abierto sigue siendo "+".
+  const enHorarioCompartido = Boolean(estado.horarioModoConjunto || estado.horarioVistaIndividualAmigoFileId) && !panelAmigosAbierto;
+  if (mas) {
+    const etiqueta = traducirTextoInterfaz(enHorarioCompartido ? "Salir del horario compartido" : "Agregar");
+    if ((mas.dataset.modo === "salir") !== enHorarioCompartido) {
+      mas.dataset.modo = enHorarioCompartido ? "salir" : "agregar";
+      if (enHorarioCompartido) {
+        mas.innerHTML = '<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>';
+      } else {
+        mas.textContent = "+";
+      }
+    }
+    mas.title = etiqueta;
+    mas.setAttribute("aria-label", etiqueta);
+  }
+  if (mas && masOrig) mas.classList.toggle("oculto", !enHorarioCompartido && masOrig.classList.contains("oculto"));
 }
 
 /* ===================== Vista inicial (centra en la clase más temprana / hora actual) ===================== */
@@ -1000,6 +1031,7 @@ function renderizarHorarioInterno() {
   const alturaDisponibleReal = window.innerHeight - contenedor.getBoundingClientRect().top - paddingInferior;
   const altoDisponible = Math.max(280, alturaDisponibleReal);
 
+  contenedor.classList.toggle("horario-expandido", Boolean(estado.horarioExpandido) && !document.fullscreenElement);
   if (document.fullscreenElement) {
     contenedor.style.maxHeight = "100vh";
     contenedor.style.overflowY = "auto";
@@ -2469,7 +2501,11 @@ function inicializarHorario() {
   inicializarHorarioAmigos();
   inicializarHorarioConjunto();
   [["btn-horario-barra-agregar", "btn-horario-agregar"], ["btn-horario-barra-amigos", "btn-horario-amigos"]].forEach(([idBarra, idOrig]) => {
-    document.getElementById(idBarra)?.addEventListener("click", () => document.getElementById(idOrig)?.click());
+    document.getElementById(idBarra)?.addEventListener("click", (ev) => {
+      // El "+" central se convierte en "Salir" dentro del horario compartido (ver sincronizarBarraHorario).
+      const salir = ev.currentTarget.dataset.modo === "salir";
+      document.getElementById(salir ? "btn-salir-modo-conjunto" : idOrig)?.click();
+    });
   });
   document.getElementById("btn-horario-barra-fs")?.addEventListener("click", () => alternarHorarioInmersivo());
   document.getElementById("btn-horario-tab-horario")?.addEventListener("click", () => {
@@ -2489,6 +2525,9 @@ function inicializarHorario() {
   if (panelAmigosEl) new MutationObserver(() => { sincronizarHorarioAngosto(); sincronizarBarraHorario(); }).observe(panelAmigosEl, { attributes: true, attributeFilter: ["class"] });
   window.addEventListener("resize", sincronizarHorarioAngosto);
   sincronizarHorarioAngosto();
+  const topbarObservada = document.querySelector(".mobile-topbar");
+  if (topbarObservada && window.ResizeObserver) new ResizeObserver(medirTopbarHorario).observe(topbarObservada);
+  document.fonts?.ready?.then(medirTopbarHorario);
   if (btnDescargar) {
     btnDescargar.addEventListener("click", descargarHorarioComoImagen);
   }
