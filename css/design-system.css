@@ -1807,6 +1807,10 @@ a:hover .enlace-rapido-nombre {
 /* v3.28.0 B (E1, corrección): toda la fila es clicable, no solo el texto (enlace extendido). El hover resalta la fila entera. */
 .enlace-rapido-fila.glass-panel { position: relative; }
 .enlace-rapido-fila > a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+/* v3.29.2: el borde transparente de la fila perdía contra html[data-mode="true-dark"][data-palette] .glass-panel (0,3,1) y
+   [data-mode="light"] .glass-panel, que fijan border-color. Se sube la especificidad para que gane en todos los modos. */
+html[data-mode] .enlace-rapido-fila.glass-panel,
+html[data-mode][data-palette] .enlace-rapido-fila.glass-panel { border-color: transparent; }
 
 /* ---- Enlaces Rápidos laterales: solo con espacio de sobra a la derecha ---- */
 .enlaces-lateral {
