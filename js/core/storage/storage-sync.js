@@ -95,7 +95,7 @@ async function asegurarTokenValido() {
     // vez real, o una cuenta migrando desde el flujo viejo (ver B.5): no
     // hay nada que se pueda resolver en silencio acá, hace falta el login
     // completo (popup, gesto real) al menos una vez.
-    mostrarAvisoReconexion();
+    mostrarAvisoReconexion("este dispositivo no tiene sesión de Google renovable guardada (no es un problema de internet)");
     return false;
   }
 
@@ -355,7 +355,7 @@ function recuperarConexionEscalonada() {
 
     // Paso 1: internet real
     if (!(await probarConexionReal())) {
-      mostrarIndicadorConexion("desconectado");
+      mostrarIndicadorConexion("desconectado", "ninguna de las 4 pruebas de red respondió (app, Google, Google APIs, Worker)");
       return false;
     }
 
@@ -391,7 +391,7 @@ function recuperarConexionEscalonada() {
     // molesto en teléfonos que suspenden la app o cambian de red al abrirla.
     if (haySesionGuardada()) {
       console.warn("La renovación silenciosa falló, pero la sesión guardada sigue presente; se reintentará sin pedir otro login.");
-      mostrarIndicadorConexion("reconectando");
+      mostrarIndicadorConexion("reconectando", "hay internet pero no se pudo renovar el token vía Worker (se sigue reintentando)");
       prepararAvisoRenovarLogin(false);
       return false;
     }
@@ -399,7 +399,7 @@ function recuperarConexionEscalonada() {
     // No hay token guardado o Google confirmó invalid_grant: el toque del
     // usuario sí es necesario para obtener una autorización nueva.
     console.warn("No hay una sesión Google renovable guardada; hace falta autorizar de nuevo.");
-    mostrarIndicadorConexion("desconectado");
+    mostrarIndicadorConexion("desconectado", "Google no acepta la sesión guardada (invalid_grant) o no hay sesión guardada: hay que renovar el inicio de sesión");
     prepararAvisoRenovarLogin(true);
     mostrarToast("Tu sesión de Google necesita renovarse. Toca «Sin conexión» o «Reconectar».");
     return false;
@@ -462,7 +462,12 @@ function manejarFalloDeRed(e) {
     // ("reconectando" - un corte pasajero, Drive lento, lo que sea) que
     // gris (que se lee como "confirmado, no hay nada que hacer"). Solo se
     // muestra gris cuando el propio navegador confirma que no hay señal.
-    mostrarIndicadorConexion(navigator.onLine === false ? "desconectado" : "reconectando");
+    const detalle = `falló una llamada a Drive: ${(e && e.message) || e}`;
+    mostrarIndicadorConexion("reconectando", detalle);
+    // FIX: navigator.onLine === false da falsos negativos en móviles justo al abrir la app o al cambiar de red.
+    // Antes eso pintaba gris "Sin conexión" sin comprobar nada; ahora se confirma con pruebas reales de red
+    // (recuperarConexionEscalonada pasa a gris solo si ninguna responde, y si hay internet reintenta sola).
+    if (navigator.onLine === false) recuperarConexionEscalonada();
   }
 }
 
@@ -525,7 +530,7 @@ function inicializarReconexionAlVolverOnline() {
     // Algunos navegadores móviles envían `offline` al cambiar de Wi-Fi a
     // datos aunque el teléfono siga teniendo internet. Confirmar contra la
     // red antes de presentar un corte definitivo evita ese falso aviso.
-    mostrarIndicadorConexion("reconectando");
+    mostrarIndicadorConexion("reconectando", "el navegador avisó 'offline' (se está comprobando con pruebas reales)");
     probarConexionReal().then((hayInternet) => {
       if (hayInternet) {
         mostrarIndicadorConexion("reconectando");
@@ -534,7 +539,7 @@ function inicializarReconexionAlVolverOnline() {
           if (estado.pendienteSync) intentarSincronizar();
         });
       } else {
-        mostrarIndicadorConexion("desconectado");
+        mostrarIndicadorConexion("desconectado", "el navegador avisó 'offline' y ninguna prueba de red respondió");
       }
     });
   });
@@ -702,12 +707,41 @@ function pintarPillConexion(nuevoEstado) {
 
 let temporizadorOcultarConectado = null;
 
+/** Muestra el motivo técnico bajo el texto del modal de la píldora (solo mientras haya un aviso activo). */
+function pintarMotivoConexion() {
+  const texto = document.getElementById("texto-modal-sin-conexion");
+  if (!texto) return;
+  let linea = document.getElementById("motivo-modal-sin-conexion");
+  if (!estado.motivoConexion) {
+    if (linea) linea.remove();
+    return;
+  }
+  if (!linea) {
+    linea = document.createElement("small");
+    linea.id = "motivo-modal-sin-conexion";
+    linea.className = "muted";
+    linea.style.display = "block";
+    linea.style.marginTop = "8px";
+    texto.after(linea);
+  }
+  linea.textContent = `Motivo técnico: ${estado.motivoConexion}`;
+}
+
 /** Punto único que cambia de estado real: pinta la píldora, actualiza el
  *  indicador del sidebar, y si el nuevo estado es "conectado" programa su
  *  propio apagado a los 3s. */
-function mostrarIndicadorConexion(nuevoEstado) {
+function mostrarIndicadorConexion(nuevoEstado, motivo) {
   clearTimeout(temporizadorOcultarConectado);
   estado.conexionDrive = nuevoEstado;
+  // Diagnóstico: guarda POR QUÉ se prendió el aviso (consola + modal de la píldora), para poder saber la causa real
+  // cuando aparece "Sin conexión" sin que haya fallado internet.
+  if (nuevoEstado === "desconectado" || nuevoEstado === "reconectando") {
+    estado.motivoConexion = motivo || estado.motivoConexion || "sin detalle";
+    console.warn(`[conexión] ${nuevoEstado}: ${estado.motivoConexion}`);
+  } else {
+    estado.motivoConexion = "";
+  }
+  pintarMotivoConexion();
   pintarPillConexion(nuevoEstado);
   actualizarIndicadorSync();
 
@@ -725,8 +759,8 @@ function mostrarIndicadorConexion(nuevoEstado) {
  *  caminos que sí saben distinguir (online/offline, manejarFalloDeRed)
  *  llaman a mostrarIndicadorConexion() de forma directa con el estado
  *  correcto. */
-function mostrarAvisoReconexion() {
-  mostrarIndicadorConexion("desconectado");
+function mostrarAvisoReconexion(motivo) {
+  mostrarIndicadorConexion("desconectado", motivo);
 }
 
 /** Se llama a mano (storage.js, tras establecer un token válido) o desde

@@ -410,9 +410,14 @@ window.addEventListener("DOMContentLoaded", () => {
       // pendiente para siempre y cualquier intento de sync/sondeo quedaría
       // esperando indefinidamente en vez de simplemente no tener nada que
       // hacer sin token.
-      estado.conexionDrive = habiaCacheAlCargar ? "desconectado" : "ok";
+      // FIX: antes, con sesión en caché, aquí se marcaba "desconectado" sin intentar nada. Renovar el token va por el
+      // Worker y NO necesita el script de Google, así que se intenta igual; el estado lo decide asegurarTokenValido.
+      estado.conexionDrive = "ok";
       actualizarIndicadorSync();
       resolverAuthListo();
+      if (habiaCacheAlCargar) {
+        asegurarTokenValido().then((ok) => { if (ok) sincronizarAlIniciar(); });
+      }
     },
     alRechazarPermiso: (motivo) => {
       // FIX (bug reportado: "no le da permisos la primera vez y se rompe el
