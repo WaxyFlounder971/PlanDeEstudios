@@ -4802,9 +4802,16 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
 .horario-dias-pill-grid .pill-item { flex: none; white-space: normal; }
 
 /* Selector de hora personalizado (2 selects tipo select-custom lado a lado). */
-.horario-selector-hora { display: flex; align-items: center; gap: 4px; }
-.horario-selector-hora .select-custom { flex: 1; min-width: 0; }
-.horario-selector-hora .select-custom-boton { text-align: center; padding-left: 8px; padding-right: 8px; }
+/* Las dos zonas (inicio / fin) se reparten el ancho sobrante por igual y los 4 cuadros (HH : MM) miden lo mismo:
+   sin esto los cuadros se encogían al contenido y el número se partía en dos líneas ("4 / 5"). */
+.horario-zona-hora { flex: 1 1 0; min-width: 0; }
+.horario-selector-hora { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; }
+.horario-selector-hora .select-custom { flex: 1 1 0; min-width: 0; width: auto; }
+.horario-selector-hora .select-custom-boton {
+  justify-content: center; text-align: center; white-space: nowrap;
+  padding-left: 4px; padding-right: 4px;
+  background-image: none; /* sin flecha: el número va centrado y nunca se tapa ni se parte */
+}
 .horario-selector-hora-separador { font-weight: 700; color: var(--text-muted); }
 
 /* Ajustes → Horario → "Días de la semana" (2026-08-23): antes eran 2 listas
