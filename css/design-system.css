@@ -8405,3 +8405,32 @@ body.modal-abierto { overflow: hidden !important; }
 @media (max-width: 899.98px) {
   .mobile-topbar { min-height: var(--enc-alto-barra-movil); box-sizing: border-box; }
 }
+
+/* =========================================================================
+   2026-11-13 — Comunidad en versión angosta (<900px): un solo encabezado
+   La barra superior (js/ui/topbar-contexto.js) muestra «Comunidad» + conteos en vez del logo «Wapper»; el
+   encabezado de la página se oculta, ⋮ pasa al final de la fila del switch Profesores/Compañeros y «+» queda
+   flotando abajo a la derecha, igual que en Notas. En >=900px no cambia nada. Revertir = borrar este bloque
+   (y quitar «comunidad» de SECCIONES_CON_CTX en topbar-contexto.js).
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-encabezado { display: none; }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-fila-switch {
+    display: flex; align-items: center; gap: 8px; position: relative; z-index: 10;
+  }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-fila-switch > .pill-switch-binario { flex: 1; min-width: 0; width: auto; }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-ajustes-angosto { display: inline-flex; flex: none; }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-ajustes-angosto .agenda-btn-ajustes { width: 40px; height: 40px; }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-fab {
+    display: inline-grid; place-items: center;
+    position: fixed; z-index: 45;
+    right: calc(18px + env(safe-area-inset-right, 0px));
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: 56px; height: 56px; min-width: 56px; min-height: 56px; padding: 0;
+    border-radius: 50%; line-height: 1; box-shadow: var(--shadow-float, 0 8px 24px rgba(0, 0, 0, 0.35));
+  }
+  /* Si el botón flotante de «Instalar app» está a la vista, el «+» se sube para no taparlo. */
+  body[data-topbar-ctx="comunidad"]:has(.btn-instalar-app-flotante:not(.oculto)) #seccion-comunidad .com-fab {
+    bottom: calc(18px + 52px + 12px + env(safe-area-inset-bottom, 0px));
+  }
+}
