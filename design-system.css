@@ -8196,3 +8196,154 @@ body.modal-abierto { overflow: hidden !important; }
 /* cada enlace pasa a dos líneas si no cabe: textos, estado y botones sin cortarse (antes "Activo" se partía en 3 líneas) */
 #lista-horario-enlaces-compartidos .row-between { flex-wrap: wrap; gap: 8px 10px; }
 #lista-horario-enlaces-compartidos .badge { white-space: nowrap; }
+
+/* =========================================================================
+   Parche v3.30 — Agenda / Horario / Tiempo de Estudio (< 900px)
+   ========================================================================= */
+
+/* ---- Agenda: filtros en UNA línea cuando caben ----
+   El panel de «Estado» (modo extendido) está cerrado pero fuera del flujo y sumaba ancho a la medición
+   (scrollWidth), así que la barra se partía en dos líneas aunque sobrara espacio. Cerrado, no cuenta. */
+.agenda-filtro-estados--midiendo .agenda-filtro-estado-popover:not(.abierto) { display: none !important; }
+
+/* ---- Tiempo de Estudio angosto: piezas ocultas por defecto (en >= 900px no existen) ---- */
+.topbar-estudio, .topbar-estudio-lado, .te-fab-host { display: none; }
+.te-nav-ico { display: none; }
+
+@media (max-width: 899.98px) {
+  :root { --te-nav-alto: 64px; --topbar-icono-bajar: 3px; }
+
+  /* Iconos ☰ ⋮ 🔗 un poco más abajo para alinearlos con el bloque central (un solo valor para ajustar). */
+  body[data-topbar-ctx="agenda"].agenda-angosta :is(#btn-hamburguesa, #btn-agenda-ajustes, #btn-topbar-enlaces),
+  body.horario-angosto :is(#btn-hamburguesa, #btn-topbar-enlaces),
+  body.te-angosto :is(#btn-hamburguesa, #btn-topbar-enlaces, #topbar-estudio-izq, #topbar-estudio-der) {
+    position: relative; top: var(--topbar-icono-bajar);
+  }
+
+  /* ---- Horario: botón de descarga más visible sin tocar el ancho de la columna (26px) ---- */
+  body.horario-angosto .horario-descargar-icono {
+    color: var(--accent-2);
+    background: color-mix(in srgb, var(--accent-2) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-2) 40%, transparent);
+    transition: transform .15s ease, background .15s ease;
+  }
+  body.horario-angosto .horario-descargar-icono svg { width: 18px; height: 18px; stroke-width: 2.3; }
+  body.horario-angosto .horario-descargar-icono:active { transform: scale(.92); background: color-mix(in srgb, var(--accent-2) 26%, transparent); }
+
+  /* ---- Barra superior de Estudio: ☰ [izq] · centro · [der] 🔗 (lados iguales → el centro queda centrado) ---- */
+  body.te-angosto #topbar-ctx { display: none; }
+  body.te-angosto .mobile-topbar { gap: 6px; border-radius: 0 0 18px 18px; }
+  body.te-angosto .topbar-estudio-lado { display: flex; align-items: center; gap: 2px; flex: 1 1 0; min-width: 0; }
+  body.te-angosto #topbar-estudio-izq { justify-content: flex-start; }
+  body.te-angosto #topbar-estudio-der { justify-content: flex-end; }
+  body.te-angosto .mobile-topbar-centro { flex: 0 1 auto; max-width: 58%; }
+  body.te-angosto #topbar-estudio {
+    align-self: stretch; min-width: 0; max-width: 100%;
+    display: flex; flex-direction: column; align-items: center; gap: var(--enc-gap, 2px); text-align: center;
+  }
+  body.te-angosto #topbar-estudio .app-encabezado__semestre {
+    height: auto; min-height: 0; max-width: none; padding: 3px 8px; margin: -3px 0;
+    line-height: 1.2; white-space: nowrap; overflow-wrap: normal;
+  }
+  body.te-angosto #topbar-estudio .app-encabezado__centro { gap: var(--enc-gap, 2px); max-width: 100%; }
+  body.te-angosto #topbar-estudio .app-encabezado__titulofila { min-height: 0; gap: 0 !important; white-space: nowrap; line-height: 1.2; }
+  body.te-angosto #topbar-estudio .app-encabezado__rango { min-height: 0; white-space: nowrap; line-height: 1.2; }
+  body.te-angosto #topbar-estudio-izq .app-encabezado__lado { height: 32px; padding: 0 12px; font-size: .78rem; }
+  body.te-angosto #topbar-estudio-der .agenda-btn-ajustes { width: 42px; height: 42px; font-size: 1.45rem; color: var(--text-primary); }
+  body.te-angosto .app-contenido { padding-top: 14px; }
+
+  /* ---- Barra inferior: las 3 pestañas de siempre, fijas abajo ---- */
+  body.te-angosto #seccion-tiempo-estudio {
+    padding-bottom: calc(var(--te-nav-alto) + env(safe-area-inset-bottom, 0px) + 24px);
+  }
+  body.te-angosto #seccion-tiempo-estudio::after {
+    content: ""; position: fixed; left: 0; right: 0; bottom: 0; z-index: 44; pointer-events: none;
+    height: calc(var(--te-nav-alto) + env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, var(--bg-header-solido, var(--bg-panel)) 94%, transparent);
+    border-top: 1px solid var(--border-glass);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  }
+  body.te-angosto #seccion-tiempo-estudio > :is(.pill-switch-binario, .te-barra-detalle) {
+    position: fixed; left: 0; right: calc(66px + env(safe-area-inset-right, 0px)); bottom: env(safe-area-inset-bottom, 0px); z-index: 45;
+    width: auto; height: var(--te-nav-alto); box-sizing: border-box; margin: 0;
+    padding: 4px; gap: 0; overflow: visible; background: transparent; border: 0; border-radius: 0; box-shadow: none;
+  }
+  body.te-angosto #seccion-tiempo-estudio > :is(.pill-switch-binario, .te-barra-detalle) .pill-switch-thumb { display: none; }
+  body.te-angosto #seccion-tiempo-estudio > :is(.pill-switch-binario, .te-barra-detalle)::after {
+    content: ""; position: absolute; right: 0; top: 16px; bottom: 16px; width: 1px; background: var(--border-glass);
+  }
+  body.te-angosto #seccion-tiempo-estudio :is(.pill-switch-binario, .te-barra-detalle) .pill-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-width: 0; padding: 4px 2px; border-radius: 18px;
+    font-size: .7rem; font-weight: 600; line-height: 1.15; color: var(--text-muted);
+    overflow: visible; text-overflow: clip; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+  }
+  body.te-angosto .pill-item[data-vista="materias"]      { --tab-c: #9a5cf0; }
+  body.te-angosto .pill-item[data-vista="estadisticas"]  { --tab-c: #3a86f0; }
+  body.te-angosto .pill-item[data-vista="competencias"]  { --tab-c: #f0b429; }
+  body.te-angosto #seccion-tiempo-estudio .pill-item.active { color: var(--tab-c); font-weight: 700; }
+  body.te-angosto #seccion-tiempo-estudio .te-nav-ico {
+    display: block; width: 24px; height: 24px; flex: none;
+    fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    color: var(--tab-c); opacity: .55; transition: opacity .18s ease, filter .18s ease;
+  }
+  body.te-angosto #seccion-tiempo-estudio .pill-item.active .te-nav-ico { opacity: 1; filter: saturate(1.5) brightness(1.15); stroke-width: 2; }
+  [data-rendimiento="reducido"] body.te-angosto .te-nav-ico { transition: none; }
+
+  /* ---- "+" flotante dentro de la barra, a la derecha ---- */
+  body.te-angosto #te-fab { display: block; }
+  body.te-angosto #te-fab > button {
+    position: fixed; z-index: 46;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc((var(--te-nav-alto) - 46px) / 2 + env(safe-area-inset-bottom, 0px));
+    width: 46px; height: 46px; min-width: 46px; min-height: 46px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.7rem; line-height: 1; border-radius: 50%;
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--accent-2) 35%, transparent);
+  }
+  body.te-angosto .btn-instalar-app-flotante {
+    right: calc(10px + env(safe-area-inset-right, 0px)) !important;
+    bottom: calc(var(--te-nav-alto) + 14px + env(safe-area-inset-bottom, 0px)) !important;
+    height: 46px !important;
+  }
+  body.te-angosto .btn-instalar-app-flotante:not(.instalar-expandido) { width: 46px !important; }
+
+  /* ---- Detalle de materia: ◀ · código/nombre · ⋮ en la barra superior ---- */
+  body.te-angosto-detalle #topbar-estudio .te-det-centro { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; }
+  body.te-angosto-detalle .te-det-codigo { font-size: .66rem; line-height: 1.2; letter-spacing: .03em; color: var(--accent-2); }
+  body.te-angosto-detalle .te-det-nombre {
+    font-family: var(--font-display); font-size: .95rem; font-weight: 700; line-height: 1.2;
+    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  body.te-angosto-detalle .te-det-volver { width: 34px; height: 34px; font-size: .8rem; color: var(--text-primary); }
+  body.te-angosto-detalle .te-det-config { width: 42px; height: 42px; font-size: 1.45rem; color: var(--text-primary); }
+
+  /* Toda la paleta toma el color de la materia (--te-det-color lo pone el módulo en <body>). */
+  body.te-angosto-detalle {
+    --accent-1: var(--te-det-color);
+    --accent-2: color-mix(in srgb, var(--te-det-color) 55%, #fff);
+    --color-primario: var(--te-det-color);
+    --gradient-accent: linear-gradient(135deg, var(--te-det-color), color-mix(in srgb, var(--te-det-color) 55%, #fff));
+    --gradient-accent-alt: linear-gradient(135deg, var(--te-det-color), color-mix(in srgb, var(--te-det-color) 55%, #fff));
+    --accent-1-10: color-mix(in srgb, var(--te-det-color) 10%, transparent);
+    --accent-1-20: color-mix(in srgb, var(--te-det-color) 25%, transparent);
+    --accent-glow-1: color-mix(in srgb, var(--te-det-color) 26%, transparent);
+    --accent-glow-2: color-mix(in srgb, var(--te-det-color) 18%, transparent);
+  }
+  /* La línea de color bajo el encabezado */
+  body.te-angosto-detalle .mobile-topbar {
+    background: color-mix(in srgb, var(--te-det-color) 10%, var(--bg-panel));
+    border-bottom: 3px solid var(--te-det-color);
+    box-shadow: 0 8px 18px -10px var(--te-det-color);
+  }
+  body.te-angosto-detalle #seccion-tiempo-estudio::after {
+    background: color-mix(in srgb, var(--te-det-color) 9%, var(--bg-header-solido, var(--bg-panel)));
+    border-top-color: color-mix(in srgb, var(--te-det-color) 34%, var(--border-glass));
+  }
+  body.te-angosto-detalle #seccion-tiempo-estudio .glass-card { border-color: color-mix(in srgb, var(--te-det-color) 34%, var(--border-glass)); }
+
+  /* Timer como en el prototipo: anillo, botón y 3 datos en una fila */
+  body.te-angosto-detalle .te-timer-circular-wrap { width: min(70%, 200px); }
+  body.te-angosto-detalle .te-timer-col-stats { flex-direction: row; flex-basis: 100%; width: 100%; gap: 8px; }
+  body.te-angosto-detalle .te-timer-col-stats .te-timer-stat { flex: 1 1 0; min-width: 0; padding: 10px 4px; white-space: nowrap; }
+}

@@ -199,6 +199,8 @@
   <!-- Barra superior solo-móvil -->
   <div class="mobile-topbar">
     <button id="btn-hamburguesa" class="btn-topbar-icono" aria-label="Abrir menú">☰</button>
+    <!-- Tiempo de Estudio (solo <900px): js/tiempo-estudio/tiempo-estudio-angosto.js mueve aquí racha/Unirse (izq.) y ⋮ (der.). -->
+    <div id="topbar-estudio-izq" class="topbar-estudio-lado"></div>
     <!-- 2026-09-19: el <h3> ahora vive dentro de .mobile-topbar-centro para
          poder apilar debajo la línea del timer (#timer-linea-topbar), que
          solo aparece mientras hay una sesión corriendo.
@@ -236,11 +238,14 @@
       <div id="topbar-agenda" class="topbar-agenda"></div>
       <!-- Encabezado de Horario (solo <900px): horario.js mueve aquí el semestre y "‹ Semana N › · fecha" (mismos nodos, con sus listeners). -->
       <div id="topbar-horario" class="topbar-horario"></div>
+      <!-- Encabezado de Tiempo de Estudio (solo <900px): semestre · Semana N · rango, o código + nombre de la materia. -->
+      <div id="topbar-estudio" class="topbar-estudio"></div>
       <div id="timer-linea-topbar" class="timer-indicador timer-indicador--linea oculto"></div>
     </div>
     <!-- Acceso directo a Enlaces rápidos en móvil (2026-08-07): antes solo se
          llegaba entrando a Ajustes. Mismo estilo "símbolo limpio" sin borde
          ni fondo que la hamburguesa — ver .btn-topbar-icono en design-system.css. -->
+    <div id="topbar-estudio-der" class="topbar-estudio-lado"></div>
     <button id="btn-topbar-enlaces" class="btn-topbar-icono" aria-label="Enlaces rápidos" title="Enlaces rápidos"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3.2-3.2a4.5 4.5 0 0 0-6.4-6.4l-1.1 1.1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3.2 3.2a4.5 4.5 0 0 0 6.4 6.4l1.1-1.1"/></svg></button>
     <!-- Progreso del semestre sobre el borde inferior de la barra (solo Resumen, solo <900px). -->
     <div id="topbar-progreso" class="topbar-progreso" role="progressbar" aria-label="Progreso del semestre" aria-valuemin="0" aria-valuemax="100" hidden><span class="topbar-progreso__fill"></span></div>
