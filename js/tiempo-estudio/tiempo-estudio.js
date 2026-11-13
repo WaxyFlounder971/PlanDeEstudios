@@ -1046,7 +1046,7 @@ function construirEncabezadoDetalle(cont, item) {
 
   const tarjeta = document.createElement("div");
   tarjeta.className = "glass-card te-encabezado-detalle";
-  tarjeta.style.cssText = `display:flex; align-items:center; gap:10px; --te-color-materia:${color};`;
+  tarjeta.style.cssText = `display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center; gap:10px; --te-color-materia:${color};`;
 
   const btnVolver = document.createElement("button");
   btnVolver.type = "button";
@@ -1064,9 +1064,18 @@ function construirEncabezadoDetalle(cont, item) {
   titulo.type = "button";
   titulo.className = "te-encabezado-detalle-nombre";
   titulo.style.cssText =
-    "margin:0; flex:1; text-align:center; background:none; border:none; cursor:pointer; " +
-    "color:var(--text-primary); font-weight:700; font-size:1.05rem; padding:6px;";
-  titulo.textContent = nombreMateria;
+    "margin:0; min-width:0; text-align:center; background:none; border:none; cursor:pointer; " +
+    "color:var(--text-primary); font-weight:700; font-size:1.05rem; padding:6px; " +
+    "display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.2;";
+  // Pantalla grande: código arriba (chico, color de acento) y nombre debajo, centrados — igual que en la barra superior del móvil.
+  const codigoTitulo = document.createElement("small");
+  codigoTitulo.className = "te-det-codigo";
+  codigoTitulo.textContent = item.esIndependiente ? "Propia" : materia.codigo || "";
+  codigoTitulo.hidden = !codigoTitulo.textContent;
+  const nombreTitulo = document.createElement("span");
+  nombreTitulo.className = "te-det-nombre";
+  nombreTitulo.textContent = item.nombreMateriaCorto || nombreMateria;
+  titulo.append(codigoTitulo, nombreTitulo);
   if (!item.esIndependiente) titulo.addEventListener("click", () => {
     abrirBuscarMateriaEn({ mm, materia, plan, semestre, nombreMateria, origen: "tiempo-estudio" });
   });

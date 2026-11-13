@@ -8342,8 +8342,27 @@ body.modal-abierto { overflow: hidden !important; }
   }
   body.te-angosto-detalle #seccion-tiempo-estudio .glass-card { border-color: color-mix(in srgb, var(--te-det-color) 34%, var(--border-glass)); }
 
-  /* Timer como en el prototipo: anillo, botón y 3 datos en una fila */
+  /* Timer: el anillo algo más contenido en el detalle del móvil */
   body.te-angosto-detalle .te-timer-circular-wrap { width: min(70%, 200px); }
-  body.te-angosto-detalle .te-timer-col-stats { flex-direction: row; flex-basis: 100%; width: 100%; gap: 8px; }
-  body.te-angosto-detalle .te-timer-col-stats .te-timer-stat { flex: 1 1 0; min-width: 0; padding: 10px 4px; white-space: nowrap; }
+  /* Sin logo ni "Wapper" en la barra superior de Estudio */
+  body.te-angosto .mobile-topbar-centro > h3 { display: none !important; }
 }
+
+/* ---- Tiempo de Estudio: todos los tamaños ---- */
+/* Estudiado · Faltan · Meta: siempre debajo del timer, en fila y sin forma de tarjeta (solo los números) */
+#seccion-tiempo-estudio .te-timer-col-stats {
+  order: 4; flex: 0 0 100%; width: 100%; flex-direction: row; justify-content: center; gap: 28px;
+}
+#seccion-tiempo-estudio .te-timer-col-stats .te-timer-stat {
+  background: none; border: 0; border-radius: 0; padding: 4px 10px; flex: 0 1 auto; min-width: 72px; white-space: nowrap;
+}
+/* Encabezado de la materia (pantalla grande): código arriba, nombre abajo, centrados */
+.te-encabezado-detalle .te-det-codigo { display: block; font-size: .72rem; line-height: 1.2; letter-spacing: .03em; color: var(--accent-2); }
+.te-encabezado-detalle .te-det-nombre { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.te-encabezado-detalle .te-det-codigo[hidden] { display: none; }
+/* Racha: llama 50% más grande, sin píldora ni borde, número centrado con la llama */
+.te-llama--chip { height: 33px; }
+.te-racha-chip { border: 0 !important; background: none !important; padding: 0 6px; gap: 4px; align-items: center; box-shadow: none; }
+.te-racha-chip--riesgo { animation: none; }
+.te-racha-chip--riesgo .te-racha-num { color: var(--color-danger); }
+.te-racha-num { align-items: center; line-height: 1; }
