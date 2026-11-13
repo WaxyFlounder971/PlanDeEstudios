@@ -7672,7 +7672,7 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
    ========================================================================= */
 /* Piezas nuevas: ocultas por defecto, así en >=900px no existen. */
 .topbar-ctx[hidden], .topbar-ctx__sub[hidden], .topbar-progreso[hidden] { display: none; }
-.asistente-acciones-angosto { display: none; }
+.topbar-asistente-accion { display: none; } /* ⓘ y ⟳ del Asistente: solo en la barra superior angosta */
 .notas-seccion .notas-fab, .notas-seccion .notas-ajustes-angosto { display: none; }
 
 @media (max-width: 899.98px) {
@@ -7710,12 +7710,11 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
   /* Resumen: la tarjeta "Semana N de M" ya está arriba, en la barra. */
   body[data-topbar-ctx="resumen"] .resumen-semana-tarjeta { display: none; }
 
-  /* Asistente: se oculta el encabezado; ⓘ y ⟳ pasan a una fila al tope de la tarjeta del chat. */
+  /* Asistente: se oculta el encabezado; ⓘ pasa junto a ☰ y ⟳ junto a 🔗 en la barra superior. */
   body[data-topbar-ctx="asistente"] #asistente-encabezado { display: none; }
-  body[data-topbar-ctx="asistente"] .asistente-acciones-angosto {
-    display: flex; align-items: center; justify-content: space-between; flex: none;
-  }
-  .asistente-acciones-angosto .app-encabezado__icono { width: 34px; height: 34px; }
+  body[data-topbar-ctx="asistente"] .mobile-topbar { gap: 6px; }
+  body[data-topbar-ctx="asistente"] .topbar-asistente-accion { display: flex; color: var(--accent-1); }
+  body[data-topbar-ctx="asistente"] .topbar-asistente-accion:hover { background: color-mix(in srgb, var(--accent-1) 16%, transparent); border-radius: 50%; }
 
   /* Notas: se oculta el encabezado; ⋮ va al final de la búsqueda y "+" es un botón flotante. */
   body[data-topbar-ctx="notas"] .notas-encabezado { display: none; }

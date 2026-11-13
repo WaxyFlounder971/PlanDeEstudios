@@ -4073,17 +4073,19 @@ function construirEsqueletoAsistente(contenedor) {
   filaEncabezado.append(izquierdaEnc, centroEnc, derechaEnc);
   encabezado.appendChild(filaEncabezado);
 
-  // Versión angosta (<900px): el encabezado de arriba se oculta por CSS y sus dos acciones (info a la izquierda,
-  // nueva conversación a la derecha) pasan a esta fila al tope de la tarjeta. Son copias con el MISMO onclick:
-  // en pantallas anchas esta fila está oculta y el encabezado de siempre queda intacto.
-  const filaAccionesAngosto = document.createElement("div");
-  filaAccionesAngosto.className = "asistente-acciones-angosto";
-  [btnInfo, btnNueva].forEach((original) => {
+  // Versión angosta (<900px): el encabezado de arriba se oculta por CSS y sus dos acciones pasan a la barra superior:
+  // ⓘ justo a la derecha de ☰ y ⟳ justo a la izquierda de 🔗. Son copias con el MISMO onclick; el CSS solo las
+  // muestra con <body data-topbar-ctx="asistente"> en <900px, así que en pantallas anchas (y en otras secciones)
+  // no se ven y el encabezado de siempre queda intacto. Se reconstruyen en cada llamada para no duplicarlas.
+  document.querySelectorAll(".topbar-asistente-accion").forEach((n) => n.remove());
+  const crearCopiaTopbar = (original) => {
     const copia = original.cloneNode(true);
+    copia.className = "btn-topbar-icono topbar-asistente-accion";
     copia.onclick = original.onclick;
-    filaAccionesAngosto.appendChild(copia);
-  });
-  tarjeta.appendChild(filaAccionesAngosto);
+    return copia;
+  };
+  document.getElementById("btn-hamburguesa")?.after(crearCopiaTopbar(btnInfo));
+  document.getElementById("btn-topbar-enlaces")?.before(crearCopiaTopbar(btnNueva));
 
   const scroll = document.createElement("div");
   scroll.id = "asistente-chat-scroll";
