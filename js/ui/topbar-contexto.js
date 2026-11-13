@@ -19,7 +19,7 @@
    - En >= 900px la barra móvil no existe (display:none), así que nada cambia.
    ========================================================================= */
 
-const SECCIONES_CON_CTX = new Set(["resumen", "asistente", "notas", "agenda"]); // "agenda": solo marca el body, su encabezado lo monta js/agenda/agenda-angosta.js
+const SECCIONES_CON_CTX = new Set(["resumen", "asistente", "notas", "agenda", "tiempo-estudio"]); // "agenda": solo marca el body, su encabezado lo monta js/agenda/agenda-angosta.js
 const contenidos = {};
 let seccionActual = null;
 

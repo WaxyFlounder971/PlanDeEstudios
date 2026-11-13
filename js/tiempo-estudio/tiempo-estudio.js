@@ -45,6 +45,7 @@ import { construirVistaCompetencias, obtenerAccionesEncabezadoCompetencias, sinc
 import { montarIndicadoresTimer } from "./tiempo-estudio-indicador.js";
 import { construirChipRacha, inicializarRacha, alFusionarDatosRacha, simularAnimacionRachaDemo } from "./tiempo-estudio-racha-ui.js";
 import { minutosSesionEnRango } from "./tiempo-estudio-periodos.js";
+import { acomodarEncabezadoTE, acomodarDetalleTE, construirBarraDetalleTE, iconoVistaTE, registrarRepintadoTE } from "./tiempo-estudio-angosto.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -690,7 +691,9 @@ function crearPillVistaSeccion() {
     btn.type = "button";
     btn.className = "pill-item";
     btn.dataset.vista = valor;
-    btn.textContent = texto;
+    // Versión angosta (<900px): la píldora es la barra inferior y cada pestaña lleva su icono (en pantalla grande el CSS lo oculta).
+    btn.innerHTML = `${iconoVistaTE(valor)}<span class="te-nav-texto"></span>`;
+    btn.querySelector(".te-nav-texto").textContent = texto;
     btn.addEventListener("click", () => cambiarVistaTiempoEstudio(valor));
     grupo.appendChild(btn);
   });
@@ -744,6 +747,8 @@ function pintarEncabezadoTE() {
   if (!host) return;
   host.replaceChildren();
   construirEncabezado(host, construirBotonSemestreTiempo());
+  // Versión angosta (<900px): los mismos nodos suben a la barra superior (tiempo-estudio-angosto.js). En pantalla grande no hace nada.
+  acomodarEncabezadoTE(host);
 }
 
 /** Durante un arrastre, las pestañas vecinas deben estar ya armadas (si no, se ve un hueco o un corte). */
@@ -1082,6 +1087,25 @@ function construirEncabezadoDetalle(cont, item) {
   tarjeta.appendChild(titulo);
   tarjeta.appendChild(btnConfig);
   cont.appendChild(tarjeta);
+
+  // Versión angosta (<900px): ◀ · código sobre nombre · ⋮ suben a la barra superior, la paleta toma el color de la
+  // materia y se agrega la barra inferior (tiempo-estudio-angosto.js). En pantalla grande no hace nada.
+  acomodarDetalleTE({
+    tarjeta,
+    btnVolver,
+    titulo,
+    btnConfig,
+    codigo: item.esIndependiente ? "Propia" : item.materia?.codigo || "",
+    nombre: item.nombreMateriaCorto || nombreMateria,
+    color,
+    alAgregar: () => abrirModalRegistroManual([item], () => renderizarTiempoEstudio()),
+  });
+  const barraDetalle = construirBarraDetalleTE((vista) => {
+    materiaDetalleActivaId = null;
+    vistaSeccionTE = vista;
+    renderizarTiempoEstudio();
+  });
+  if (barraDetalle) cont.appendChild(barraDetalle);
 }
 
 /**
@@ -1979,5 +2003,7 @@ function irADetalleMateriaTiempoEstudio(materiaMatriculadaId) {
 // directo — se expone igual acá por consistencia con ese patrón ya
 // establecido.
 window.renderizarTiempoEstudio = renderizarTiempoEstudio;
+
+registrarRepintadoTE(() => renderizarTiempoEstudio()); // la versión angosta lo usa al cambiar el ancho de la ventana
 
 export { inicializarTiempoEstudio, renderizarTiempoEstudio, obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMin, obtenerMateriasParaTiempoEstudio };

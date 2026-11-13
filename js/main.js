@@ -40,6 +40,7 @@ import { revisarWrappedAutomatico } from "./semestres/semestres-wrapped.js";
 import { inicializarModoDesarrollador } from "./core/modo-desarrollador.js";
 import { inicializarResumen, renderizarResumen } from "./resumen/resumen.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
+import "./tiempo-estudio/tiempo-estudio-angosto.js"; // Tiempo <900px: encabezado en la barra superior, barra inferior y "+" flotante
 import "./agenda/agenda-angosta.js"; // Agenda <900px: encabezado en la barra superior, barra inferior y "+" flotante
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { inicializarTiempoEstudio, renderizarTiempoEstudio } from "./tiempo-estudio/tiempo-estudio.js";
