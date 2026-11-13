@@ -8459,3 +8459,30 @@ body.modal-abierto { overflow: hidden !important; }
       radial-gradient(circle 18px at 0 0, transparent 17.5px, var(--bg-header-solido) 18px) right bottom / 18px 18px no-repeat;
   }
 }
+
+/* =========================================================================
+   2026-11-13 — Barra superior móvil (<900px): ◀ y ⋮ dibujados con CSS, centrados de verdad
+   Antes eran los caracteres «◀» y «⋮», cuyo dibujo dentro de la caja cambia según la tipografía del equipo
+   (en algunos se veían más arriba que ☰ y 🔗). Ahora son formas geométricas centradas en su caja de 34/42 px,
+   así quedan al mismo nivel que ☰ y 🔗 en cualquier equipo. Mismo tamaño aproximado y mismo color (currentColor).
+   Aplica a ⋮ de Tiempo (lista y detalle), Agenda, ◀ del detalle de materia y ☰. Revertir = borrar este bloque.
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  .mobile-topbar :is(.agenda-btn-ajustes, .te-det-config, .te-det-volver) {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0 !important; line-height: 0 !important; padding: 0;
+  }
+  .mobile-topbar :is(.agenda-btn-ajustes, .te-det-config)::before {
+    content: ""; flex: none; width: 4px; height: 4px; border-radius: 50%; background: currentColor;
+    box-shadow: 0 -7px 0 currentColor, 0 7px 0 currentColor;
+  }
+  .mobile-topbar #btn-hamburguesa { display: inline-flex; align-items: center; justify-content: center; font-size: 0 !important; line-height: 0 !important; }
+  .mobile-topbar #btn-hamburguesa::before {
+    content: ""; flex: none; width: 16px; height: 2px; border-radius: 1px; background: currentColor;
+    box-shadow: 0 -7px 0 currentColor, 0 7px 0 currentColor;
+  }
+  .mobile-topbar .te-det-volver::before {
+    content: ""; flex: none; width: 11px; height: 12px; background: currentColor;
+    clip-path: polygon(100% 0, 100% 100%, 0 50%);
+  }
+}
