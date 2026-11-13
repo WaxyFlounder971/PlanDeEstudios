@@ -1132,7 +1132,7 @@ function renderizarHorarioInterno() {
     const espaciador = document.createElement("div");
     // 28px: mismo ancho que .horario-col-horas (ver construirColumnaHoras),
     // para que este header quede alineado con la columna de horas de abajo.
-    espaciador.style.cssText = "width:28px; flex-shrink:0; display:flex; align-items:center; justify-content:center;";
+    espaciador.style.cssText = "width:28px; flex-shrink:0; display:flex; align-items:center; justify-content:flex-start;";
     // Pantalla pequeña: Descargar vive aquí, solo icono, a nivel del primer día (en pantalla grande queda oculto por CSS).
     const btnDescargarGrid = document.createElement("button");
     btnDescargarGrid.type = "button";

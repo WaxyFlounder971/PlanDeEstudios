@@ -8434,3 +8434,28 @@ body.modal-abierto { overflow: hidden !important; }
     bottom: calc(18px + 52px + 12px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+/* =========================================================================
+   2026-11-13 — Horario (<900px): ajustes visuales
+   1) «+» de la barra inferior sin el resplandor (queda solo el anillo oscuro).
+   2) Botón de descarga más grande y separado del borde de la pantalla: sigue ocupando la columna de 28px, pero
+      sobresale unos px sobre la columna del primer día (no cambia ningún ancho de la cuadrícula).
+   3) Esquinas inferiores redondeadas de la barra superior: lo que se asomaba (el fondo azul de la página) se
+      rellena con el color de la fila de días, así la esquina se ve oscura. Revertir = borrar este bloque.
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  body.horario-angosto .horario-barra__mas,
+  body.horario-angosto .horario-barra__mas:hover,
+  body.horario-angosto .horario-barra__mas:active,
+  body.horario-angosto .horario-barra__mas:focus { box-shadow: none; }
+
+  body.horario-angosto .horario-descargar-icono { width: 34px; height: 34px; margin-left: 6px; }
+  body.horario-angosto .horario-descargar-icono svg { width: 21px; height: 21px; }
+
+  body.horario-angosto .mobile-topbar::before {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 18px; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(circle 18px at 18px 0, transparent 17.5px, var(--bg-header-solido) 18px) left bottom / 18px 18px no-repeat,
+      radial-gradient(circle 18px at 0 0, transparent 17.5px, var(--bg-header-solido) 18px) right bottom / 18px 18px no-repeat;
+  }
+}
