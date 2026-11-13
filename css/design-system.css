@@ -8311,6 +8311,7 @@ body.modal-abierto { overflow: hidden !important; }
   /* ---- Detalle de materia: ◀ · código/nombre · ⋮ en la barra superior ---- */
   body.te-angosto-detalle #topbar-estudio .te-det-centro { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; }
   body.te-angosto-detalle .te-det-codigo { font-size: .66rem; line-height: 1.2; letter-spacing: .03em; color: var(--accent-2); }
+  body.te-angosto-detalle .te-det-codigo.te-codigo-clickeable { padding: 2px 8px; margin: -2px 0; }
   body.te-angosto-detalle .te-det-nombre {
     font-family: var(--font-display); font-size: .95rem; font-weight: 700; line-height: 1.2;
     max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -8349,12 +8350,25 @@ body.modal-abierto { overflow: hidden !important; }
 }
 
 /* ---- Tiempo de Estudio: todos los tamaños ---- */
-/* Estudiado · Faltan · Meta: siempre debajo del timer, en fila y sin forma de tarjeta (solo los números) */
-#seccion-tiempo-estudio .te-timer-col-stats {
-  order: 4; flex: 0 0 100%; width: 100%; flex-direction: row; justify-content: center; gap: 28px;
-}
+/* Estudiado · Faltan · Meta: sin forma de tarjeta (solo los números). La posición es la de siempre:
+   a la izquierda del anillo si todo cabe en una fila; debajo del timer cuando no cabe. */
 #seccion-tiempo-estudio .te-timer-col-stats .te-timer-stat {
-  background: none; border: 0; border-radius: 0; padding: 4px 10px; flex: 0 1 auto; min-width: 72px; white-space: nowrap;
+  background: none; border: 0; border-radius: 0; padding: 4px 10px;
+}
+/* Cuando la columna ya no cabe junto al anillo (contenedor angosto) los 3 datos van en una fila, sin partirse */
+@container te-timer15 (max-width: 420px) {
+  #seccion-tiempo-estudio .te-timer-col-stats { flex-direction: row; justify-content: center; gap: 8px; }
+  #seccion-tiempo-estudio .te-timer-col-stats .te-timer-stat { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 4px 2px; }
+}
+/* Detalle de materia en pantalla grande: solo el color de ACENTO toma el de la materia (no el fondo general) */
+#seccion-tiempo-estudio[data-te-detalle] {
+  --accent-1: var(--te-det-color);
+  --accent-2: color-mix(in srgb, var(--te-det-color) 55%, #fff);
+  --color-primario: var(--te-det-color);
+  --gradient-accent: linear-gradient(135deg, var(--te-det-color), color-mix(in srgb, var(--te-det-color) 55%, #fff));
+  --gradient-accent-alt: linear-gradient(135deg, var(--te-det-color), color-mix(in srgb, var(--te-det-color) 55%, #fff));
+  --accent-1-10: color-mix(in srgb, var(--te-det-color) 10%, transparent);
+  --accent-1-20: color-mix(in srgb, var(--te-det-color) 25%, transparent);
 }
 /* Encabezado de la materia (pantalla grande): código arriba, nombre abajo, centrados */
 .te-encabezado-detalle .te-det-codigo { display: block; font-size: .72rem; line-height: 1.2; letter-spacing: .03em; color: var(--accent-2); }
@@ -8366,3 +8380,5 @@ body.modal-abierto { overflow: hidden !important; }
 .te-racha-chip--riesgo { animation: none; }
 .te-racha-chip--riesgo .te-racha-num { color: var(--color-danger); }
 .te-racha-num { align-items: center; line-height: 1; }
+/* Pie de Competencias: un solo botón de texto («Unirse a una competencia») */
+.te-pestanas-finales-materias.te-pie-unirse { grid-template-columns: minmax(0, 1fr); }

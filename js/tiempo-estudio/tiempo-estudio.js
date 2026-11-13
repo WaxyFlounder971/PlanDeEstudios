@@ -486,12 +486,7 @@ function construirEncabezado(cont, botonSemestre = null) {
 
   if (enCompetencias) {
     const acciones = obtenerAccionesEncabezadoCompetencias(renderizarTiempoEstudio);
-    const btnUnirse = document.createElement("button");
-    btnUnirse.type = "button";
-    btnUnirse.className = "btn btn-secondary app-encabezado__lado";
-    btnUnirse.textContent = traducirTextoInterfaz("Unirse");
-    btnUnirse.addEventListener("click", () => acciones.alUnirse());
-    izquierda.appendChild(btnUnirse);
+    // "Unirse" ya no vive en el encabezado: va al pie de la lista de competencias (construirPieUnirse).
 
     const btnCrear = document.createElement("button");
     btnCrear.type = "button";
@@ -1046,7 +1041,10 @@ function construirEncabezadoDetalle(cont, item) {
 
   const tarjeta = document.createElement("div");
   tarjeta.className = "glass-card te-encabezado-detalle";
-  tarjeta.style.cssText = `display:grid; grid-template-columns:44px minmax(0,1fr) 44px; align-items:center; gap:10px; --te-color-materia:${color};`;
+  tarjeta.style.cssText = `display:flex; align-items:center; gap:10px; --te-color-materia:${color};`;
+  // Pantalla grande: la paleta de ESTA sección toma el color de acento de la materia (el fondo general no cambia).
+  cont.dataset.teDetalle = "1";
+  cont.style.setProperty("--te-det-color", color);
 
   const btnVolver = document.createElement("button");
   btnVolver.type = "button";
@@ -1064,7 +1062,7 @@ function construirEncabezadoDetalle(cont, item) {
   titulo.type = "button";
   titulo.className = "te-encabezado-detalle-nombre";
   titulo.style.cssText =
-    "margin:0; min-width:0; text-align:center; background:none; border:none; cursor:pointer; " +
+    "margin:0; flex:1; min-width:0; text-align:center; background:none; border:none; cursor:pointer; " +
     "color:var(--text-primary); font-weight:700; font-size:1.05rem; padding:6px; " +
     "display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.2;";
   // Pantalla grande: código arriba (chico, color de acento) y nombre debajo, centrados — igual que en la barra superior del móvil.
@@ -1072,6 +1070,8 @@ function construirEncabezadoDetalle(cont, item) {
   codigoTitulo.className = "te-det-codigo";
   codigoTitulo.textContent = item.esIndependiente ? "Propia" : materia.codigo || "";
   codigoTitulo.hidden = !codigoTitulo.textContent;
+  // Igual que el código en la tarjeta de la lista: subrayado punteado y abre "Buscar materia en..." (el click sube al botón del título).
+  if (!item.esIndependiente) codigoTitulo.classList.add("te-codigo-clickeable");
   const nombreTitulo = document.createElement("span");
   nombreTitulo.className = "te-det-nombre";
   nombreTitulo.textContent = item.nombreMateriaCorto || nombreMateria;
@@ -1092,6 +1092,8 @@ function construirEncabezadoDetalle(cont, item) {
     abrirModalConfigTiempoEstudio(mm, nombreMateria, () => alGuardarConfiguracionMateria(mm), confirmarEliminarMateriaPersonalizada);
   });
 
+  // Misma anchura a los lados para que el título quede centrado de verdad.
+  [btnVolver, btnConfig].forEach((b) => { b.style.flex = "0 0 44px"; b.style.width = "44px"; });
   tarjeta.appendChild(btnVolver);
   tarjeta.appendChild(titulo);
   tarjeta.appendChild(btnConfig);
@@ -1762,6 +1764,8 @@ function construirPantallaDetalle(cont, item) {
 function renderizarTiempoEstudio() {
   const cont = document.getElementById("seccion-tiempo-estudio");
   if (!cont) return;
+  cont.removeAttribute("data-te-detalle"); // lo vuelve a poner el encabezado del detalle
+  cont.style.removeProperty("--te-det-color");
   if (materiaDetalleActivaId || !panelesVistaTE || !cont.contains(panelesVistaTE.viewport)) {
     cont.innerHTML = "";
     panelesVistaTE = null;

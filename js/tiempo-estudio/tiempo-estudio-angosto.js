@@ -5,7 +5,7 @@
 
    Lista (Materias · Estadísticas · Competencias):
    - La barra superior móvil deja de mostrar el logo "Wapper" y pasa a mostrar, entre ☰ y 🔗:
-       izquierda  → lo que antes iba a la izquierda del encabezado (racha 🔥, o "Unirse" en Competencias)
+       izquierda  → lo que antes iba a la izquierda del encabezado (racha 🔥; en Competencias queda vacío: "Unirse" va al pie de la lista)
        centro     → semestre (tocable) · "Semana N" · rango de fechas
        derecha    → ⋮ (ajustes de Tiempo)
    - El "+" pasa a ser un botón flotante abajo a la derecha, al lado de la barra inferior.
@@ -148,6 +148,14 @@ export function acomodarDetalleTE({ tarjeta, btnVolver, titulo, btnConfig, codig
   cod.className = "te-det-codigo";
   cod.textContent = codigo || "";
   cod.hidden = !codigo;
+  // El código es funcional, como en la tarjeta de la lista: abre "Buscar materia en..." (lo hace el botón del título).
+  if (titulo.tagName === "BUTTON" && codigo) {
+    cod.classList.add("te-codigo-clickeable");
+    cod.setAttribute("role", "button");
+    cod.tabIndex = 0;
+    cod.addEventListener("click", () => titulo.click());
+    cod.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); titulo.click(); } });
+  }
   // Los estilos en línea de la tarjeta de siempre (centrado, tamaño, relleno) no aplican en la barra superior.
   titulo.style.cssText = "background:none; border:0; padding:0; margin:0; cursor:pointer; color:inherit;";
   titulo.classList.add("te-det-nombre");
@@ -155,6 +163,8 @@ export function acomodarDetalleTE({ tarjeta, btnVolver, titulo, btnConfig, codig
   centro.append(cod, titulo);
   cuerpo.replaceChildren(centro);
 
+  // En la barra superior el tamaño lo da el CSS (los 44px fijos son del encabezado de pantalla grande).
+  [btnVolver, btnConfig].forEach((b) => { b.style.flex = ""; b.style.width = ""; });
   btnVolver.classList.add("te-det-volver");
   btnConfig.style.fontSize = "";
   btnConfig.classList.add("te-det-config");
