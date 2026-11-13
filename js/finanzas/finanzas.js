@@ -180,8 +180,39 @@ function construirEncabezadoFinanzas() {
   if (estado.finanzasVistaActiva === "resumen") der.appendChild(construirBotonPrivacidad());
   fila.append(izq, centro, der);
   cab.appendChild(fila);
-  return cab;
+
+  // 2026-11-13: versión angosta (<900px) — el encabezado de la página se oculta por CSS y título + subtítulo
+  // viven en la barra superior (ver js/ui/topbar-contexto.js), en lugar del logo «Wapper». El subtítulo largo
+  // se usa si cabe en una línea; si no, la versión corta. El ojo de «Ocultar importes» (solo en Inicio) pasa a
+  // una fila propia a la derecha. En pantalla grande nada de esto se ve.
+  const ayudaCorta = AYUDA_CORTA_FINANZAS[estado.finanzasVistaActiva];
+  window.actualizarTopbarCtx?.("finanzas", {
+    titulo: traducirTextoInterfaz(info.etiqueta),
+    sub: [traducirTextoInterfaz(info.ayuda), ...(ayudaCorta ? [traducirTextoInterfaz(ayudaCorta)] : [])],
+  });
+  const bloque = document.createDocumentFragment();
+  bloque.appendChild(cab);
+  if (estado.finanzasVistaActiva === "resumen") {
+    const filaOjo = document.createElement("div");
+    filaOjo.className = "finanzas-ojo-angosto";
+    filaOjo.appendChild(construirBotonPrivacidad());
+    bloque.appendChild(filaOjo);
+  }
+  return bloque;
 }
+
+/** Subtítulos cortos para la barra superior del teléfono (caben en una línea). */
+const AYUDA_CORTA_FINANZAS = {
+  resumen: "Cuánto tienes y qué viene",
+  "gastos-u": "Lo que gastas, ganas y ahorras",
+  cuentas: "Efectivo, bancos y tarjetas",
+  deudas: "Préstamos y gastos divididos",
+  plan: "Pagos e ingresos que vienen",
+  presupuesto: "Cuánto gastar por categoría",
+  metas: "Lo que ahorras y tu avance",
+  semestres: "Matrícula y becas",
+  "gastos-estudiantiles": "Ayudas y gastos estudiantiles",
+};
 
 /** Le pasa a la navegación qué secciones hay, cuál está activa y qué hacen los botones de acción. */
 function actualizarNavegacionFinanzas() {
@@ -438,6 +469,7 @@ function renderizarFinanzas() {
   const cont = document.getElementById("seccion-finanzas");
   if (!cont) return;
   cont.innerHTML = "";
+  window.actualizarTopbarCtx?.("finanzas", { titulo: traducirTextoInterfaz("Finanzas") }); // onboarding / saldo inicial: sin subtítulo
 
   if (estado.finanzasPasoSaldoInicial) {
     ocultarNavegacionFinanzas();

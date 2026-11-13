@@ -8486,3 +8486,16 @@ body.modal-abierto { overflow: hidden !important; }
     clip-path: polygon(100% 0, 100% 100%, 0 50%);
   }
 }
+
+/* =========================================================================
+   2026-11-13 — Finanzas en versión angosta (<900px): título y subtítulo en la barra superior
+   Quita el logo «Wapper» de la barra y muestra ahí el título + subtítulo de la pantalla activa (Inicio,
+   Movimientos, Cuentas…); el encabezado de la página se oculta. El ojo «Ocultar importes» (solo Inicio) queda en
+   una fila a la derecha. En >=900px no cambia nada. Revertir = borrar este bloque y quitar «finanzas» de
+   SECCIONES_CON_CTX en topbar-contexto.js.
+   ========================================================================= */
+.finanzas-ojo-angosto { display: none; }
+@media (max-width: 899.98px) {
+  body[data-topbar-ctx="finanzas"] #seccion-finanzas .finanzas-cab { display: none; }
+  body[data-topbar-ctx="finanzas"] #seccion-finanzas .finanzas-ojo-angosto { display: flex; justify-content: flex-end; }
+}
