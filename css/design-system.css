@@ -8494,8 +8494,13 @@ body.modal-abierto { overflow: hidden !important; }
    una fila a la derecha. En >=900px no cambia nada. Revertir = borrar este bloque y quitar «finanzas» de
    SECCIONES_CON_CTX en topbar-contexto.js.
    ========================================================================= */
-.finanzas-ojo-angosto { display: none; }
+.finanzas-ojo--tarjeta { display: none; }
 @media (max-width: 899.98px) {
   body[data-topbar-ctx="finanzas"] #seccion-finanzas .finanzas-cab { display: none; }
-  body[data-topbar-ctx="finanzas"] #seccion-finanzas .finanzas-ojo-angosto { display: flex; justify-content: flex-end; }
+  /* El ojo pasa a la esquina superior derecha de la primera tarjeta de Inicio. */
+  body[data-topbar-ctx="finanzas"] #seccion-finanzas .disponible-hero,
+  body[data-topbar-ctx="finanzas"] #seccion-finanzas .resumen-hero { position: relative; }
+  body[data-topbar-ctx="finanzas"] #seccion-finanzas .finanzas-ojo--tarjeta {
+    display: inline-flex; position: absolute; top: 8px; right: 8px; width: 34px; height: 34px;
+  }
 }

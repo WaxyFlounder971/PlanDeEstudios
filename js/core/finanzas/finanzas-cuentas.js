@@ -142,6 +142,13 @@ function crearTraspaso(datos, { origenId = null, destinoId = null, monto, montoD
   if ((origenId && !o) || (destinoId && !d)) return { ok: false, motivo: "no_existe" };
   const valor = redondear(monto); if (!(valor > 0)) return { ok: false, motivo: "monto" }; if (valor > MAX_MONTO) return { ok: false, motivo: "monto_grande" };
   const f = fecha === undefined ? hoyIso() : fecha; if (!fechaValida(f)) return { ok: false, motivo: "fecha" };
+  // F1 (v3.28.0): desde "Sin asignar" solo se puede pasar lo que de verdad hay. Con "Sin asignar" en cero o en negativo (movimientos sin
+  // cuenta que gastaron más de lo que tenías) un traspaso lo hundiría más: -₡1 649 945 pasaba a -₡3 299 890 y el destino "recibía" dinero que no existía.
+  if (!o) {
+    const corte = f > hoyIso() ? f : hoyIso();
+    const libre = Math.max(redondear(calcularTotalesMovimientos(datos, corte).sinAsignar), 0);
+    if (valor > libre) return { ok: false, motivo: "sin_asignar_insuficiente", disponible: libre };
+  }
   const monedaO = o ? o.moneda : monedaPrincipal(datos), monedaD = d ? d.moneda : monedaPrincipal(datos);
   let destinoMonto = null;
   if (monedaO !== monedaD) {
