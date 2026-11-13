@@ -1041,7 +1041,7 @@ function construirEncabezadoDetalle(cont, item) {
 
   const tarjeta = document.createElement("div");
   tarjeta.className = "glass-card te-encabezado-detalle";
-  tarjeta.style.cssText = `display:flex; align-items:center; gap:10px; --te-color-materia:${color};`;
+  tarjeta.style.cssText = `display:flex; align-items:center; justify-content:center; --te-color-materia:${color};`;
   // Pantalla grande: la paleta de ESTA sección toma el color de acento de la materia (el fondo general no cambia).
   cont.dataset.teDetalle = "1";
   cont.style.setProperty("--te-det-color", color);
@@ -1062,7 +1062,7 @@ function construirEncabezadoDetalle(cont, item) {
   titulo.type = "button";
   titulo.className = "te-encabezado-detalle-nombre";
   titulo.style.cssText =
-    "margin:0; flex:1; min-width:0; text-align:center; background:none; border:none; cursor:pointer; " +
+    "margin:0; flex:0 1 auto; min-width:0; max-width:100%; text-align:center; background:none; border:none; cursor:pointer; " +
     "color:var(--text-primary); font-weight:700; font-size:1.05rem; padding:6px; " +
     "display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.2;";
   // Pantalla grande: código arriba (chico, color de acento) y nombre debajo, centrados — igual que en la barra superior del móvil.
@@ -1092,8 +1092,10 @@ function construirEncabezadoDetalle(cont, item) {
     abrirModalConfigTiempoEstudio(mm, nombreMateria, () => alGuardarConfiguracionMateria(mm), confirmarEliminarMateriaPersonalizada);
   });
 
-  // Misma anchura a los lados para que el título quede centrado de verdad.
-  [btnVolver, btnConfig].forEach((b) => { b.style.flex = "0 0 44px"; b.style.width = "44px"; });
+  // Pantalla grande: ◀ anclado a la izquierda y ⋮ a la derecha (cada uno centrado en vertical); código + nombre
+  // centrados en ambos ejes del encabezado. El posicionamiento está en el CSS (.te-det-lado).
+  btnVolver.classList.add("te-det-lado", "te-det-lado--izq");
+  btnConfig.classList.add("te-det-lado", "te-det-lado--der");
   tarjeta.appendChild(btnVolver);
   tarjeta.appendChild(titulo);
   tarjeta.appendChild(btnConfig);

@@ -129,9 +129,9 @@ export function acomodarEncabezadoTE(host) {
  */
 export function acomodarDetalleTE({ tarjeta, btnVolver, titulo, btnConfig, codigo, nombre, color, alAgregar }) {
   sincronizar();
+  // Pantalla grande: no se toca NADA (borrar el display en línea de la tarjeta la dejaba apilada en 3 líneas).
   if (!activo) {
     quitarDetalle();
-    if (tarjeta) tarjeta.style.display = "";
     return;
   }
   const cuerpo = porId("topbar-estudio");
@@ -163,8 +163,8 @@ export function acomodarDetalleTE({ tarjeta, btnVolver, titulo, btnConfig, codig
   centro.append(cod, titulo);
   cuerpo.replaceChildren(centro);
 
-  // En la barra superior el tamaño lo da el CSS (los 44px fijos son del encabezado de pantalla grande).
-  [btnVolver, btnConfig].forEach((b) => { b.style.flex = ""; b.style.width = ""; });
+  // En la barra superior el tamaño lo da el CSS (el anclaje a los lados es del encabezado de pantalla grande).
+  [btnVolver, btnConfig].forEach((b) => b.classList.remove("te-det-lado", "te-det-lado--izq", "te-det-lado--der"));
   btnVolver.classList.add("te-det-volver");
   btnConfig.style.fontSize = "";
   btnConfig.classList.add("te-det-config");
