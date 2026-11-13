@@ -82,3 +82,5 @@ Otros atributos de `<html>` que el CSS lee: `data-rendimiento="reducido"` (Modo 
 - Visibilidad se maneja con la clase `.oculto`, no con `style.display` inline, salvo casos puntuales ya documentados en el propio CSS.
 - Cualquier elemento animado (transform/box-shadow/backdrop-filter) debe tener su contraparte apagada bajo `[data-rendimiento="reducido"]` si se agrega a una sección nueva, siguiendo el mismo criterio ya aplicado al resto del sistema.
 - El archivo crece por bloques con separador `/* ===== ... ===== */` fechados o versionados (v8.3, v1.14.1, etc.) — al agregar una sección nueva grande, seguir ese mismo patrón de encabezado para que seas rastreable en este índice.
+
+Cambio 2026-11-13: la barra superior móvil (`.mobile-topbar`, <900px) mide lo mismo en todas las secciones: el alto de la barra de Horario/Agenda/Tiempo (82.5 px con letra mediana), por la variable `--enc-alto-barra-movil` (`calc(27.3px + 3.45rem)`, bloque final de `css/design-system.css`). La vista extendida (≥900px) no cambia.

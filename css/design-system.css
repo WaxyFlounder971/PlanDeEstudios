@@ -5291,8 +5291,8 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
    se mudó adentro del modal de Ajustes). */
 .te-encabezado { flex-wrap: wrap; }
 
-.te-codigo-clickeable { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
-.te-codigo-clickeable:hover { color: var(--text-primary); }
+.te-codigo-clickeable { cursor: pointer; text-decoration: none; }
+.te-codigo-clickeable:hover { color: var(--text-primary); text-decoration: none; }
 
 /* D.2: badges clickeables (Es requisito / Buscarlo / Cerrar) — mismo
    tamaño que .badge (padding/font-size/pill), pero .badge sola no trae
@@ -8392,3 +8392,16 @@ body.modal-abierto { overflow: hidden !important; }
 }
 .te-encabezado-detalle .te-det-lado--izq { left: 12px; }
 .te-encabezado-detalle .te-det-lado--der { right: 12px; }
+
+/* =========================================================================
+   2026-11-13 — Barra superior de UN SOLO TAMAÑO en la vista contraída / teléfono (<900px)
+   Todas las secciones usan el alto de la barra de Horario (la más alta: semestre + «Semana N» + fecha),
+   para que al pasar de una sección a otra la barra no se estire ni se encoja.
+   La vista extendida (≥900px, con todo visible) NO se toca.
+   El alto depende de «Tamaño de letra»: fórmula en rem + px medida en 14/16/18 px (coincide con Horario a 0.1px).
+   Para cambiar el alto de todas: editar --enc-alto-barra-movil. Revertir = borrar este bloque.
+   ========================================================================= */
+:root { --enc-alto-barra-movil: calc(27.3px + 3.45rem); }
+@media (max-width: 899.98px) {
+  .mobile-topbar { min-height: var(--enc-alto-barra-movil); box-sizing: border-box; }
+}
