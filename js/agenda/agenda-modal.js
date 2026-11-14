@@ -102,10 +102,38 @@ function abrirGestionAdjuntosEvento() {
 // para abrir el modal) — mismo patrón que window.renderizarHorario en
 // horario.js/horario-modal.js.
 function refrescarAgenda() {
+  // Repintar vacía y reconstruye las listas: sin esto el scroll volvía al inicio al marcar
+  // una tarea como completada. Se guarda la posición (ventana y contenedores con scroll) y se restaura.
+  const posicion = capturarScrollAgenda();
   window.renderizarAgenda?.();
   // Resumen agrega tareas/exámenes/eventos de Agenda — mismo motivo que
   // renderizarAgenda de arriba, mismo patrón de exposición en window.
   window.renderizarResumen?.();
+  restaurarScrollAgenda(posicion);
+}
+
+function capturarScrollAgenda() {
+  const raiz = document.scrollingElement || document.documentElement;
+  const internos = [];
+  document.querySelectorAll("#seccion-agenda, #seccion-agenda *, #seccion-resumen, #seccion-resumen *, .app-contenido").forEach((n) => {
+    if (n.scrollTop > 0 || n.scrollLeft > 0) internos.push({ n, t: n.scrollTop, l: n.scrollLeft });
+  });
+  return { x: raiz.scrollLeft, y: raiz.scrollTop, internos };
+}
+
+function restaurarScrollAgenda(p) {
+  const aplicar = () => {
+    const raiz = document.scrollingElement || document.documentElement;
+    if (raiz.scrollTop !== p.y) raiz.scrollTop = p.y;
+    if (raiz.scrollLeft !== p.x) raiz.scrollLeft = p.x;
+    p.internos.forEach(({ n, t, l }) => {
+      if (!n.isConnected) return;
+      n.scrollTop = t;
+      n.scrollLeft = l;
+    });
+  };
+  aplicar();
+  requestAnimationFrame(aplicar); // por si el layout termina de asentarse (filtros, medición de chips)
 }
 
 function buscarEventoVivoPorId(id) {

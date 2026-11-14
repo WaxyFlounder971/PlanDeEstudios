@@ -45,6 +45,7 @@ import { construirVistaCompetencias, obtenerAccionesEncabezadoCompetencias, sinc
 import { montarIndicadoresTimer } from "./tiempo-estudio-indicador.js";
 import { construirChipRacha, inicializarRacha, alFusionarDatosRacha, simularAnimacionRachaDemo } from "./tiempo-estudio-racha-ui.js";
 import { minutosSesionEnRango } from "./tiempo-estudio-periodos.js";
+import { acomodarEncabezadoTE, acomodarDetalleTE, construirBarraDetalleTE, iconoVistaTE, registrarRepintadoTE } from "./tiempo-estudio-angosto.js";
 import { abrirBuscarMateriaEn } from "../ui/buscar-materia.js";
 import {
   cambiarTimerEstudio,
@@ -485,12 +486,7 @@ function construirEncabezado(cont, botonSemestre = null) {
 
   if (enCompetencias) {
     const acciones = obtenerAccionesEncabezadoCompetencias(renderizarTiempoEstudio);
-    const btnUnirse = document.createElement("button");
-    btnUnirse.type = "button";
-    btnUnirse.className = "btn btn-secondary app-encabezado__lado";
-    btnUnirse.textContent = traducirTextoInterfaz("Unirse");
-    btnUnirse.addEventListener("click", () => acciones.alUnirse());
-    izquierda.appendChild(btnUnirse);
+    // "Unirse" ya no vive en el encabezado: va al pie de la lista de competencias (construirPieUnirse).
 
     const btnCrear = document.createElement("button");
     btnCrear.type = "button";
@@ -690,7 +686,9 @@ function crearPillVistaSeccion() {
     btn.type = "button";
     btn.className = "pill-item";
     btn.dataset.vista = valor;
-    btn.textContent = texto;
+    // Versión angosta (<900px): la píldora es la barra inferior y cada pestaña lleva su icono (en pantalla grande el CSS lo oculta).
+    btn.innerHTML = `${iconoVistaTE(valor)}<span class="te-nav-texto"></span>`;
+    btn.querySelector(".te-nav-texto").textContent = texto;
     btn.addEventListener("click", () => cambiarVistaTiempoEstudio(valor));
     grupo.appendChild(btn);
   });
@@ -744,6 +742,8 @@ function pintarEncabezadoTE() {
   if (!host) return;
   host.replaceChildren();
   construirEncabezado(host, construirBotonSemestreTiempo());
+  // Versión angosta (<900px): los mismos nodos suben a la barra superior (tiempo-estudio-angosto.js). En pantalla grande no hace nada.
+  acomodarEncabezadoTE(host);
 }
 
 /** Durante un arrastre, las pestañas vecinas deben estar ya armadas (si no, se ve un hueco o un corte). */
@@ -1041,7 +1041,10 @@ function construirEncabezadoDetalle(cont, item) {
 
   const tarjeta = document.createElement("div");
   tarjeta.className = "glass-card te-encabezado-detalle";
-  tarjeta.style.cssText = `display:flex; align-items:center; gap:10px; --te-color-materia:${color};`;
+  tarjeta.style.cssText = `display:flex; align-items:center; justify-content:center; --te-color-materia:${color};`;
+  // Pantalla grande: la paleta de ESTA sección toma el color de acento de la materia (el fondo general no cambia).
+  cont.dataset.teDetalle = "1";
+  cont.style.setProperty("--te-det-color", color);
 
   const btnVolver = document.createElement("button");
   btnVolver.type = "button";
@@ -1059,9 +1062,20 @@ function construirEncabezadoDetalle(cont, item) {
   titulo.type = "button";
   titulo.className = "te-encabezado-detalle-nombre";
   titulo.style.cssText =
-    "margin:0; flex:1; text-align:center; background:none; border:none; cursor:pointer; " +
-    "color:var(--text-primary); font-weight:700; font-size:1.05rem; padding:6px;";
-  titulo.textContent = nombreMateria;
+    "margin:0; flex:0 1 auto; min-width:0; max-width:100%; text-align:center; background:none; border:none; cursor:pointer; " +
+    "color:var(--text-primary); font-weight:700; font-size:1.05rem; padding:6px; " +
+    "display:flex; flex-direction:column; align-items:center; gap:1px; line-height:1.2;";
+  // Pantalla grande: código arriba (chico, color de acento) y nombre debajo, centrados — igual que en la barra superior del móvil.
+  const codigoTitulo = document.createElement("small");
+  codigoTitulo.className = "te-det-codigo";
+  codigoTitulo.textContent = item.esIndependiente ? "Propia" : materia.codigo || "";
+  codigoTitulo.hidden = !codigoTitulo.textContent;
+  // Igual que el código en la tarjeta de la lista: subrayado punteado y abre "Buscar materia en..." (el click sube al botón del título).
+  if (!item.esIndependiente) codigoTitulo.classList.add("te-codigo-clickeable");
+  const nombreTitulo = document.createElement("span");
+  nombreTitulo.className = "te-det-nombre";
+  nombreTitulo.textContent = item.nombreMateriaCorto || nombreMateria;
+  titulo.append(codigoTitulo, nombreTitulo);
   if (!item.esIndependiente) titulo.addEventListener("click", () => {
     abrirBuscarMateriaEn({ mm, materia, plan, semestre, nombreMateria, origen: "tiempo-estudio" });
   });
@@ -1078,10 +1092,33 @@ function construirEncabezadoDetalle(cont, item) {
     abrirModalConfigTiempoEstudio(mm, nombreMateria, () => alGuardarConfiguracionMateria(mm), confirmarEliminarMateriaPersonalizada);
   });
 
+  // Pantalla grande: ◀ anclado a la izquierda y ⋮ a la derecha (cada uno centrado en vertical); código + nombre
+  // centrados en ambos ejes del encabezado. El posicionamiento está en el CSS (.te-det-lado).
+  btnVolver.classList.add("te-det-lado", "te-det-lado--izq");
+  btnConfig.classList.add("te-det-lado", "te-det-lado--der");
   tarjeta.appendChild(btnVolver);
   tarjeta.appendChild(titulo);
   tarjeta.appendChild(btnConfig);
   cont.appendChild(tarjeta);
+
+  // Versión angosta (<900px): ◀ · código sobre nombre · ⋮ suben a la barra superior, la paleta toma el color de la
+  // materia y se agrega la barra inferior (tiempo-estudio-angosto.js). En pantalla grande no hace nada.
+  acomodarDetalleTE({
+    tarjeta,
+    btnVolver,
+    titulo,
+    btnConfig,
+    codigo: item.esIndependiente ? "Propia" : item.materia?.codigo || "",
+    nombre: item.nombreMateriaCorto || nombreMateria,
+    color,
+    alAgregar: () => abrirModalRegistroManual([item], () => renderizarTiempoEstudio()),
+  });
+  const barraDetalle = construirBarraDetalleTE((vista) => {
+    materiaDetalleActivaId = null;
+    vistaSeccionTE = vista;
+    renderizarTiempoEstudio();
+  });
+  if (barraDetalle) cont.appendChild(barraDetalle);
 }
 
 /**
@@ -1729,6 +1766,8 @@ function construirPantallaDetalle(cont, item) {
 function renderizarTiempoEstudio() {
   const cont = document.getElementById("seccion-tiempo-estudio");
   if (!cont) return;
+  cont.removeAttribute("data-te-detalle"); // lo vuelve a poner el encabezado del detalle
+  cont.style.removeProperty("--te-det-color");
   if (materiaDetalleActivaId || !panelesVistaTE || !cont.contains(panelesVistaTE.viewport)) {
     cont.innerHTML = "";
     panelesVistaTE = null;
@@ -1979,5 +2018,7 @@ function irADetalleMateriaTiempoEstudio(materiaMatriculadaId) {
 // directo — se expone igual acá por consistencia con ese patrón ya
 // establecido.
 window.renderizarTiempoEstudio = renderizarTiempoEstudio;
+
+registrarRepintadoTE(() => renderizarTiempoEstudio()); // la versión angosta lo usa al cambiar el ancho de la ventana
 
 export { inicializarTiempoEstudio, renderizarTiempoEstudio, obtenerEstudioParaHoy, irADetalleMateriaTiempoEstudio, formatearHorasMin, obtenerMateriasParaTiempoEstudio };

@@ -82,3 +82,13 @@ Otros atributos de `<html>` que el CSS lee: `data-rendimiento="reducido"` (Modo 
 - Visibilidad se maneja con la clase `.oculto`, no con `style.display` inline, salvo casos puntuales ya documentados en el propio CSS.
 - Cualquier elemento animado (transform/box-shadow/backdrop-filter) debe tener su contraparte apagada bajo `[data-rendimiento="reducido"]` si se agrega a una sección nueva, siguiendo el mismo criterio ya aplicado al resto del sistema.
 - El archivo crece por bloques con separador `/* ===== ... ===== */` fechados o versionados (v8.3, v1.14.1, etc.) — al agregar una sección nueva grande, seguir ese mismo patrón de encabezado para que seas rastreable en este índice.
+
+Cambio 2026-11-13: la barra superior móvil (`.mobile-topbar`, <900px) mide lo mismo en todas las secciones: el alto de la barra de Horario/Agenda/Tiempo (82.5 px con letra mediana), por la variable `--enc-alto-barra-movil` (`calc(27.3px + 3.45rem)`, bloque final de `css/design-system.css`). La vista extendida (≥900px) no cambia.
+
+Cambio 2026-11-13 (Comunidad angosta): en <900px la barra superior muestra «Comunidad» + conteos (sin el logo «Wapper»), el encabezado de la página se oculta, ⋮ va junto al switch Profesores/Compañeros y «+» es un botón flotante abajo a la derecha (como Notas). Bloque final de `css/design-system.css`; `comunidad` se agregó a `SECCIONES_CON_CTX` en `js/ui/topbar-contexto.js`. La vista extendida no cambia.
+
+Cambio 2026-11-13 (Horario angosto): «+» de la barra inferior sin resplandor; botón de descarga de 34px separado 6px del borde (sobresale sobre la columna del primer día; en `horario.js` el espaciador de 28px alinea a la izquierda); esquinas inferiores de la barra superior rellenas con `--bg-header-solido` (`.mobile-topbar::before`). Bloque final de `css/design-system.css`.
+
+Cambio 2026-11-13 (alineación de la barra superior móvil): ◀ (`.te-det-volver`) y ⋮ (`.agenda-btn-ajustes`, `.te-det-config` dentro de `.mobile-topbar`) se dibujan con CSS (puntos/triángulo centrados en su caja) en vez de caracteres, para que queden al mismo nivel que ☰ y 🔗 sin depender de la tipografía. Bloque final de `css/design-system.css`.
+
+Cambio 2026-11-13 (Finanzas angosta): en <900px la barra superior muestra título + subtítulo de la pantalla de Finanzas activa en vez del logo «Wapper» (`finanzas` en `SECCIONES_CON_CTX`, publicado desde `construirEncabezadoFinanzas`), el encabezado de la página se oculta y el ojo de «Ocultar importes» pasa a la esquina superior derecha de la primera tarjeta de Inicio (`.finanzas-ojo--tarjeta`). Movimientos ya no tiene fila propia de título + «Añadir movimiento». Bloque final de `css/design-system.css`.

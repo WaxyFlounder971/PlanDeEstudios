@@ -1795,11 +1795,12 @@ function construirSeccionHorasTotales(cont) {
   // Mismo grid 2x2 y misma tarjetita que "Resumen" de cada materia
   // (construirSeccionResumenFinal) — un solo lenguaje visual en Estadísticas.
   const grid = document.createElement("div");
-  grid.style.cssText = "display:grid; grid-template-columns:repeat(auto-fit, minmax(125px, 1fr)); gap:10px;";
+  // Sin forma de tarjeta (solo el texto) y centradas, también la última fila incompleta.
+  grid.style.cssText = "display:flex; flex-wrap:wrap; justify-content:center; gap:16px 10px;";
   tarjetas.forEach(([etiqueta, minutos, detalle]) => {
     const tarjeta = document.createElement("div");
     tarjeta.className = "stack";
-    tarjeta.style.cssText = "gap:4px; padding:12px 10px; border-radius:14px; border:1px solid var(--border-glass); background:rgba(255,255,255,0.03); text-align:center;";
+    tarjeta.style.cssText = "gap:4px; padding:6px 10px; flex:0 1 160px; min-width:125px; text-align:center;";
     tarjeta.innerHTML = `
       <span class="muted" style="font-size:0.72rem; line-height:1.25;">${etiqueta}</span>
       <strong style="font-size:1.05rem; font-variant-numeric:tabular-nums;">${formatearMinutos(minutos)}</strong>

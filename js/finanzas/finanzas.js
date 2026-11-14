@@ -180,8 +180,31 @@ function construirEncabezadoFinanzas() {
   if (estado.finanzasVistaActiva === "resumen") der.appendChild(construirBotonPrivacidad());
   fila.append(izq, centro, der);
   cab.appendChild(fila);
+
+  // 2026-11-13: versión angosta (<900px) — el encabezado de la página se oculta por CSS y título + subtítulo
+  // viven en la barra superior (ver js/ui/topbar-contexto.js), en lugar del logo «Wapper». El subtítulo largo
+  // se usa si cabe en una línea; si no, la versión corta. El ojo de «Ocultar importes» (solo en Inicio) pasa a
+  // la esquina superior derecha de la primera tarjeta (ver construirResumenFinanzas). En pantalla grande nada de esto se ve.
+  const ayudaCorta = AYUDA_CORTA_FINANZAS[estado.finanzasVistaActiva];
+  window.actualizarTopbarCtx?.("finanzas", {
+    titulo: traducirTextoInterfaz(info.etiqueta),
+    sub: [traducirTextoInterfaz(info.ayuda), ...(ayudaCorta ? [traducirTextoInterfaz(ayudaCorta)] : [])],
+  });
   return cab;
 }
+
+/** Subtítulos cortos para la barra superior del teléfono (caben en una línea). */
+const AYUDA_CORTA_FINANZAS = {
+  resumen: "Cuánto tienes y qué viene",
+  "gastos-u": "Lo que gastas, ganas y ahorras",
+  cuentas: "Efectivo, bancos y tarjetas",
+  deudas: "Préstamos y gastos divididos",
+  plan: "Pagos e ingresos que vienen",
+  presupuesto: "Cuánto gastar por categoría",
+  metas: "Lo que ahorras y tu avance",
+  semestres: "Matrícula y becas",
+  "gastos-estudiantiles": "Ayudas y gastos estudiantiles",
+};
 
 /** Le pasa a la navegación qué secciones hay, cuál está activa y qué hacen los botones de acción. */
 function actualizarNavegacionFinanzas() {
@@ -322,6 +345,14 @@ function construirResumenFinanzas() {
   const sobresRiesgo = construirBloqueSobresEnRiesgo();
   if (sobresRiesgo) sec.appendChild(sobresRiesgo);
   sec.appendChild(construirTarjetaPrincipalResumen(totales, modulos));
+  // Teléfono (<900px): el ojo de «Ocultar importes» vive dentro de la primera tarjeta (Disponible o, si no hay, la principal),
+  // arriba a la derecha. En pantalla grande se oculta por CSS y queda el del encabezado.
+  const primeraTarjeta = sec.querySelector(".disponible-hero, .resumen-hero");
+  if (primeraTarjeta) {
+    const ojo = construirBotonPrivacidad();
+    ojo.classList.add("finanzas-ojo--tarjeta");
+    primeraTarjeta.appendChild(ojo);
+  }
   // Con el modo privacidad las gráficas (que dibujan importes) se ocultan.
   if (!privacidadActiva() && (totalBecas !== 0 || totalGastado !== 0 || totalIngresos !== 0)) {
     sec.appendChild(construirGraficasResumenFinanzas(totalBecas, totalIngresos, totalGastado));
@@ -438,6 +469,7 @@ function renderizarFinanzas() {
   const cont = document.getElementById("seccion-finanzas");
   if (!cont) return;
   cont.innerHTML = "";
+  window.actualizarTopbarCtx?.("finanzas", { titulo: traducirTextoInterfaz("Finanzas") }); // onboarding / saldo inicial: sin subtítulo
 
   if (estado.finanzasPasoSaldoInicial) {
     ocultarNavegacionFinanzas();

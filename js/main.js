@@ -15,6 +15,7 @@ import { MODO_DEMO, PREVIEW_DEMO, activarEstadoDemo, cargarDatosDemo, registrarA
 import { configurarCorreoAnalitica, inicializarAnaliticaUso, registrarAnaliticaUso } from "./core/analitica.js";
 import { inicializarTutorialDesdeAjustes, mostrarOnboardingNuevoUsuario, mostrarTutorialPrimeraVez } from "./core/onboarding.js";
 import { aplicarLogoApp } from "./core/marca.js";
+import "./ui/topbar-contexto.js"; // barra superior contextual (solo <900px): Resumen, Asistente y Notas
 import { abrirIntroCarga, cancelarIntroCarga, iniciarIntroCarga, introEnCurso } from "./core/intro-apertura.js";
 import { inicializarInstalacionApp, mostrarInvitacionInstalacion } from "./core/instalacion-app.js";
 import { obtenerIniciales } from "./core/utils.js";
@@ -39,6 +40,8 @@ import { revisarWrappedAutomatico } from "./semestres/semestres-wrapped.js";
 import { inicializarModoDesarrollador } from "./core/modo-desarrollador.js";
 import { inicializarResumen, renderizarResumen } from "./resumen/resumen.js";
 import { inicializarAgenda, renderizarAgenda } from "./agenda/agenda.js";
+import "./tiempo-estudio/tiempo-estudio-angosto.js"; // Tiempo <900px: encabezado en la barra superior, barra inferior y "+" flotante
+import "./agenda/agenda-angosta.js"; // Agenda <900px: encabezado en la barra superior, barra inferior y "+" flotante
 import { inicializarHorario, renderizarHorario } from "./horario/horario.js";
 import { inicializarTiempoEstudio, renderizarTiempoEstudio } from "./tiempo-estudio/tiempo-estudio.js";
 import { revisarLinkInvitacionAlCargar } from "./tiempo-estudio/tiempo-estudio-competencias.js";
@@ -407,9 +410,14 @@ window.addEventListener("DOMContentLoaded", () => {
       // pendiente para siempre y cualquier intento de sync/sondeo quedaría
       // esperando indefinidamente en vez de simplemente no tener nada que
       // hacer sin token.
-      estado.conexionDrive = habiaCacheAlCargar ? "desconectado" : "ok";
+      // FIX: antes, con sesión en caché, aquí se marcaba "desconectado" sin intentar nada. Renovar el token va por el
+      // Worker y NO necesita el script de Google, así que se intenta igual; el estado lo decide asegurarTokenValido.
+      estado.conexionDrive = "ok";
       actualizarIndicadorSync();
       resolverAuthListo();
+      if (habiaCacheAlCargar) {
+        asegurarTokenValido().then((ok) => { if (ok) sincronizarAlIniciar(); });
+      }
     },
     alRechazarPermiso: (motivo) => {
       // FIX (bug reportado: "no le da permisos la primera vez y se rompe el
@@ -1629,6 +1637,7 @@ function mostrarSeccion(nombre, { desdeHistorial = false } = {}) {
   seccionNavegacionActual = nombre;
   window.__appSeccionActiva = nombre;
   window.sincronizarNavFinanzas?.(nombre); // sub-barra de Finanzas: solo visible en esa sección
+  window.sincronizarTopbarCtx?.(nombre); // barra superior contextual (<900px): título/subtítulo de Resumen, Asistente y Notas
   if (cambioSeccion) registrarAnaliticaUso(nombre, "Abrir sección");
   Object.entries(secciones).forEach(([clave, idEl]) => {
     const el = document.getElementById(idEl);

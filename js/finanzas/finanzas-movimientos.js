@@ -20,7 +20,6 @@ import { formatearFechaLarga, formatearMonto } from "./finanzas.js";
 import { obtenerTodosLosSemestres } from "./finanzas-gastos.js";
 import { abrirModalMovimiento, nombreMostradoMovimiento } from "./finanzas-movimiento-modal.js";
 import { formatearFrecuenciaRecurrente } from "./finanzas-recurrencia.js";
-import { abrirRegistroRapido } from "./finanzas-registro-rapido.js";
 
 const SECCIONES_POR_TIPO = [
   { tipo: "gasto", titulo: "Gastos", icono: "🧾", conSubtotal: true },
@@ -261,23 +260,8 @@ function renderizarPestanaMovimientos(contenedor) {
     renderizarPestanaMovimientos(contenedor);
   };
 
-  const cabecera = document.createElement("div");
-  cabecera.className = "row-between";
-  const h3 = document.createElement("h3");
-  h3.className = "texto-encabezado-seccion";
-  h3.style.margin = "0";
-  h3.textContent = t("Movimientos");
-  const btnAgregar = document.createElement("button");
-  btnAgregar.type = "button";
-  btnAgregar.className = "btn btn-primary";
-  btnAgregar.textContent = t("+ Añadir movimiento");
-  // Registro rápido primero (monto y listo); el formulario completo queda en "Más opciones".
-  btnAgregar.addEventListener("click", () => abrirRegistroRapido({
-    alGuardar: refrescar,
-    abrirFormularioCompleto: () => abrirModalMovimiento({ alGuardar: refrescar }),
-  }));
-  cabecera.append(h3, btnAgregar);
-  contenedor.appendChild(cabecera);
+  // 2026-11-13: sin fila propia de título + «Añadir movimiento»: el encabezado ya dice «Movimientos» y el botón ＋ vive
+  // en la barra inferior (teléfono) y en la navegación lateral (escritorio).
 
   const visibles = obtenerMovimientosVisibles();
   if (!visibles.length) {

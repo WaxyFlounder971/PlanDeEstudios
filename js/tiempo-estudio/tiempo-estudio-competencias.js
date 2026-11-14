@@ -1741,6 +1741,23 @@ function armarEasterEggSimulacion(entrada, refrescar) {
 }
 
 /**
+ * Pie de la vista: «Unirse a una competencia» como botón de texto discreto, al final de todo
+ * (mismo estilo que «Mostrar más materias» / «Nueva Materia» al pie de Materias). Antes era un
+ * botón del encabezado.
+ */
+function construirPieUnirse(envoltorio, refrescar) {
+  const pie = document.createElement("div");
+  pie.className = "te-pestanas-finales-materias te-pie-unirse";
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "te-pestana-final-materias";
+  btn.textContent = traducirTextoInterfaz("Unirse a una competencia");
+  btn.addEventListener("click", () => obtenerAccionesEncabezadoCompetencias(refrescar).alUnirse());
+  pie.appendChild(btn);
+  envoltorio.appendChild(pie);
+}
+
+/**
  * Punto de entrada — llamado desde tiempo-estudio.js cuando el pill
  * superior está en "Competencias". `refrescar` es el mismo callback sin
  * argumentos (`renderizarTiempoEstudio`) que ya usan Materias/Estadísticas.
@@ -1800,6 +1817,7 @@ function construirVistaCompetencias(cont, refrescar) {
     nota.className = "muted";
     nota.textContent = "Podios, cambios de vista y celebraciones de prueba usan los mismos componentes visuales de la app, con datos ficticios.";
     envoltorio.appendChild(nota);
+    construirPieUnirse(envoltorio, refrescar);
     cont.appendChild(envoltorio);
     return;
   }
@@ -1864,6 +1882,7 @@ function construirVistaCompetencias(cont, refrescar) {
       <p class="muted" style="margin:0; font-size:0.82rem;">Creá una y compartí el link, o unite con uno que te pasen.</p>
     `;
     envoltorio.appendChild(vacio);
+    construirPieUnirse(envoltorio, refrescarDatos);
     vistaCompetenciasCache = entrada;
     cont.appendChild(envoltorio);
     return;
@@ -1896,6 +1915,7 @@ function construirVistaCompetencias(cont, refrescar) {
   // ninguna finalizada; el botón "Recuperar historial" que tuvo brevemente
   // se sacó, no aportaba nada al caso de uso real).
   construirRegistroCompetencias(envoltorio, refrescarDatos);
+  construirPieUnirse(envoltorio, refrescarDatos);
 
   vistaCompetenciasCache = entrada;
   cont.appendChild(envoltorio);

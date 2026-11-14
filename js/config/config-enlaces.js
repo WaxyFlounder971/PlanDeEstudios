@@ -43,8 +43,10 @@ function renderizarListaEnlacesEn(contenedorId, enlaces, conEditar) {
 
   enlaces.forEach((enlace) => {
     const item = document.createElement("div");
-    item.className = "glass-panel row-between";
-    item.style.padding = "10px 14px";
+    // v3.28.0 B (E1): en el panel lateral y el cajón la fila toma el diseño de los ítems del menú (.enlace-rapido-fila);
+    // la lista de Configuración (conEditar) conserva su aspecto de tarjeta.
+    item.className = "glass-panel row-between" + (conEditar ? "" : " enlace-rapido-fila");
+    if (conEditar) item.style.padding = "10px 14px";
 
     const enlaceAbrir = document.createElement("a");
     enlaceAbrir.href = enlace.url;

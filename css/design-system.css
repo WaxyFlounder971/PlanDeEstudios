@@ -1480,6 +1480,7 @@ body.asistente-teclado-abierto .mobile-topbar {
   padding: 0;
 }
 .btn-topbar-icono:active { opacity: 0.6; }
+.btn-topbar-icono svg { width: 22px; height: 22px; display: block; }
 /* flex:1 para que el título ocupe el espacio del medio y el botón de
    Enlaces (agregado después de <h3> en el HTML) quede pegado al borde
    derecho de la barra, sin necesitar un wrapper extra. */
@@ -1806,6 +1807,10 @@ a:hover .enlace-rapido-nombre {
 /* v3.28.0 B (E1, corrección): toda la fila es clicable, no solo el texto (enlace extendido). El hover resalta la fila entera. */
 .enlace-rapido-fila.glass-panel { position: relative; }
 .enlace-rapido-fila > a::after { content: ""; position: absolute; inset: 0; border-radius: inherit; }
+/* v3.29.2: el borde transparente de la fila perdía contra html[data-mode="true-dark"][data-palette] .glass-panel (0,3,1) y
+   [data-mode="light"] .glass-panel, que fijan border-color. Se sube la especificidad para que gane en todos los modos. */
+html[data-mode] .enlace-rapido-fila.glass-panel,
+html[data-mode][data-palette] .enlace-rapido-fila.glass-panel { border-color: transparent; }
 
 /* ---- Enlaces Rápidos laterales: solo con espacio de sobra a la derecha ---- */
 .enlaces-lateral {
@@ -3187,6 +3192,7 @@ img, svg { max-width: 100%; }
 .btn-instalar-app-flotante.instalar-ocultando { opacity:0; transform:translateY(8px) scale(.92); pointer-events:none; }
 .btn-instalar-app-flotante.oculto { display:none; }
 .instalar-app-icono { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); display:grid; place-items:center; width:28px; height:28px; font-size:1.55rem; line-height:1; flex:0 0 auto; transition:left .52s cubic-bezier(.22,1,.36,1),transform .52s cubic-bezier(.22,1,.36,1); }
+.instalar-app-icono svg { width:24px; height:24px; display:block; overflow:visible; }
 .instalar-expandido .instalar-app-icono { left:18px; transform:translateY(-50%); }
 .instalar-app-texto { margin-left:25px; white-space:nowrap; font-size:.98rem; font-weight:750; letter-spacing:.01em; opacity:0; transform:translateX(5px); transition:opacity .28s ease .08s,transform .42s cubic-bezier(.22,1,.36,1) .04s; }
 .instalar-expandido .instalar-app-texto { opacity:1; transform:translateX(0); }
@@ -4796,9 +4802,16 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
 .horario-dias-pill-grid .pill-item { flex: none; white-space: normal; }
 
 /* Selector de hora personalizado (2 selects tipo select-custom lado a lado). */
-.horario-selector-hora { display: flex; align-items: center; gap: 4px; }
-.horario-selector-hora .select-custom { flex: 1; min-width: 0; }
-.horario-selector-hora .select-custom-boton { text-align: center; padding-left: 8px; padding-right: 8px; }
+/* Las dos zonas (inicio / fin) se reparten el ancho sobrante por igual y los 4 cuadros (HH : MM) miden lo mismo:
+   sin esto los cuadros se encogían al contenido y el número se partía en dos líneas ("4 / 5"). */
+.horario-zona-hora { flex: 1 1 0; min-width: 0; }
+.horario-selector-hora { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; }
+.horario-selector-hora .select-custom { flex: 1 1 0; min-width: 0; width: auto; }
+.horario-selector-hora .select-custom-boton {
+  justify-content: center; text-align: center; white-space: nowrap;
+  padding-left: 4px; padding-right: 4px;
+  background-image: none; /* sin flecha: el número va centrado y nunca se tapa ni se parte */
+}
 .horario-selector-hora-separador { font-weight: 700; color: var(--text-muted); }
 
 /* Ajustes → Horario → "Días de la semana" (2026-08-23): antes eran 2 listas
@@ -5285,8 +5298,8 @@ html.exportar-tema-default:is([data-mode="dark"], [data-mode="true-dark"]) {
    se mudó adentro del modal de Ajustes). */
 .te-encabezado { flex-wrap: wrap; }
 
-.te-codigo-clickeable { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 2px; }
-.te-codigo-clickeable:hover { color: var(--text-primary); }
+.te-codigo-clickeable { cursor: pointer; text-decoration: none; }
+.te-codigo-clickeable:hover { color: var(--text-primary); text-decoration: none; }
 
 /* D.2: badges clickeables (Es requisito / Buscarlo / Cerrar) — mismo
    tamaño que .badge (padding/font-size/pill), pero .badge sola no trae
@@ -7653,3 +7666,847 @@ body.enlaces-drawer-abierto .timer-plegado-boton { translate: calc(12px - min(32
 }
 [data-rendimiento="reducido"] .timer-plegado-boton:hover { box-shadow: none; }
 [data-rendimiento="reducido"] .timer-plegado-boton .timer-luz { animation: none; }
+
+/* =========================================================================
+   Barra superior contextual — SOLO versión angosta (< 900px)
+   -------------------------------------------------------------------------
+   Resumen, Asistente y Notas rápidas: la barra superior móvil muestra el título
+   y subtítulo de la sección en vez del logo (☰ y 🔗 siguen siempre visibles), y
+   el encabezado que antes iba dentro de la página se oculta. El texto es el mismo
+   tamaño de siempre (--enc-fs-titulo / --enc-fs-sub), siempre en UNA línea y
+   sin "…": js/ui/topbar-contexto.js elige la versión corta si la larga no entra.
+   Marca: <body data-topbar-ctx="resumen|asistente|notas"> (lo pone ese módulo).
+   ========================================================================= */
+/* Piezas nuevas: ocultas por defecto, así en >=900px no existen. */
+.topbar-ctx[hidden], .topbar-ctx__sub[hidden], .topbar-progreso[hidden] { display: none; }
+.topbar-asistente-accion { display: none; } /* ⓘ y ⟳ del Asistente: solo en la barra superior angosta */
+.notas-seccion .notas-fab, .notas-seccion .notas-ajustes-angosto { display: none; }
+
+@media (max-width: 899.98px) {
+  /* Barra: bordes inferiores redondeados; el progreso del semestre recorre ese borde. */
+  body[data-topbar-ctx] .mobile-topbar { border-radius: 0 0 18px 18px; }
+  body[data-topbar-ctx] .mobile-topbar-centro > h3 { display: none !important; } /* !important: el <h3> trae display:flex inline en index.html */
+
+  .topbar-ctx {
+    align-self: stretch; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; gap: var(--enc-gap, 1.4px);
+    text-align: center;
+  }
+  .topbar-ctx__titulo {
+    margin: 0; font-family: var(--font-display); font-size: var(--enc-fs-titulo, 1.21875rem);
+    font-weight: 600; line-height: 1.2; color: var(--text-primary);
+    white-space: nowrap; overflow: visible; max-width: none;
+  }
+  .topbar-ctx__sub {
+    font-size: var(--enc-fs-sub, 0.78rem); line-height: 1.2; color: var(--text-muted);
+    white-space: nowrap;
+  }
+
+  /* Progreso: sombra interior de 3px que sigue la curva del borde (pista tenue + relleno recortado al %). */
+  .topbar-progreso {
+    position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+    box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--text-primary) 14%, transparent);
+  }
+  .topbar-progreso__fill {
+    position: absolute; inset: 0; border-radius: inherit;
+    box-shadow: inset 0 -3px 0 var(--color-primario, var(--accent-1, #7c9eff));
+    clip-path: inset(0 calc(100% - var(--p, 0%)) 0 0);
+    transition: clip-path 0.45s cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+
+  /* Resumen: la tarjeta "Semana N de M" ya está arriba, en la barra. */
+  body[data-topbar-ctx="resumen"] .resumen-semana-tarjeta { display: none; }
+
+  /* Asistente: se oculta el encabezado; ⓘ pasa junto a ☰ y ⟳ junto a 🔗 en la barra superior. */
+  body[data-topbar-ctx="asistente"] #asistente-encabezado { display: none; }
+  body[data-topbar-ctx="asistente"] .mobile-topbar { gap: 6px; }
+  body[data-topbar-ctx="asistente"] .topbar-asistente-accion { display: flex; color: var(--accent-1); }
+  body[data-topbar-ctx="asistente"] .topbar-asistente-accion:hover { background: color-mix(in srgb, var(--accent-1) 16%, transparent); border-radius: 50%; }
+
+  /* Notas: se oculta el encabezado; ⋮ va al final de la búsqueda y "+" es un botón flotante. */
+  body[data-topbar-ctx="notas"] .notas-encabezado { display: none; }
+  body[data-topbar-ctx="notas"] .notas-seccion .notas-ajustes-angosto { display: inline-flex; flex: none; }
+  body[data-topbar-ctx="notas"] .notas-ajustes-angosto .nt-btn-circulo { width: 40px; height: 40px; min-width: 40px; min-height: 40px; }
+  body[data-topbar-ctx="notas"] .notas-seccion .notas-fab {
+    display: inline-grid; place-items: center;
+    position: fixed; z-index: 45;
+    right: calc(18px + env(safe-area-inset-right, 0px));
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: 56px; height: 56px; min-width: 56px; min-height: 56px; padding: 0;
+    border-radius: 50%; line-height: 1; box-shadow: var(--shadow-float, 0 8px 24px rgba(0, 0, 0, 0.35));
+  }
+  /* Si el botón flotante de "Instalar app" está a la vista, el "+" se sube para no taparlo. */
+  body[data-topbar-ctx="notas"]:has(.btn-instalar-app-flotante:not(.oculto)) .notas-seccion .notas-fab {
+    bottom: calc(18px + 52px + 12px + env(safe-area-inset-bottom, 0px));
+  }
+}
+/* =========================================================================
+   Agenda angosta (< 900px) — encabezado en la barra superior, barra inferior de 3 botones y "+" flotante
+   -------------------------------------------------------------------------
+   Solo cambian POSICIONES: los elementos, textos, tamaños de letra, animaciones y la lógica de Agenda son los
+   de siempre. js/agenda/agenda-angosta.js mueve los mismos nodos (semestre, "Semana N · rango · Hoy", ⋮ y +) y
+   pone <body class="agenda-angosta">; <body data-topbar-ctx="agenda"> (js/ui/topbar-contexto.js) marca que
+   Agenda está abierta. En >= 900px nada de esto se aplica: el switch pill y el encabezado siguen igual.
+   El switch pill (#pills-agenda-vista) pasa a ser la barra inferior: mismos botones, mismo thumb que sigue al
+   dedo (--nav-pill-progreso) y mismo gesto de deslizar entre vistas.
+   ========================================================================= */
+.topbar-agenda { display: none; }
+.agenda-nav-ico { display: none; }
+
+@media (max-width: 899.98px) {
+  :root { --agenda-nav-alto: 64px; }
+
+  /* ---- Barra superior: semestre · Semana N · rango + Hoy entre ☰ y ⋮ 🔗 ---- */
+  body.agenda-angosta[data-topbar-ctx="agenda"] #topbar-ctx { display: none; }
+  body.agenda-angosta[data-topbar-ctx="agenda"] .mobile-topbar { gap: 6px; }
+  body.agenda-angosta[data-topbar-ctx="agenda"] #topbar-agenda {
+    align-self: stretch; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; gap: var(--enc-gap, 2px);
+    text-align: center;
+    /* Centrado respecto a TODO el ancho de la barra: a la izquierda hay 2 botones (☰ ⋮) y a la derecha 1 (🔗);
+       este margen iguala los dos lados (42px = 1 botón) para que el bloque no se corra por los iconos. */
+    margin-right: 42px;
+  }
+  /* Lo mismo para el aviso de "Sin conexión" y la línea del timer de estudio: centrados en TODA la barra. */
+  body.agenda-angosta[data-topbar-ctx="agenda"] :is(#pill-sin-conexion, #timer-linea-topbar) { margin-right: 42px; }
+  body.agenda-angosta #topbar-agenda #agenda-nombre-semestre {
+    height: auto; min-height: 0; max-width: none;
+    padding: 3px 8px; margin: -3px 0;            /* zona de toque cómoda sin engordar la barra */
+    line-height: 1.2; white-space: nowrap; overflow-wrap: normal;
+  }
+  body.agenda-angosta #topbar-agenda #agenda-subheader-dinamico { gap: var(--enc-gap, 2px); max-width: 100%; }
+  /* Una sola línea por elemento: el texto nunca se corta ni baja de renglón. */
+  body.agenda-angosta #topbar-agenda .app-encabezado__titulofila {
+    min-height: 0; gap: 0 !important; white-space: nowrap; line-height: 1.2;
+  }
+  body.agenda-angosta #topbar-agenda .app-encabezado__titulofila .btn-icono-fantasma {
+    padding: 6px 7px; margin: -6px -2px; line-height: 1;
+  }
+  body.agenda-angosta #topbar-agenda .app-encabezado__rango { min-height: 0; white-space: nowrap; line-height: 1.2; }
+
+  /* ⋮ (ajustes de Agenda): justo a la derecha de ☰ (order lo coloca ahí); solo mientras Agenda está abierta. */
+  body.agenda-angosta #btn-agenda-ajustes { display: none; order: -1; }
+  body.agenda-angosta[data-topbar-ctx="agenda"] #btn-hamburguesa { order: -2; }
+  body.agenda-angosta[data-topbar-ctx="agenda"] #btn-agenda-ajustes {
+    display: flex; width: 42px; height: 42px; font-size: 1.45rem; color: var(--text-primary);
+  }
+
+  /* Separación uniforme = la de las tarjetas (14px): barra superior → filtros → lista. */
+  body.agenda-angosta .app-contenido { padding-top: 14px; }
+  body.agenda-angosta #seccion-agenda .agenda-filtro-estados { margin-top: 0; }
+  body.agenda-angosta #seccion-agenda .agenda-busqueda-cont { margin: 0; }
+
+  /* El encabezado original (ya vacío) no ocupa lugar en la página. */
+  body.agenda-angosta #agenda-header { display: none; }
+
+  /* ---- Barra inferior: el mismo #pills-agenda-vista, fijo abajo ---- */
+  body.agenda-angosta #seccion-agenda {
+    padding-bottom: calc(var(--agenda-nav-alto) + env(safe-area-inset-bottom, 0px) + 24px);
+  }
+  /* Fondo de la barra a todo el ancho (el grupo de botones deja a la derecha el lugar del "+"). */
+  body.agenda-angosta #seccion-agenda::after {
+    content: ""; position: fixed; left: 0; right: 0; bottom: 0; z-index: 44; pointer-events: none;
+    height: calc(var(--agenda-nav-alto) + env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, var(--bg-header-solido, var(--bg-panel)) 94%, transparent);
+    border-top: 1px solid var(--border-glass);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  }
+  body.agenda-angosta #pills-agenda-vista {
+    position: fixed; left: 0; right: calc(66px + env(safe-area-inset-right, 0px)); bottom: env(safe-area-inset-bottom, 0px); z-index: 45;
+    width: auto; height: var(--agenda-nav-alto); box-sizing: border-box;
+    padding: 4px; gap: 0; overflow: visible;      /* 4px = el margen que usa el thumb para calcular su ancho */
+    background: transparent; border-radius: 0;
+  }
+  /* Resaltado: sin caja, sin barrita ni fondo. El activo se distingue por color más intenso y el texto en negrita. */
+  body.agenda-angosta #pills-agenda-vista .pill-switch-thumb { display: none; }
+  /* Separador fino entre los 3 botones y el "+". */
+  body.agenda-angosta #pills-agenda-vista::after {
+    content: ""; position: absolute; right: 0; top: 16px; bottom: 16px; width: 1px; background: var(--border-glass);
+  }
+  body.agenda-angosta #pills-agenda-vista .pill-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-width: 0; padding: 4px 2px; border-radius: 18px;
+    font-size: 0.7rem; font-weight: 600; line-height: 1.15;
+    color: var(--text-muted); overflow: visible; text-overflow: clip; white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="lista"]      { --tab-c: #f0b429; }
+  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="calendario"] { --tab-c: #2fb075; }
+  body.agenda-angosta #pills-agenda-vista .pill-item[data-vista="materia"]    { --tab-c: #22b8d9; }
+  body.agenda-angosta #pills-agenda-vista .pill-item.active { color: var(--tab-c); font-weight: 700; }
+  body.agenda-angosta #pills-agenda-vista .pill-item .agenda-nav-texto { overflow: visible; text-overflow: clip; white-space: nowrap; }
+
+  /* Iconos como en el prototipo: trazo de color con relleno translúcido; apagado 60%, activo 100%. */
+  body.agenda-angosta #pills-agenda-vista .agenda-nav-ico {
+    display: block; width: 24px; height: 24px; flex: none;
+    fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    color: var(--tab-c); opacity: 0.55; transition: opacity .18s ease, filter .18s ease;
+  }
+  body.agenda-angosta #pills-agenda-vista .pill-item.active .agenda-nav-ico { opacity: 1; filter: saturate(1.5) brightness(1.15); stroke-width: 2; }
+  [data-rendimiento="reducido"] body.agenda-angosta #pills-agenda-vista .agenda-nav-ico { transition: none; }
+
+  /* ---- "+" dentro de la barra, a la derecha, centrado en altura (círculo de 46px) ---- */
+  body.agenda-angosta #btn-agenda-agregar.agenda-fab {
+    position: fixed; z-index: 46;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc((var(--agenda-nav-alto) - 46px) / 2 + env(safe-area-inset-bottom, 0px));
+    width: 46px; height: 46px; min-width: 46px; min-height: 46px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.7rem; line-height: 1; border-radius: 50%;
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--accent-2) 35%, transparent);
+  }
+  /* "Instalar app": abajo del todo como siempre; solo sube cuando la barra inferior de Agenda está a la vista, para ir por encima de ella y alineado con el "+" (mismo eje vertical: 44px vs 46px → +1px). */
+  body.agenda-angosta:has(#seccion-agenda:not(.oculto)) .btn-instalar-app-flotante {
+    right: calc(10px + env(safe-area-inset-right, 0px)) !important;
+    bottom: calc(var(--agenda-nav-alto) + 14px + env(safe-area-inset-bottom, 0px)) !important;
+    height: 46px !important;                       /* mismo tamaño que el "+" */
+  }
+  body.agenda-angosta:has(#seccion-agenda:not(.oculto)) .btn-instalar-app-flotante:not(.instalar-expandido) { width: 46px !important; }
+  /* ☰ y 🔗 quedan donde siempre (igual que en las demás secciones); solo se acerca ⋮ a ☰. */
+  body.agenda-angosta[data-topbar-ctx="agenda"] #btn-agenda-ajustes { margin-left: -12px; }
+  /* La barra flotante de selección múltiple queda por encima de la barra inferior, no tapándola. */
+  body.agenda-angosta .agenda-barra-seleccion { bottom: calc(var(--agenda-nav-alto) + 14px + env(safe-area-inset-bottom, 0px)); }
+  /* Escribiendo en el buscador (teclado abierto) la barra y el "+" se apartan para no subir sobre el teclado. */
+  body.agenda-angosta #seccion-agenda:has(#agenda-busqueda-input:focus)::after,
+  body.agenda-angosta #seccion-agenda:has(#agenda-busqueda-input:focus) :is(#pills-agenda-vista, #btn-agenda-agregar) { display: none; }
+}
+
+/* =========================================================================
+   Horario — SOLO pantalla pequeña (< 900px). Misma mecánica que Agenda:
+   · el encabezado (semestre · Semana N · fecha) sube a la barra superior móvil, en lugar del logo y "Wapper";
+   · barra inferior anclada a todo el ancho (Horario · Amigos | +);
+   · pantalla completa flota sobre el horario y sube cuando existe "Instalar app".
+   body.horario-angosto lo pone horario.js (< 900px y sección Horario abierta). En pantalla grande no cambia nada.
+   ========================================================================= */
+.topbar-horario { display: none; }
+#horario-barra, #btn-horario-barra-fs { display: none !important; }
+.horario-descargar-icono { display: none; }
+
+@media (max-width: 899.98px) {
+  :root { --horario-nav-alto: 64px; }
+
+  /* ---- Barra superior: ☰ · semestre / Semana N / fecha · 🔗 ---- */
+  body.horario-angosto .mobile-topbar { border-radius: 0 0 18px 18px; gap: 6px; }
+  body.horario-angosto .mobile-topbar-centro > h3,
+  body.horario-angosto #topbar-ctx,
+  body.horario-angosto #topbar-agenda { display: none !important; }
+  body.horario-angosto #topbar-horario {
+    align-self: stretch; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; gap: var(--enc-gap, 2px); text-align: center;
+  }
+  body.horario-angosto #topbar-horario #horario-nombre-semestre {
+    height: auto; min-height: 0; max-width: none;
+    padding: 3px 8px; margin: -3px 0; line-height: 1.2; white-space: nowrap; overflow-wrap: normal;
+  }
+  body.horario-angosto #topbar-horario .app-encabezado__centro { gap: var(--enc-gap, 2px); max-width: 100%; }
+  body.horario-angosto #topbar-horario .app-encabezado__titulofila {
+    min-height: 0; gap: 0 !important; white-space: nowrap; line-height: 1.2;
+  }
+  body.horario-angosto #topbar-horario .app-encabezado__titulofila .btn-icono-fantasma { padding: 6px 7px; margin: -6px -2px; line-height: 1; }
+  body.horario-angosto #topbar-horario .app-encabezado__rango { min-height: 0; white-space: nowrap; line-height: 1.2; }
+  /* el encabezado original (ya sin contenido útil) no ocupa lugar */
+  body.horario-angosto #horario-header { display: none; }
+  body.horario-angosto .app-contenido { padding-top: 14px; }
+  body.horario-angosto #seccion-horario {
+    padding-bottom: calc(var(--horario-nav-alto) + env(safe-area-inset-bottom, 0px) + 16px);
+  }
+
+  /* ---- Barra inferior anclada ---- */
+  body.horario-angosto #horario-barra {
+    display: flex !important; align-items: center;
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; box-sizing: border-box;
+    height: calc(var(--horario-nav-alto) + env(safe-area-inset-bottom, 0px));
+    padding: 0 calc(10px + env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) 4px;
+    background: color-mix(in srgb, var(--bg-header-solido, var(--bg-panel)) 94%, transparent);
+    border-top: 1px solid var(--border-glass);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  }
+  .horario-barra__tabs { flex: 1; min-width: 0; height: var(--horario-nav-alto); display: flex; position: relative; padding: 4px; box-sizing: border-box; }
+  .horario-barra__tabs::after { content: ""; position: absolute; right: 0; top: 16px; bottom: 16px; width: 1px; background: var(--border-glass); }
+  .horario-barra__tab {
+    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    padding: 4px 2px; border: 0; border-radius: 18px; background: none; cursor: pointer;
+    font: inherit; font-size: 0.7rem; font-weight: 600; line-height: 1.15; white-space: nowrap;
+    color: var(--text-muted); -webkit-tap-highlight-color: transparent;
+  }
+  .horario-barra__tab[data-tab="horario"] { --tab-c: var(--accent-2); --nav-c1: #2F86DC; --nav-c2: #E0352F; }
+  .horario-barra__tab[data-tab="amigos"]  { --tab-c: var(--accent-2); --nav-c1: #E8632F; --nav-c2: #2F86DC; }
+  .horario-barra__tab.on { color: var(--text-primary); font-weight: 700; }
+  .horario-barra__ico { width: 24px; height: 24px; flex: none; display: block; opacity: 0.55; transition: opacity .18s ease, filter .18s ease; }
+  .horario-barra__tab.on .horario-barra__ico { opacity: 1; filter: saturate(1.5) brightness(1.15); }
+  .horario-barra__tab:focus-visible, .horario-barra__mas:focus-visible, .horario-fab-fs:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+  .horario-barra__mas {
+    flex: none; width: 46px; height: 46px; min-width: 46px; min-height: 46px; margin-left: 6px; padding: 0;
+    display: flex; align-items: center; justify-content: center; border-radius: 50%;
+    font-size: 1.7rem; line-height: 1; box-shadow: 0 3px 10px color-mix(in srgb, var(--accent-2) 35%, transparent);
+  }
+  /* en las vistas de amigos el "+" se oculta pero conserva su hueco */
+  #horario-barra .horario-barra__mas.oculto { display: flex !important; visibility: hidden; pointer-events: none; }
+
+  /* ---- Pantalla completa: flota sobre el horario; sube cuando hay botón de instalar ---- */
+  body.horario-angosto #btn-horario-barra-fs { display: inline-flex !important; }
+  .horario-fab-fs {
+    position: fixed; z-index: 46; width: 46px; height: 46px; min-width: 46px; min-height: 46px;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc(var(--horario-nav-alto) + 14px + env(safe-area-inset-bottom, 0px));
+    border: 1px solid var(--border-glass); background: var(--bg-header-solido); box-shadow: var(--shadow-float);
+    transition: bottom .3s cubic-bezier(.22, 1, .36, 1), transform var(--transition-fast);
+  }
+  /* "Instalar app": igual que en Agenda, por encima de la barra inferior */
+  body.horario-angosto .btn-instalar-app-flotante {
+    right: calc(10px + env(safe-area-inset-right, 0px)) !important;
+    bottom: calc(var(--horario-nav-alto) + 14px + env(safe-area-inset-bottom, 0px)) !important;
+    height: 46px !important;
+  }
+  body.horario-angosto .btn-instalar-app-flotante:not(.instalar-expandido) { width: 46px !important; }
+  body.horario-angosto:has(#btn-instalar-app-flotante:not(.oculto):not(.instalar-ocultando)) .horario-fab-fs {
+    bottom: calc(var(--horario-nav-alto) + 14px + 46px + 12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* ---- Descargar: solo icono en la esquina de la cuadrícula, a nivel del primer día ---- */
+  body.horario-angosto .horario-descargar-icono {
+    display: inline-flex; align-items: center; justify-content: center; flex: none;
+    width: 26px; height: 26px; padding: 0; border: 0; border-radius: 50%; background: none; cursor: pointer;
+    color: var(--text-secondary);
+  }
+}
+
+/* =========================================================================
+   Horario (< 900px) — ajuste 2: "+" grande al centro, horario como fondo (sin tarjeta) y Amigos como sección
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  /* barra: Horario · + · Amigos (el "+" sobresale, con anillo del color de la barra) */
+  body.horario-angosto #horario-barra { justify-content: space-between; padding: 0 4px env(safe-area-inset-bottom, 0px); }
+  .horario-barra__tab { height: var(--horario-nav-alto); padding: 6px 2px 4px; border-radius: 0; }
+  .horario-barra__tab.on { color: var(--accent-2); }
+  .horario-barra__mas {
+    width: 60px; height: 60px; min-width: 60px; min-height: 60px; margin: -30px 0 0; font-size: 2rem;
+    border: 4px solid var(--bg-header-solido); box-shadow: 0 4px 14px color-mix(in srgb, var(--accent-2) 45%, transparent);
+  }
+
+  /* Horario sin tarjeta: ocupa todo el fondo, de borde a borde */
+  body.horario-angosto .app-contenido { padding: 0; gap: 0; }
+  body.horario-angosto #seccion-horario { padding-bottom: 0; gap: 0; }
+  body.horario-angosto #horario-grid-contenedor {
+    background: none; border: 0; border-radius: 0; box-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none; padding: 0; margin: 0;
+  }
+
+  /* Panel de Amigos como sección: entre la barra superior y la inferior, sin velo, sin tarjeta y sin ✕ */
+  body.horario-angosto #modal-panel-amigos:not(.oculto) {
+    position: fixed; left: 0; right: 0; z-index: 44;
+    top: var(--horario-topbar-fin, 64px);
+    bottom: calc(var(--horario-nav-alto) + env(safe-area-inset-bottom, 0px));
+    display: block; padding: 0; overflow-y: auto; overscroll-behavior: contain;
+    background: var(--bg-canvas, var(--bg-header-solido));
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  body.horario-angosto #modal-panel-amigos .modal-card.fm2-panel {
+    width: 100%; max-width: none; max-height: none; overflow: visible; margin: 0; box-sizing: border-box;
+    padding: 16px 14px 24px; background: transparent; border: 0; border-radius: 0; box-shadow: none;
+    -webkit-backdrop-filter: none; backdrop-filter: none; animation: none;
+  }
+  body.horario-angosto #modal-panel-amigos .modal-x-close { display: none; }
+}
+
+/* =========================================================================
+   Horario (< 900px) — ajuste 3: Amigos sin título ni cuadrícula detrás; "pantalla completa" = modo inmersivo
+   (el encabezado se desliza hacia arriba y la barra inferior hacia abajo; body.horario-inmersivo lo pone horario.js)
+   ========================================================================= */
+.horario-fab-fs__salir { display: none; }
+@media (max-width: 899.98px) {
+  /* Amigos como sección: sin el título grande, sin la cuadrícula ni el botón flotante detrás */
+  body.horario-angosto #modal-panel-amigos .fm2-panel > h2 { display: none; }
+  body.horario-angosto:has(#modal-panel-amigos:not(.oculto)) #horario-grid-contenedor { visibility: hidden; }
+  body.horario-angosto:has(#modal-panel-amigos:not(.oculto)) #btn-horario-barra-fs { display: none !important; }
+
+  /* Modo inmersivo */
+  body.horario-angosto .mobile-topbar { transition: transform .25s ease, margin-bottom .25s ease; }
+  body.horario-angosto #horario-barra { transition: transform .25s ease; }
+  body.horario-angosto.horario-inmersivo .mobile-topbar {
+    transform: translateY(-100%); margin-bottom: calc(-1 * var(--horario-topbar-fin, 64px));
+  }
+  body.horario-angosto.horario-inmersivo #horario-barra { transform: translateY(100%); }
+  body.horario-angosto.horario-inmersivo .horario-fab-fs { bottom: calc(18px + env(safe-area-inset-bottom, 0px)); }
+  body.horario-angosto.horario-inmersivo .btn-instalar-app-flotante { bottom: calc(18px + env(safe-area-inset-bottom, 0px)) !important; }
+  body.horario-angosto.horario-inmersivo:has(#btn-instalar-app-flotante:not(.oculto):not(.instalar-ocultando)) .horario-fab-fs {
+    bottom: calc(18px + 46px + 12px + env(safe-area-inset-bottom, 0px));
+  }
+  body.horario-angosto.horario-inmersivo .horario-fab-fs__expandir { display: none; }
+  body.horario-angosto.horario-inmersivo .horario-fab-fs__salir { display: block; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body.horario-angosto .mobile-topbar, body.horario-angosto #horario-barra { transition: none; }
+}
+
+/* =========================================================================
+   Horario (< 900px) — ajuste 4: colores de la barra inferior (un solo tono, el acento de la app)
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  .horario-barra__tab[data-tab] { --nav-c1: var(--text-muted); --nav-c2: var(--text-muted); color: var(--text-muted); }
+  .horario-barra__tab[data-tab].on { --nav-c1: var(--accent-2); --nav-c2: var(--accent-2); color: var(--accent-2); }
+  .horario-barra__ico { opacity: 1; filter: none; }
+  .horario-barra__tab.on .horario-barra__ico { filter: none; }
+}
+
+/* Horario (< 900px) — ajuste 5: el botón flotante mostraba los dos iconos a la vez.
+   .app-encabezado__icono svg { display:block } (más arriba) pisaba el display:none del icono de salir; se sube la especificidad. */
+.app-encabezado__icono.horario-fab-fs .horario-fab-fs__salir { display: none; }
+@media (max-width: 899.98px) {
+  body.horario-angosto.horario-inmersivo .app-encabezado__icono.horario-fab-fs .horario-fab-fs__expandir { display: none; }
+  body.horario-angosto.horario-inmersivo .app-encabezado__icono.horario-fab-fs .horario-fab-fs__salir { display: block; }
+}
+
+/* =========================================================================
+   Horario (< 900px) — ajuste 6: encabezado siempre por encima, esquinas del panel de Amigos y estilo de Amigos
+   · La cuadrícula forma su propio nivel de apilado (z 30) por debajo de la barra superior (40), el menú lateral (55) y la
+     barra inferior (45): sus filas sticky internas (z 50) ya no pueden pasar por encima del encabezado ni de la barra.
+   · En modo expandido scrollea la página (no la cuadrícula): las filas sticky se pegan justo debajo de la barra superior.
+   · El panel de Amigos arranca en el borde superior, por debajo de la barra, con el mismo fondo de la app; así las esquinas
+     redondeadas de la barra se ven iguales que en las demás secciones.
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  body.horario-angosto #horario-grid-contenedor { position: relative; z-index: 30; }
+  body.horario-angosto #horario-grid-contenedor.horario-expandido [style*="position:sticky"][style*="top:0"] {
+    top: var(--horario-topbar-fin, 64px) !important;
+  }
+  body.horario-angosto.horario-inmersivo #horario-grid-contenedor.horario-expandido [style*="position:sticky"][style*="top:0"] {
+    top: 0 !important;
+  }
+
+  /* Panel de Amigos: de borde a borde, bajo la barra superior (z 40) y sobre la cuadrícula (z 30) */
+  body.horario-angosto #modal-panel-amigos:not(.oculto) {
+    top: 0; z-index: 35; box-sizing: border-box;
+    padding: var(--horario-topbar-fin, 64px) 0 0;
+    background: transparent;
+  }
+
+  /* Amigos con el lenguaje de la app: tarjetas de vidrio con borde fino y un solo acento (--accent-2) */
+  body.horario-angosto #modal-panel-amigos .fm2-conjunto {
+    color: var(--text-primary); border-radius: var(--radius-md); box-shadow: none;
+    background: color-mix(in srgb, var(--accent-2) 12%, var(--bg-header-solido));
+    border: 1px solid color-mix(in srgb, var(--accent-2) 40%, var(--border-glass));
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-conjunto-icono {
+    color: var(--accent-2); border-radius: var(--radius-sm);
+    background: color-mix(in srgb, var(--accent-2) 20%, transparent);
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-conjunto-sub { color: var(--text-secondary); opacity: 1; }
+  body.horario-angosto #modal-panel-amigos .fm2-conjunto-flecha { color: var(--accent-2); }
+  body.horario-angosto #modal-panel-amigos .fm2-preview {
+    background: color-mix(in srgb, var(--bg-header-solido) 70%, transparent); border: 1px solid var(--border-glass);
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-accion {
+    border-radius: var(--radius-md); color: var(--text-primary);
+    background: var(--bg-header-solido); border: 1px solid var(--border-glass);
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-accion svg { color: var(--accent-2); }
+  body.horario-angosto #modal-panel-amigos .fm2-lista-encabezado { color: var(--text-muted); font-weight: 600; }
+  body.horario-angosto #modal-panel-amigos .fm2-card {
+    border-radius: var(--radius-md); background: var(--bg-header-solido);
+    border: 1px solid color-mix(in srgb, var(--c) 38%, var(--border-glass));
+  }
+  body.horario-angosto #modal-panel-amigos .fm2-card.fm2-off { background: transparent; border-color: var(--border-glass); }
+  body.horario-angosto #modal-panel-amigos .fm2-switch[aria-pressed="true"] { background: var(--accent-2); }
+  body.horario-angosto #modal-panel-amigos .fm2-icono { color: var(--text-secondary); border-radius: var(--radius-sm); }
+  body.horario-angosto #modal-panel-amigos .fm2-icono.fm2-peligro { color: #e05252; }
+}
+
+/* =========================================================================
+   Horario (< 900px) — ajuste 7: "+" ↔ "Salir", pestañita de extender fija y modo inmersivo
+   · En el horario compartido el "+" central pasa a "Salir" (horario.js cambia su icono y su destino; es el mismo botón).
+   · La pestañita de extender/contraer 24 h deja de ir dentro del scroll: queda fija, centrada, justo sobre la barra inferior.
+     No se ve en modo inmersivo ni con el panel de Amigos abierto.
+   · Modo inmersivo: el contenido sube junto con la barra superior (alto medido antes de entrar) y la barra inferior baja
+     lo suficiente para que el "+", que sobresale de ella, tampoco se vea.
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  .horario-barra__mas svg { display: block; width: 26px; height: 26px; flex: none; }
+
+  /* !important: la pestañita trae position:sticky, z-index y fondo en línea desde horario.js */
+  body.horario-angosto .horario-barra-expandir {
+    position: fixed !important; z-index: 44 !important;
+    left: 50%; transform: translateX(-50%);
+    bottom: calc(var(--horario-nav-alto) + env(safe-area-inset-bottom, 0px));
+    width: 56px; padding: 0 !important; opacity: .85;
+    border: 1px solid var(--border-glass); border-bottom: 0; border-radius: 14px 14px 0 0;
+  }
+  body.horario-angosto .horario-barra-expandir-icono { font-size: 1.3rem; line-height: 1.5; }
+  body.horario-angosto.horario-inmersivo .horario-barra-expandir,
+  body.horario-angosto:has(#modal-panel-amigos:not(.oculto)) .horario-barra-expandir { display: none !important; }
+
+  /* como la pestañita ya no ocupa lugar en el scroll, se deja aire para que no tape la última fila */
+  body.horario-angosto #horario-grid { padding-bottom: 34px; }
+  /* en modo expandido scrollea la página: la cuadrícula no debe terminar detrás de la barra inferior */
+  body.horario-angosto #horario-grid-contenedor.horario-expandido {
+    margin-bottom: calc(var(--horario-nav-alto) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Modo inmersivo */
+  body.horario-angosto #horario-grid-contenedor { transition: max-height .25s ease; }
+  body.horario-angosto.horario-inmersivo #horario-barra { transform: translateY(calc(100% + 52px)); }
+}
+
+/* =========================================================================
+   Asistente: iconos propios en la fila de entrada (todas las pantallas) + botón "Instalar app" por encima de esa fila
+   (< 900px) + icono de enlace en Enlaces rápidos
+   ========================================================================= */
+.asistente-btn-icono {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex-shrink: 0;
+  padding: 6px; line-height: 1; cursor: pointer;
+  background: none; border: none; border-radius: var(--radius-pill);
+  color: var(--text-secondary);
+  transition: color .2s ease, background .2s ease, transform .15s ease;
+}
+.asistente-btn-icono svg { width: 22px; height: 22px; display: block; flex: none; }
+.asistente-btn-icono:hover:not(:disabled) { color: var(--text-primary); background: color-mix(in srgb, var(--text-primary) 8%, transparent); }
+.asistente-btn-icono:active:not(:disabled) { transform: scale(.94); }
+.asistente-btn-enviar, .asistente-btn-enviar:hover:not(:disabled) { color: var(--accent-2); }
+.asistente-btn-voz--grabando, .asistente-btn-voz--grabando:hover:not(:disabled) { color: #e05252; }
+.asistente-btn-voz--grabando svg { animation: asistente-pulso 1.4s ease-in-out infinite; }
+.asistente-btn-voz__tiempo { font-size: .8rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.asistente-icono-giro { animation: asistente-giro .9s linear infinite; }
+@keyframes asistente-pulso { 50% { opacity: .55; } }
+@keyframes asistente-giro { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .asistente-btn-voz--grabando svg, .asistente-icono-giro { animation: none; }
+}
+
+.drawer-enlaces-titulo { display: flex; align-items: center; gap: 8px; }
+.drawer-enlaces-titulo svg { width: 20px; height: 20px; flex: none; color: var(--accent-2); }
+.btn-flotante-enlaces svg { width: 20px; height: 20px; display: block; }
+
+@media (max-width: 899.98px) {
+  /* asistente.js publica --asistente-compositor-tope (borde inferior de pantalla → borde superior de la
+     fila de entrada). El botón flotante se coloca justo encima, así no tapa el micrófono ni el botón de enviar. */
+  body[data-topbar-ctx="asistente"] .btn-instalar-app-flotante {
+    bottom: calc(var(--asistente-compositor-tope, 84px) + 12px);
+  }
+}
+
+/* =========================================================================
+   Modales: bloqueo real del scroll de fondo (todas las pantallas; solo actúa con un modal abierto)
+   · body.modal-abierto ya ponía overflow:hidden en <body>; ahora también en <html> (mismo patrón que el onboarding) y la
+     tarjeta del modal no encadena el scroll hacia la página al llegar a su tope. js/ui/modal-scroll.js suma un respaldo táctil.
+   ========================================================================= */
+html:has(body.modal-abierto) { overflow: hidden !important; overscroll-behavior: none; }
+body.modal-abierto { overflow: hidden !important; }
+.modal-overlay, .modal-card { overscroll-behavior: contain; }
+
+/* =========================================================================
+   Panel de Amigos: lista de "Mis enlaces" desplegada dentro del panel (antes vivía en Ajustes → Horario compartido)
+   ========================================================================= */
+.fm2-enlaces { display: grid; gap: 8px; }
+.fm2-enlaces-sub { margin: 2px 2px 4px; font-size: .8rem; line-height: 1.45; }
+#btn-ir-enlaces-generados[aria-expanded="true"] { border-color: color-mix(in srgb, var(--accent-2) 55%, var(--border-glass)); }
+/* cada enlace pasa a dos líneas si no cabe: textos, estado y botones sin cortarse (antes "Activo" se partía en 3 líneas) */
+#lista-horario-enlaces-compartidos .row-between { flex-wrap: wrap; gap: 8px 10px; }
+#lista-horario-enlaces-compartidos .badge { white-space: nowrap; }
+
+/* =========================================================================
+   Parche v3.30 — Agenda / Horario / Tiempo de Estudio (< 900px)
+   ========================================================================= */
+
+/* ---- Agenda: filtros en UNA línea cuando caben ----
+   El panel de «Estado» (modo extendido) está cerrado pero fuera del flujo y sumaba ancho a la medición
+   (scrollWidth), así que la barra se partía en dos líneas aunque sobrara espacio. Cerrado, no cuenta. */
+.agenda-filtro-estados--midiendo .agenda-filtro-estado-popover:not(.abierto) { display: none !important; }
+
+/* ---- Tiempo de Estudio angosto: piezas ocultas por defecto (en >= 900px no existen) ---- */
+.topbar-estudio, .topbar-estudio-lado, .te-fab-host { display: none; }
+.te-nav-ico { display: none; }
+
+@media (max-width: 899.98px) {
+  :root { --te-nav-alto: 64px; --topbar-icono-bajar: 3px; }
+
+  /* Iconos ☰ ⋮ 🔗 un poco más abajo para alinearlos con el bloque central (un solo valor para ajustar). */
+  body[data-topbar-ctx="agenda"].agenda-angosta :is(#btn-hamburguesa, #btn-agenda-ajustes, #btn-topbar-enlaces),
+  body.horario-angosto :is(#btn-hamburguesa, #btn-topbar-enlaces),
+  body.te-angosto :is(#btn-hamburguesa, #btn-topbar-enlaces, #topbar-estudio-izq, #topbar-estudio-der) {
+    position: relative; top: var(--topbar-icono-bajar);
+  }
+
+  /* ---- Horario: botón de descarga más visible sin tocar el ancho de la columna (26px) ---- */
+  body.horario-angosto .horario-descargar-icono {
+    color: var(--accent-2);
+    background: color-mix(in srgb, var(--accent-2) 14%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-2) 40%, transparent);
+    transition: transform .15s ease, background .15s ease;
+  }
+  body.horario-angosto .horario-descargar-icono svg { width: 18px; height: 18px; stroke-width: 2.3; }
+  body.horario-angosto .horario-descargar-icono:active { transform: scale(.92); background: color-mix(in srgb, var(--accent-2) 26%, transparent); }
+
+  /* ---- Barra superior de Estudio: ☰ [izq] · centro · [der] 🔗 (lados iguales → el centro queda centrado) ---- */
+  body.te-angosto #topbar-ctx { display: none; }
+  body.te-angosto .mobile-topbar { gap: 6px; border-radius: 0 0 18px 18px; }
+  body.te-angosto .topbar-estudio-lado { display: flex; align-items: center; gap: 2px; flex: 1 1 0; min-width: 0; }
+  body.te-angosto #topbar-estudio-izq { justify-content: flex-start; }
+  body.te-angosto #topbar-estudio-der { justify-content: flex-end; }
+  body.te-angosto .mobile-topbar-centro { flex: 0 1 auto; max-width: 58%; }
+  body.te-angosto #topbar-estudio {
+    align-self: stretch; min-width: 0; max-width: 100%;
+    display: flex; flex-direction: column; align-items: center; gap: var(--enc-gap, 2px); text-align: center;
+  }
+  body.te-angosto #topbar-estudio .app-encabezado__semestre {
+    height: auto; min-height: 0; max-width: none; padding: 3px 8px; margin: -3px 0;
+    line-height: 1.2; white-space: nowrap; overflow-wrap: normal;
+  }
+  body.te-angosto #topbar-estudio .app-encabezado__centro { gap: var(--enc-gap, 2px); max-width: 100%; }
+  body.te-angosto #topbar-estudio .app-encabezado__titulofila { min-height: 0; gap: 0 !important; white-space: nowrap; line-height: 1.2; }
+  body.te-angosto #topbar-estudio .app-encabezado__rango { min-height: 0; white-space: nowrap; line-height: 1.2; }
+  body.te-angosto #topbar-estudio-izq .app-encabezado__lado { height: 32px; padding: 0 12px; font-size: .78rem; }
+  body.te-angosto #topbar-estudio-der .agenda-btn-ajustes { width: 42px; height: 42px; font-size: 1.45rem; color: var(--text-primary); }
+  body.te-angosto .app-contenido { padding-top: 14px; }
+
+  /* ---- Barra inferior: las 3 pestañas de siempre, fijas abajo ---- */
+  body.te-angosto #seccion-tiempo-estudio {
+    padding-bottom: calc(var(--te-nav-alto) + env(safe-area-inset-bottom, 0px) + 24px);
+  }
+  body.te-angosto #seccion-tiempo-estudio::after {
+    content: ""; position: fixed; left: 0; right: 0; bottom: 0; z-index: 44; pointer-events: none;
+    height: calc(var(--te-nav-alto) + env(safe-area-inset-bottom, 0px));
+    background: color-mix(in srgb, var(--bg-header-solido, var(--bg-panel)) 94%, transparent);
+    border-top: 1px solid var(--border-glass);
+    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  }
+  body.te-angosto #seccion-tiempo-estudio > :is(.pill-switch-binario, .te-barra-detalle) {
+    position: fixed; left: 0; right: calc(66px + env(safe-area-inset-right, 0px)); bottom: env(safe-area-inset-bottom, 0px); z-index: 45;
+    width: auto; height: var(--te-nav-alto); box-sizing: border-box; margin: 0;
+    padding: 4px; gap: 0; overflow: visible; background: transparent; border: 0; border-radius: 0; box-shadow: none;
+  }
+  body.te-angosto #seccion-tiempo-estudio > :is(.pill-switch-binario, .te-barra-detalle) .pill-switch-thumb { display: none; }
+  body.te-angosto #seccion-tiempo-estudio > :is(.pill-switch-binario, .te-barra-detalle)::after {
+    content: ""; position: absolute; right: 0; top: 16px; bottom: 16px; width: 1px; background: var(--border-glass);
+  }
+  body.te-angosto #seccion-tiempo-estudio :is(.pill-switch-binario, .te-barra-detalle) .pill-item {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    min-width: 0; padding: 4px 2px; border-radius: 18px;
+    font-size: .7rem; font-weight: 600; line-height: 1.15; color: var(--text-muted);
+    overflow: visible; text-overflow: clip; white-space: nowrap; -webkit-tap-highlight-color: transparent;
+  }
+  body.te-angosto .pill-item[data-vista="materias"]      { --tab-c: #9a5cf0; }
+  body.te-angosto .pill-item[data-vista="estadisticas"]  { --tab-c: #3a86f0; }
+  body.te-angosto .pill-item[data-vista="competencias"]  { --tab-c: #f0b429; }
+  body.te-angosto #seccion-tiempo-estudio .pill-item.active { color: var(--tab-c); font-weight: 700; }
+  body.te-angosto #seccion-tiempo-estudio .te-nav-ico {
+    display: block; width: 24px; height: 24px; flex: none;
+    fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+    color: var(--tab-c); opacity: .55; transition: opacity .18s ease, filter .18s ease;
+  }
+  body.te-angosto #seccion-tiempo-estudio .pill-item.active .te-nav-ico { opacity: 1; filter: saturate(1.5) brightness(1.15); stroke-width: 2; }
+  [data-rendimiento="reducido"] body.te-angosto .te-nav-ico { transition: none; }
+
+  /* ---- "+" flotante dentro de la barra, a la derecha ---- */
+  body.te-angosto #te-fab { display: block; }
+  body.te-angosto #te-fab > button {
+    position: fixed; z-index: 46;
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    bottom: calc((var(--te-nav-alto) - 46px) / 2 + env(safe-area-inset-bottom, 0px));
+    width: 46px; height: 46px; min-width: 46px; min-height: 46px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.7rem; line-height: 1; border-radius: 50%;
+    box-shadow: 0 3px 10px color-mix(in srgb, var(--accent-2) 35%, transparent);
+  }
+  body.te-angosto .btn-instalar-app-flotante {
+    right: calc(10px + env(safe-area-inset-right, 0px)) !important;
+    bottom: calc(var(--te-nav-alto) + 14px + env(safe-area-inset-bottom, 0px)) !important;
+    height: 46px !important;
+  }
+  body.te-angosto .btn-instalar-app-flotante:not(.instalar-expandido) { width: 46px !important; }
+
+  /* ---- Detalle de materia: ◀ · código/nombre · ⋮ en la barra superior ---- */
+  body.te-angosto-detalle #topbar-estudio .te-det-centro { display: flex; flex-direction: column; align-items: center; min-width: 0; max-width: 100%; }
+  body.te-angosto-detalle .te-det-codigo { font-size: .66rem; line-height: 1.2; letter-spacing: .03em; color: var(--accent-2); }
+  body.te-angosto-detalle .te-det-codigo.te-codigo-clickeable { padding: 2px 8px; margin: -2px 0; }
+  body.te-angosto-detalle .te-det-nombre {
+    font-family: var(--font-display); font-size: .95rem; font-weight: 700; line-height: 1.2;
+    max-width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  body.te-angosto-detalle .te-det-volver { width: 34px; height: 34px; font-size: .8rem; color: var(--text-primary); }
+  body.te-angosto-detalle .te-det-config { width: 42px; height: 42px; font-size: 1.45rem; color: var(--text-primary); }
+
+  /* Toda la paleta toma el color de la materia (--te-det-color lo pone el módulo en <body>). */
+  body.te-angosto-detalle {
+    --accent-1: var(--te-det-color);
+    --accent-2: color-mix(in srgb, var(--te-det-color) 55%, #fff);
+    --color-primario: var(--te-det-color);
+    --gradient-accent: linear-gradient(135deg, var(--te-det-color), color-mix(in srgb, var(--te-det-color) 55%, #fff));
+    --gradient-accent-alt: linear-gradient(135deg, var(--te-det-color), color-mix(in srgb, var(--te-det-color) 55%, #fff));
+    --accent-1-10: color-mix(in srgb, var(--te-det-color) 10%, transparent);
+    --accent-1-20: color-mix(in srgb, var(--te-det-color) 25%, transparent);
+    --accent-glow-1: color-mix(in srgb, var(--te-det-color) 26%, transparent);
+    --accent-glow-2: color-mix(in srgb, var(--te-det-color) 18%, transparent);
+  }
+  /* La línea de color bajo el encabezado */
+  body.te-angosto-detalle .mobile-topbar {
+    background: color-mix(in srgb, var(--te-det-color) 10%, var(--bg-panel));
+    border-bottom: 3px solid var(--te-det-color);
+    box-shadow: 0 8px 18px -10px var(--te-det-color);
+  }
+  body.te-angosto-detalle #seccion-tiempo-estudio::after {
+    background: color-mix(in srgb, var(--te-det-color) 9%, var(--bg-header-solido, var(--bg-panel)));
+    border-top-color: color-mix(in srgb, var(--te-det-color) 34%, var(--border-glass));
+  }
+  body.te-angosto-detalle #seccion-tiempo-estudio .glass-card { border-color: color-mix(in srgb, var(--te-det-color) 34%, var(--border-glass)); }
+
+  /* Timer: el anillo algo más contenido en el detalle del móvil */
+  body.te-angosto-detalle .te-timer-circular-wrap { width: min(70%, 200px); }
+  /* Sin logo ni "Wapper" en la barra superior de Estudio */
+  body.te-angosto .mobile-topbar-centro > h3 { display: none !important; }
+}
+
+/* ---- Tiempo de Estudio: todos los tamaños ---- */
+/* Estudiado · Faltan · Meta: sin forma de tarjeta (solo los números). La posición es la de siempre:
+   a la izquierda del anillo si todo cabe en una fila; debajo del timer cuando no cabe. */
+#seccion-tiempo-estudio .te-timer-col-stats .te-timer-stat {
+  background: none; border: 0; border-radius: 0; padding: 4px 10px;
+}
+/* Cuando la columna ya no cabe junto al anillo (contenedor angosto) los 3 datos van en una fila, sin partirse */
+@container te-timer15 (max-width: 420px) {
+  #seccion-tiempo-estudio .te-timer-col-stats { flex-direction: row; justify-content: center; gap: 8px; }
+  #seccion-tiempo-estudio .te-timer-col-stats .te-timer-stat { flex: 1 1 0; min-width: 0; white-space: nowrap; padding: 4px 2px; }
+}
+/* Detalle de materia en pantalla grande: solo el color de ACENTO toma el de la materia (no el fondo general) */
+#seccion-tiempo-estudio[data-te-detalle] {
+  --accent-1: var(--te-det-color);
+  --accent-2: color-mix(in srgb, var(--te-det-color) 55%, #fff);
+  --color-primario: var(--te-det-color);
+  --gradient-accent: linear-gradient(135deg, var(--te-det-color), color-mix(in srgb, var(--te-det-color) 55%, #fff));
+  --gradient-accent-alt: linear-gradient(135deg, var(--te-det-color), color-mix(in srgb, var(--te-det-color) 55%, #fff));
+  --accent-1-10: color-mix(in srgb, var(--te-det-color) 10%, transparent);
+  --accent-1-20: color-mix(in srgb, var(--te-det-color) 25%, transparent);
+}
+/* Encabezado de la materia (pantalla grande): código arriba, nombre abajo, centrados */
+.te-encabezado-detalle .te-det-codigo { display: block; font-size: .72rem; line-height: 1.2; letter-spacing: .03em; color: var(--accent-2); }
+.te-encabezado-detalle .te-det-nombre { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.te-encabezado-detalle .te-det-codigo[hidden] { display: none; }
+/* Racha: llama 50% más grande, sin píldora ni borde, número centrado con la llama */
+.te-llama--chip { height: 33px; }
+.te-racha-chip { border: 0 !important; background: none !important; padding: 0 6px; gap: 4px; align-items: center; box-shadow: none; }
+.te-racha-chip--riesgo { animation: none; }
+.te-racha-chip--riesgo .te-racha-num { color: var(--color-danger); }
+.te-racha-num { align-items: center; line-height: 1; }
+/* Pie de Competencias: un solo botón de texto («Unirse a una competencia») */
+.te-pestanas-finales-materias.te-pie-unirse { grid-template-columns: minmax(0, 1fr); }
+
+/* Encabezado de la materia (pantalla grande): UNA sola fila de alto. ◀ y ⋮ anclados a los lados, centrados
+   en vertical; código + nombre (que cuentan como un solo bloque) centrados en ambos ejes. */
+.te-encabezado-detalle { position: relative; min-height: 68px; padding: 10px 68px; }
+.te-encabezado-detalle .te-det-lado {
+  position: absolute; top: 0; bottom: 0; margin: auto 0; width: 44px; height: 44px; padding: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.te-encabezado-detalle .te-det-lado--izq { left: 12px; }
+.te-encabezado-detalle .te-det-lado--der { right: 12px; }
+
+/* =========================================================================
+   2026-11-13 — Barra superior de UN SOLO TAMAÑO en la vista contraída / teléfono (<900px)
+   Todas las secciones usan el alto de la barra de Horario (la más alta: semestre + «Semana N» + fecha),
+   para que al pasar de una sección a otra la barra no se estire ni se encoja.
+   La vista extendida (≥900px, con todo visible) NO se toca.
+   El alto depende de «Tamaño de letra»: fórmula en rem + px medida en 14/16/18 px (coincide con Horario a 0.1px).
+   Para cambiar el alto de todas: editar --enc-alto-barra-movil. Revertir = borrar este bloque.
+   ========================================================================= */
+:root { --enc-alto-barra-movil: calc(27.3px + 3.45rem); }
+@media (max-width: 899.98px) {
+  .mobile-topbar { min-height: var(--enc-alto-barra-movil); box-sizing: border-box; }
+}
+
+/* =========================================================================
+   2026-11-13 — Comunidad en versión angosta (<900px): un solo encabezado
+   La barra superior (js/ui/topbar-contexto.js) muestra «Comunidad» + conteos en vez del logo «Wapper»; el
+   encabezado de la página se oculta, ⋮ pasa al final de la fila del switch Profesores/Compañeros y «+» queda
+   flotando abajo a la derecha, igual que en Notas. En >=900px no cambia nada. Revertir = borrar este bloque
+   (y quitar «comunidad» de SECCIONES_CON_CTX en topbar-contexto.js).
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-encabezado { display: none; }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-fila-switch {
+    display: flex; align-items: center; gap: 8px; position: relative; z-index: 10;
+  }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-fila-switch > .pill-switch-binario { flex: 1; min-width: 0; width: auto; }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-ajustes-angosto { display: inline-flex; flex: none; }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-ajustes-angosto .agenda-btn-ajustes { width: 40px; height: 40px; }
+  body[data-topbar-ctx="comunidad"] #seccion-comunidad .com-fab {
+    display: inline-grid; place-items: center;
+    position: fixed; z-index: 45;
+    right: calc(18px + env(safe-area-inset-right, 0px));
+    bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+    width: 56px; height: 56px; min-width: 56px; min-height: 56px; padding: 0;
+    border-radius: 50%; line-height: 1; box-shadow: var(--shadow-float, 0 8px 24px rgba(0, 0, 0, 0.35));
+  }
+  /* Si el botón flotante de «Instalar app» está a la vista, el «+» se sube para no taparlo. */
+  body[data-topbar-ctx="comunidad"]:has(.btn-instalar-app-flotante:not(.oculto)) #seccion-comunidad .com-fab {
+    bottom: calc(18px + 52px + 12px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* =========================================================================
+   2026-11-13 — Horario (<900px): ajustes visuales
+   1) «+» de la barra inferior sin el resplandor (queda solo el anillo oscuro).
+   2) Botón de descarga más grande y separado del borde de la pantalla: sigue ocupando la columna de 28px, pero
+      sobresale unos px sobre la columna del primer día (no cambia ningún ancho de la cuadrícula).
+   3) Esquinas inferiores redondeadas de la barra superior: lo que se asomaba (el fondo azul de la página) se
+      rellena con el color de la fila de días, así la esquina se ve oscura. Revertir = borrar este bloque.
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  body.horario-angosto .horario-barra__mas,
+  body.horario-angosto .horario-barra__mas:hover,
+  body.horario-angosto .horario-barra__mas:active,
+  body.horario-angosto .horario-barra__mas:focus { box-shadow: none; }
+
+  body.horario-angosto .horario-descargar-icono { width: 34px; height: 34px; margin-left: 6px; }
+  body.horario-angosto .horario-descargar-icono svg { width: 21px; height: 21px; }
+
+  body.horario-angosto .mobile-topbar::before {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 18px; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(circle 18px at 18px 0, transparent 17.5px, var(--bg-header-solido) 18px) left bottom / 18px 18px no-repeat,
+      radial-gradient(circle 18px at 0 0, transparent 17.5px, var(--bg-header-solido) 18px) right bottom / 18px 18px no-repeat;
+  }
+}
+
+/* =========================================================================
+   2026-11-13 — Barra superior móvil (<900px): ◀ y ⋮ dibujados con CSS, centrados de verdad
+   Antes eran los caracteres «◀» y «⋮», cuyo dibujo dentro de la caja cambia según la tipografía del equipo
+   (en algunos se veían más arriba que ☰ y 🔗). Ahora son formas geométricas centradas en su caja de 34/42 px,
+   así quedan al mismo nivel que ☰ y 🔗 en cualquier equipo. Mismo tamaño aproximado y mismo color (currentColor).
+   Aplica a ⋮ de Tiempo (lista y detalle), Agenda, ◀ del detalle de materia y ☰. Revertir = borrar este bloque.
+   ========================================================================= */
+@media (max-width: 899.98px) {
+  .mobile-topbar :is(.agenda-btn-ajustes, .te-det-config, .te-det-volver) {
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 0 !important; line-height: 0 !important; padding: 0;
+  }
+  .mobile-topbar :is(.agenda-btn-ajustes, .te-det-config)::before {
+    content: ""; flex: none; width: 4px; height: 4px; border-radius: 50%; background: currentColor;
+    box-shadow: 0 -7px 0 currentColor, 0 7px 0 currentColor;
+  }
+  .mobile-topbar #btn-hamburguesa { display: inline-flex; align-items: center; justify-content: center; font-size: 0 !important; line-height: 0 !important; }
+  .mobile-topbar #btn-hamburguesa::before {
+    content: ""; flex: none; width: 16px; height: 2px; border-radius: 1px; background: currentColor;
+    box-shadow: 0 -7px 0 currentColor, 0 7px 0 currentColor;
+  }
+  .mobile-topbar .te-det-volver::before {
+    content: ""; flex: none; width: 11px; height: 12px; background: currentColor;
+    clip-path: polygon(100% 0, 100% 100%, 0 50%);
+  }
+}
+
+/* =========================================================================
+   2026-11-13 — Finanzas en versión angosta (<900px): título y subtítulo en la barra superior
+   Quita el logo «Wapper» de la barra y muestra ahí el título + subtítulo de la pantalla activa (Inicio,
+   Movimientos, Cuentas…); el encabezado de la página se oculta. El ojo «Ocultar importes» (solo Inicio) queda en
+   una fila a la derecha. En >=900px no cambia nada. Revertir = borrar este bloque y quitar «finanzas» de
+   SECCIONES_CON_CTX en topbar-contexto.js.
+   ========================================================================= */
+.finanzas-ojo--tarjeta { display: none; }
+@media (max-width: 899.98px) {
+  body[data-topbar-ctx="finanzas"] #seccion-finanzas .finanzas-cab { display: none; }
+  /* El ojo pasa a la esquina superior derecha de la primera tarjeta de Inicio. */
+  body[data-topbar-ctx="finanzas"] #seccion-finanzas .disponible-hero,
+  body[data-topbar-ctx="finanzas"] #seccion-finanzas .resumen-hero { position: relative; }
+  body[data-topbar-ctx="finanzas"] #seccion-finanzas .finanzas-ojo--tarjeta {
+    display: inline-flex; position: absolute; top: 8px; right: 8px; width: 34px; height: 34px;
+  }
+}

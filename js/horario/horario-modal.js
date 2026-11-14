@@ -545,11 +545,15 @@ function renderizarDiasYHoras(dias, estadoForm) {
       const etiquetaDia = document.createElement("span");
       etiquetaDia.className = "muted";
       etiquetaDia.style.minWidth = "70px";
+      etiquetaDia.style.flex = "none";
       etiquetaDia.textContent = dias.find((x) => x.abrevDefault === d.dia)?.etiqueta || d.dia;
       filaSuperior.appendChild(etiquetaDia);
 
       const zonaHoraInicio = document.createElement("div");
       const zonaHoraFin = document.createElement("div");
+      // Cada zona reparte el espacio sobrante por igual (ver .horario-zona-hora en el CSS), así los 4 cuadros miden lo mismo.
+      zonaHoraInicio.className = "horario-zona-hora";
+      zonaHoraFin.className = "horario-zona-hora";
       filaSuperior.appendChild(zonaHoraInicio);
       filaSuperior.appendChild(zonaHoraFin);
       fila.appendChild(filaSuperior);

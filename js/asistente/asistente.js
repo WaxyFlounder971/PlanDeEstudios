@@ -743,6 +743,21 @@ async function transcribirAudioConGemini(blob) {
   return transcribirBase64ConGemini(base64, blob.type || "audio/webm");
 }
 
+// Iconos propios del Asistente (mismo trazo que los del encabezado: 2.2, extremos redondeados, color por currentColor).
+const ATRIBUTOS_ICONO_ASISTENTE = 'viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"';
+const ICONOS_ASISTENTE = {
+  mic: `<svg ${ATRIBUTOS_ICONO_ASISTENTE}><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>`,
+  grabando: `<svg ${ATRIBUTOS_ICONO_ASISTENTE}><circle cx="12" cy="12" r="9"/><rect x="9" y="9" width="6" height="6" rx="1.5" fill="currentColor" stroke="none"/></svg>`,
+  procesando: `<svg ${ATRIBUTOS_ICONO_ASISTENTE} class="asistente-icono-giro"><path d="M21 12a9 9 0 1 1-6.2-8.55"/></svg>`,
+  enviar: `<svg ${ATRIBUTOS_ICONO_ASISTENTE}><path d="M21 3 10 14"/><path d="M21 3l-7 18-4-8-8-4 19-6z"/></svg>`,
+};
+
+// Único punto donde se dibuja el estado del botón de voz: "mic" (reposo), "grabando" (con el tiempo transcurrido si hay) o "procesando".
+function pintarIconoVoz(btn, tipo, tiempo = "") {
+  btn.classList.toggle("asistente-btn-voz--grabando", tipo === "grabando");
+  btn.innerHTML = ICONOS_ASISTENTE[tipo] + (tiempo ? `<span class="asistente-btn-voz__tiempo">${tiempo}</span>` : "");
+}
+
 /**
  * Botón de micrófono — vive al lado del input, mismo tratamiento visual
  * "solo símbolo, sin fondo de botón" que se le dio a 🔄 Nueva. Toca
@@ -760,9 +775,8 @@ function crearBotonVoz(input) {
   btn.title = traducirTextoInterfaz("Dictar por voz");
   btn.setAttribute("aria-label", traducirTextoInterfaz("Dictar por voz"));
   btn.setAttribute("aria-pressed", "false");
-  btn.textContent = "🎙️";
-  btn.style.cssText =
-    "background:none; border:none; font-size:1.4rem; line-height:1; cursor:pointer; padding:2px 8px; flex-shrink:0;";
+  pintarIconoVoz(btn, "mic");
+  btn.className = "asistente-btn-icono asistente-btn-voz";
 
   // true mientras hay una grabación de MediaRecorder en curso (fallback) —
   // separado de grabandoVoz (que cubre ambos caminos) porque btn.onclick
@@ -777,7 +791,7 @@ function crearBotonVoz(input) {
   const pintarTemporizador = () => {
     const segundos = Math.floor((Date.now() - inicioGrabacion) / 1000);
     const tiempo = `${String(Math.floor(segundos / 60)).padStart(2, "0")}:${String(segundos % 60).padStart(2, "0")}`;
-    btn.textContent = `🔴 ${tiempo}`;
+    pintarIconoVoz(btn, "grabando", tiempo);
     btn.title = traducirTextoInterfaz("Grabando, toca para detener. {tiempo}").replace("{tiempo}", tiempo);
     btn.setAttribute("aria-label", btn.title);
   };
@@ -885,7 +899,7 @@ function crearBotonVoz(input) {
           grabandoVoz = false;
           btn.setAttribute("aria-pressed", "false");
           btn.disabled = true;
-        btn.textContent = "⏳";
+        pintarIconoVoz(btn, "procesando");
         btn.title = traducirTextoInterfaz("Transcribiendo audio...");
           btn.setAttribute("aria-label", btn.title);
           try {
@@ -935,7 +949,7 @@ function crearBotonVoz(input) {
             );
           } finally {
             btn.disabled = false;
-            btn.textContent = "🎙️";
+            pintarIconoVoz(btn, "mic");
             btn.title = traducirTextoInterfaz("Dictar por voz");
             btn.setAttribute("aria-label", btn.title);
             window.__detenerGrabacionWapper = null;
@@ -950,7 +964,7 @@ function crearBotonVoz(input) {
         transicionandoAFallback = false;
         grabandoConFallback = false;
         grabandoVoz = false;
-        btn.textContent = "🎙️";
+        pintarIconoVoz(btn, "mic");
         btn.title = traducirTextoInterfaz("Dictar por voz");
         btn.setAttribute("aria-label", btn.title);
         btn.setAttribute("aria-pressed", "false");
@@ -966,7 +980,7 @@ function crearBotonVoz(input) {
 
     reconocimientoVoz.onstart = () => {
       grabandoVoz = true;
-      btn.textContent = "🔴";
+      pintarIconoVoz(btn, "grabando");
       btn.title = "Grabando… toca para detener";
     };
     reconocimientoVoz.onresult = (e) => {
@@ -1014,7 +1028,7 @@ function crearBotonVoz(input) {
       if (transicionandoAFallback) return;
       if (paradaManual) {
         grabandoVoz = false;
-        btn.textContent = "🎙️";
+        pintarIconoVoz(btn, "mic");
         btn.title = "Dictar por voz";
         input.focus();
         return;
@@ -1033,7 +1047,7 @@ function crearBotonVoz(input) {
         if (reiniciosSeguidosSinResultado >= 3) {
           reiniciosSeguidosSinResultado = 0;
           grabandoVoz = false;
-          btn.textContent = "🎙️";
+          pintarIconoVoz(btn, "mic");
           btn.title = "Dictar por voz";
           mostrarToast("No se pudo mantener la escucha activa. Prueba de nuevo.");
           return;
@@ -4027,6 +4041,12 @@ function construirEsqueletoAsistente(contenedor) {
   tituloSemana.className = "texto-encabezado-seccion app-encabezado__titulo";
   tituloSemana.textContent = traducirTextoInterfaz(numeroSemana ? `Semana ${numeroSemana}` : "Semana actual");
   centroEnc.appendChild(tituloSemana);
+  // Versión angosta (<900px): "Semana N" + "Asistente" viven en la barra superior (ver js/ui/topbar-contexto.js),
+  // en la misma posición y con el mismo tamaño que en Resumen.
+  window.actualizarTopbarCtx?.("asistente", {
+    titulo: tituloSemana.textContent,
+    sub: traducirTextoInterfaz("Asistente"),
+  });
   const btnNueva = document.createElement("button");
   btnNueva.type = "button";
   // Solo el símbolo (⟳), del alto de los demás botones del encabezado (38px) y en color de acento.
@@ -4052,6 +4072,20 @@ function construirEsqueletoAsistente(contenedor) {
   izquierdaEnc.appendChild(btnInfo);
   filaEncabezado.append(izquierdaEnc, centroEnc, derechaEnc);
   encabezado.appendChild(filaEncabezado);
+
+  // Versión angosta (<900px): el encabezado de arriba se oculta por CSS y sus dos acciones pasan a la barra superior:
+  // ⓘ justo a la derecha de ☰ y ⟳ justo a la izquierda de 🔗. Son copias con el MISMO onclick; el CSS solo las
+  // muestra con <body data-topbar-ctx="asistente"> en <900px, así que en pantallas anchas (y en otras secciones)
+  // no se ven y el encabezado de siempre queda intacto. Se reconstruyen en cada llamada para no duplicarlas.
+  document.querySelectorAll(".topbar-asistente-accion").forEach((n) => n.remove());
+  const crearCopiaTopbar = (original) => {
+    const copia = original.cloneNode(true);
+    copia.className = "btn-topbar-icono topbar-asistente-accion";
+    copia.onclick = original.onclick;
+    return copia;
+  };
+  document.getElementById("btn-hamburguesa")?.after(crearCopiaTopbar(btnInfo));
+  document.getElementById("btn-topbar-enlaces")?.before(crearCopiaTopbar(btnNueva));
 
   const scroll = document.createElement("div");
   scroll.id = "asistente-chat-scroll";
@@ -4085,15 +4119,16 @@ function construirEsqueletoAsistente(contenedor) {
   btnEnviar.id = "btn-asistente-enviar";
   btnEnviar.title = "Enviar";
   btnEnviar.setAttribute("aria-label", "Enviar");
-  btnEnviar.textContent = "➤";
-  btnEnviar.style.cssText =
-    "background:none; border:none; font-size:1.6rem; line-height:1; cursor:pointer; padding:2px 6px; flex-shrink:0; color:var(--color-luz, #6d5efc);";
+  btnEnviar.innerHTML = ICONOS_ASISTENTE.enviar;
+  btnEnviar.className = "asistente-btn-icono asistente-btn-enviar";
   btnEnviar.onclick = manejarEnvioMensaje;
   filaInput.appendChild(input);
   const btnVoz = crearBotonVoz(input);
   if (btnVoz) filaInput.appendChild(btnVoz);
   filaInput.appendChild(btnEnviar);
   tarjeta.appendChild(filaInput);
+  // Si la fila cambia de alto (el textarea crece o se vacía al enviar), el botón de instalar se reacomoda.
+  if (window.ResizeObserver) new ResizeObserver(publicarTopeCompositorAsistente).observe(filaInput);
 
   contenedor.appendChild(encabezado);
   contenedor.appendChild(tarjeta);
@@ -4185,8 +4220,21 @@ const UMBRAL_TECLADO_ABIERTO_PX = 120;
 let listenerViewportAsistenteInstalado = false;
 let observadorVisibilidadAsistente = null;
 
+// Distancia entre el borde inferior de la pantalla y el borde superior de la fila de entrada (input + micrófono + enviar).
+// El CSS la usa para subir el botón flotante "Instalar app" por encima de esa fila en pantalla pequeña.
+function publicarTopeCompositorAsistente() {
+  const fila = document.getElementById("input-asistente-mensaje")?.parentElement;
+  if (!fila || fila.offsetParent === null) {
+    document.documentElement.style.removeProperty("--asistente-compositor-tope");
+    return;
+  }
+  const tope = Math.round(document.documentElement.clientHeight - fila.getBoundingClientRect().top);
+  document.documentElement.style.setProperty("--asistente-compositor-tope", tope + "px");
+}
+
 function limpiarEstadoAsistente() {
   document.body.classList.remove("asistente-bloqueo-scroll", "asistente-teclado-abierto");
+  document.documentElement.style.removeProperty("--asistente-compositor-tope");
 }
 
 function sincronizarEstadoAsistente() {
@@ -4212,6 +4260,7 @@ function sincronizarEstadoAsistente() {
   const top = tarjeta.getBoundingClientRect().top;
   const alturaDisponible = alturaVisual - top - MARGEN_INFERIOR_CHAT_PX;
   tarjeta.style.height = `${Math.max(240, alturaDisponible)}px`;
+  publicarTopeCompositorAsistente();
 }
 
 function instalarListenerViewportAsistente() {

@@ -127,6 +127,8 @@ import { abrirModalRequisito } from "../plan/plan-detalle.js";
 
     /* ---- Rediseño: encabezado con acciones + buscador con filtros en popover ---- */
     .com-encabezado { position: relative; z-index: 10; }
+    .com-fila-switch { display: contents; }
+    #seccion-comunidad .com-fab, #seccion-comunidad .com-ajustes-angosto { display: none; }
     .com-menu-cont { position: relative; flex: none; }
     .com-popover {
       position: absolute; right: 0; top: calc(100% + 8px); z-index: 60;
@@ -4060,7 +4062,8 @@ function construirEncabezadoComunidad() {
   btnAgregar.textContent = "+";
   btnAgregar.title = enProfes ? "Agregar profesor" : "Agregar compañero";
   btnAgregar.setAttribute("aria-label", btnAgregar.title);
-  btnAgregar.addEventListener("click", () => (enProfes ? abrirModalAltaProfesor() : abrirModalAltaCompanero()));
+  const agregarSegunPestana = () => (estado.tabComunidad !== "companeros" ? abrirModalAltaProfesor() : abrirModalAltaCompanero());
+  btnAgregar.addEventListener("click", agregarSegunPestana);
   // 2026-11-04: posiciones intercambiadas — ⋮ a la izquierda y "+" a la derecha.
   zonaDer.appendChild(btnAgregar);
   fila.appendChild(zonaIzq);
@@ -4076,57 +4079,61 @@ function construirEncabezadoComunidad() {
   centro.append(titulo, conteo);
   fila.appendChild(centro);
 
-  const menu = document.createElement("div");
-  menu.className = "com-menu-cont";
-  const btnMenu = document.createElement("button");
-  btnMenu.type = "button";
-  btnMenu.className = "agenda-btn-ajustes";
-  btnMenu.textContent = "⋮";
-  btnMenu.title = "Exportar o importar";
-  btnMenu.setAttribute("aria-label", "Exportar o importar");
-  btnMenu.setAttribute("aria-haspopup", "true");
-  btnMenu.setAttribute("aria-expanded", "false");
-  const popover = document.createElement("div");
-  popover.className = "com-popover com-popover--menu oculto";
-  popover.setAttribute("role", "menu");
-  const cerrar = () => {
-    popover.classList.add("oculto");
+  // El mismo menú se arma dos veces: en el encabezado (pantalla grande) y junto al switch (teléfono, <900px).
+  const crearMenuAjustes = (izq) => {
+    const menu = document.createElement("div");
+    menu.className = "com-menu-cont";
+    const btnMenu = document.createElement("button");
+    btnMenu.type = "button";
+    btnMenu.className = "agenda-btn-ajustes";
+    btnMenu.textContent = "⋮";
+    btnMenu.title = "Exportar o importar";
+    btnMenu.setAttribute("aria-label", "Exportar o importar");
+    btnMenu.setAttribute("aria-haspopup", "true");
     btnMenu.setAttribute("aria-expanded", "false");
-  };
-  [
-    ["⬆ Exportar", () => (enProfes ? exportarProfesores() : exportarCompaneros())],
+    const popover = document.createElement("div");
+    popover.className = "com-popover com-popover--menu oculto";
+    popover.setAttribute("role", "menu");
+    const cerrar = () => {
+      popover.classList.add("oculto");
+      btnMenu.setAttribute("aria-expanded", "false");
+    };
     [
-      "⬇ Importar",
-      () =>
-        enProfes
-          ? abrirSelectorArchivoImportar("profesores", (items) => importarProfesores(items))
-          : abrirSelectorArchivoImportar("companeros", (items) => importarCompaneros(items)),
-    ],
-  ].forEach(([texto, accion]) => {
-    const item = document.createElement("button");
-    item.type = "button";
-    item.className = "btn btn-secondary";
-    item.setAttribute("role", "menuitem");
-    item.textContent = texto;
-    item.addEventListener("click", () => {
-      cerrar();
-      accion();
+      ["⬆ Exportar", () => (estado.tabComunidad !== "companeros" ? exportarProfesores() : exportarCompaneros())],
+      [
+        "⬇ Importar",
+        () =>
+          estado.tabComunidad !== "companeros"
+            ? abrirSelectorArchivoImportar("profesores", (items) => importarProfesores(items))
+            : abrirSelectorArchivoImportar("companeros", (items) => importarCompaneros(items)),
+      ],
+    ].forEach(([texto, accion]) => {
+      const item = document.createElement("button");
+      item.type = "button";
+      item.className = "btn btn-secondary";
+      item.setAttribute("role", "menuitem");
+      item.textContent = texto;
+      item.addEventListener("click", () => {
+        cerrar();
+        accion();
+      });
+      popover.appendChild(item);
     });
-    popover.appendChild(item);
-  });
-  btnMenu.addEventListener("click", () => {
-    const abrir = popover.classList.contains("oculto");
-    popover.classList.toggle("oculto", !abrir);
-    btnMenu.setAttribute("aria-expanded", String(abrir));
-  });
-  const senal = controladorPopoversComunidad?.signal;
-  if (senal) {
-    document.addEventListener("pointerdown", (ev) => { if (!menu.contains(ev.target)) cerrar(); }, { signal: senal });
-    document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrar(); }, { signal: senal });
-  }
-  menu.append(btnMenu, popover);
-  menu.classList.add("com-menu-cont--izq"); // el panel se abre hacia la derecha (el botón ya está a la izquierda)
-  zonaIzq.appendChild(menu);
+    btnMenu.addEventListener("click", () => {
+      const abrir = popover.classList.contains("oculto");
+      popover.classList.toggle("oculto", !abrir);
+      btnMenu.setAttribute("aria-expanded", String(abrir));
+    });
+    const senal = controladorPopoversComunidad?.signal;
+    if (senal) {
+      document.addEventListener("pointerdown", (ev) => { if (!menu.contains(ev.target)) cerrar(); }, { signal: senal });
+      document.addEventListener("keydown", (ev) => { if (ev.key === "Escape") cerrar(); }, { signal: senal });
+    }
+    menu.append(btnMenu, popover);
+    if (izq) menu.classList.add("com-menu-cont--izq"); // el panel se abre hacia la derecha (el botón ya está a la izquierda)
+    return menu;
+  };
+  zonaIzq.appendChild(crearMenuAjustes(true));
   fila.appendChild(zonaDer);
   encabezado.appendChild(fila);
 
@@ -4151,8 +4158,32 @@ function construirEncabezadoComunidad() {
   thumb.classList.toggle("pill-switch-thumb--derecha", estado.tabComunidad === "companeros");
   // 2026-11-04 (parche 6): el switch Profesores/Compañeros sale del panel del encabezado y queda
   // justo debajo, como en Tiempo de estudio. Se devuelve todo junto para que el llamador no cambie.
+  // 2026-11-13: versión angosta (<900px) — el encabezado de la página se oculta por CSS y la barra superior
+  // muestra «Comunidad» + conteos (ver js/ui/topbar-contexto.js). ⋮ pasa junto al switch y «+» queda flotando
+  // abajo a la derecha, igual que en Notas. Son copias con la MISMA acción; en pantalla grande no se ven.
+  const filaSwitch = document.createElement("div");
+  filaSwitch.className = "com-fila-switch";
+  const ajustesAngosto = document.createElement("span");
+  ajustesAngosto.className = "com-ajustes-angosto";
+  ajustesAngosto.appendChild(crearMenuAjustes(false));
+  filaSwitch.append(grupo, ajustesAngosto);
+  const fab = document.createElement("button");
+  fab.type = "button";
+  fab.className = "btn btn-primary com-btn-agregar-redondo com-fab";
+  fab.textContent = "+";
+  fab.title = btnAgregar.title;
+  fab.setAttribute("aria-label", btnAgregar.title);
+  fab.addEventListener("click", agregarSegunPestana);
+  const unidad = (n, uno, varios) => `${n} ${n === 1 ? uno : varios}`;
+  window.actualizarTopbarCtx?.("comunidad", {
+    titulo: "Comunidad",
+    sub: [
+      `${unidad(nProfes, "profesor", "profesores")} · ${unidad(nCompas, "compañero", "compañeros")}`,
+      `${nProfes} prof. · ${nCompas} comp.`,
+    ],
+  });
   const bloque = document.createDocumentFragment();
-  bloque.append(encabezado, grupo);
+  bloque.append(encabezado, filaSwitch, fab);
   return bloque;
 }
 
@@ -4216,7 +4247,7 @@ function asegurarVistaComunidadArmada(indice) {
 function cambiarVistaComunidad(vista) {
   if (!["profesores", "companeros"].includes(vista) || vista === estado.tabComunidad) return;
   estado.tabComunidad = vista;
-  const grupo = document.querySelector("#seccion-comunidad > .pill-switch-binario");
+  const grupo = document.querySelector("#seccion-comunidad > .com-fila-switch > .pill-switch-binario");
   if (!pistaVistasComunidad || !grupo) { renderizarComunidad(); return; }
   const indice = vista === "companeros" ? 1 : 0;
   asegurarVistaComunidadArmada(indice);
@@ -4227,6 +4258,11 @@ function cambiarVistaComunidad(vista) {
     btn.setAttribute("aria-pressed", String(i === indice));
   });
   grupo.querySelector(".pill-switch-thumb")?.classList.toggle("pill-switch-thumb--derecha", indice === 1);
+  const etiquetaAgregar = vista === "companeros" ? "Agregar compañero" : "Agregar profesor";
+  document.querySelectorAll("#seccion-comunidad .com-btn-agregar-redondo").forEach((b) => {
+    b.title = etiquetaAgregar;
+    b.setAttribute("aria-label", etiquetaAgregar);
+  });
 }
 
 function inicializarGestosComunidad(viewport) {

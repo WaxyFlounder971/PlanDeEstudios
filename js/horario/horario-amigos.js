@@ -20,7 +20,7 @@ import { obtenerLocaleInterfaz } from "../core/i18n.js";
 import { marcarCambioPendiente, mostrarCargando, ocultarCargando, registrarHookPostGuardado } from "../core/storage/storage-sync.js";
 import { crearEnlaceHorarioCompartido, crearAmigoVinculado, sellarTimestamp } from "../core/schema.js";
 import { crearArchivoJsonEnDrive, crearPermisoPublicoLectura, eliminarPermisoDrive, guardarDatos } from "../core/auth.js";
-import { mostrarToast, abrirConfirmacion, desplazarYResaltarElemento } from "../ui/componentes.js";
+import { mostrarToast, abrirConfirmacion } from "../ui/componentes.js";
 import { copiarAlPortapapelesBlindado, abrirModalCopiaManualPortapapeles } from "../core/clipboard.js";
 import { obtenerSemestreHorarioActual, obtenerColorBloque, obtenerNombreBloque, obtenerRangoHorasHorario, obtenerPlanPorId, abrirHorarioConjunto, abrirVistaIndividualAmigo } from "./horario.js";
 // Editar nombre/color de un amigo vinculado (punto 3 del ajuste chico
@@ -508,7 +508,7 @@ function confirmarEliminarRegistroEnlace(enlaceId) {
  * lo largo del tiempo, no solo el más reciente, incluidos los ya
  * revocados (para que nunca se pierda el rastro de qué se llegó a
  * compartir alguna vez, salvo que la persona borre el registro a mano con
- * el botón de papelera). Vive en Ajustes → "Horario compartido".
+ * el botón de papelera). Vive en el panel "Amigos" de Horario (botón "Mis enlaces").
  */
 function renderizarListaEnlacesCompartidos() {
   const cont = document.getElementById("lista-horario-enlaces-compartidos");
@@ -582,6 +582,9 @@ function abrirPanelAmigos() {
   if (!modal) return;
   document.body.appendChild(modal);
   modal.classList.remove("oculto");
+  // "Mis enlaces" siempre arranca plegado al abrir el panel.
+  document.getElementById("fm2-enlaces")?.classList.add("oculto");
+  document.getElementById("btn-ir-enlaces-generados")?.setAttribute("aria-expanded", "false");
   // Se repinta cada vez que se abre (no solo una vez al cargar) para que un
   // cambio hecho en otro dispositivo (ej. te desvincularon, o el enlace de
   // un amigo se cayó) se refleje sin depender del ciclo de 5 min.
@@ -611,42 +614,23 @@ function inicializarPanelAmigos() {
     });
   }
 
-  if (btnIrEnlaces) {
+  // "Mis enlaces": ya no salta a Ajustes; despliega la lista de enlaces compartidos aquí mismo, dentro del panel.
+  const panelEnlaces = document.getElementById("fm2-enlaces");
+  if (btnIrEnlaces && panelEnlaces) {
     btnIrEnlaces.addEventListener("click", () => {
-      cerrarPanelAmigos();
-      if (typeof window.mostrarSeccion === "function") window.mostrarSeccion("configuracion");
-      // 2026-11-04: antes solo se abría la subsección "Horario compartido", pero esa vive DENTRO de la
-      // sección "Horario" de Ajustes: si la de afuera estaba cerrada, la de adentro seguía oculta
-      // (display:none) y el desplazamiento no llegaba a ningún lado — por eso solo funcionaba con
-      // Horario abierto de antemano. Ahora se abre PRIMERO la sección Horario (la de afuera), luego la
-      // subsección, y recién después —ya con el contenido visible— se desplaza hasta ella.
-      // Se abren con classList (no con .click()) a propósito: el click es un toggle y cerraría una
-      // sección que ya estuviera abierta.
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        const seccion = document.getElementById("ajuste-seccion-horario-enlaces");
-        if (!seccion) return;
-        const seccionHorario = seccion.parentElement?.closest(".ajuste-seccion");
-        if (seccionHorario) seccionHorario.classList.remove("colapsada");
-        seccion.classList.remove("colapsada");
-        renderizarListaEnlacesCompartidos();
-        // Espera al reflow de las dos secciones recién abiertas antes de medir el destino.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          setTimeout(() => desplazarYResaltarElemento("#ajuste-seccion-horario-enlaces .ajuste-seccion-cabecera"), 120);
-        }));
-      }));
+      const abrir = panelEnlaces.classList.contains("oculto");
+      panelEnlaces.classList.toggle("oculto", !abrir);
+      btnIrEnlaces.setAttribute("aria-expanded", String(abrir));
+      if (!abrir) return;
+      // Se repinta cada vez que se despliega: un cambio hecho en otro dispositivo (p. ej. revocar un enlace) se ve al volver.
+      renderizarListaEnlacesCompartidos();
+      requestAnimationFrame(() => panelEnlaces.scrollIntoView({ behavior: "smooth", block: "nearest" }));
     });
   }
 
   modal.addEventListener("click", (e) => {
     if (e.target === modal) cerrarPanelAmigos();
   });
-
-  // Refresca la lista cada vez que el usuario abre esta tarjeta puntual de
-  // Ajustes a mano (no solo al cargar la app) - así un cambio hecho desde
-  // otro dispositivo (ej. revocar un enlace en el teléfono) se ve
-  // actualizado al volver a entrar acá en la PC, sin depender de un F5.
-  const cabeceraAjustes = document.querySelector("#ajuste-seccion-horario-enlaces .ajuste-seccion-cabecera");
-  if (cabeceraAjustes) cabeceraAjustes.addEventListener("click", renderizarListaEnlacesCompartidos);
 }
 
 function inicializarHorarioAmigos() {
