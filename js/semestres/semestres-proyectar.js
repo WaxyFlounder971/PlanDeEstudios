@@ -183,7 +183,7 @@ const badgeCreditos = (materia) => el("span", "badge badge-accent", t(`Créditos
 function construirBotonProyectar(semestre, obtenerPlanPorId, onCambiar) {
   if (obtenerEstadoEfectivoSemestre(semestre) !== "actual") return null;
   if (filasDelSemestre(semestre, obtenerPlanPorId).length === 0) return null;
-  const b = boton("glass-panel sp-boton-centro", t("Proyectar", "Project"), (ev) => {
+  const b = boton("btn btn-secondary btn-plan-compacto sp-centro", t("Proyectar", "Project"), (ev) => {
     ev.stopPropagation();
     const filas = filasDelSemestre(semestre, obtenerPlanPorId);
     // Materias que ya tienen resultado real salen premarcadas.
@@ -212,7 +212,7 @@ function construirVistaProyectar(semestre, obtenerPlanPorId, onCambiar) {
       const botones = el("div", "sp-botones");
       [["aprobada", t("Aprobada", "Passed")], ["reprobada", t("Reprobada", "Failed")]].forEach(([valor, texto]) => {
         const activo = st.marcas[f.mm.id] === valor;
-        const b = boton(`sp-btn ${valor}${activo ? " on" : ""}`, texto, () => {
+        const b = boton(`btn btn-secondary btn-plan-compacto sp-btn ${valor}${activo ? " on" : ""}`, texto, () => {
           if (st.marcas[f.mm.id] === valor) delete st.marcas[f.mm.id];
           else st.marcas[f.mm.id] = valor;
           pintar();
@@ -228,7 +228,7 @@ function construirVistaProyectar(semestre, obtenerPlanPorId, onCambiar) {
     const todasMarcadas = filas.length > 0 && filas.every((f) => st.marcas[f.mm.id]);
     if (todasMarcadas) cuerpo.appendChild(construirResultado(semestre, filas, st, obtenerPlanPorId, onCambiar, pintar));
 
-    const volver = boton("glass-panel sp-boton-centro", t("Volver", "Back"), () => salir(onCambiar));
+    const volver = boton("btn btn-secondary btn-plan-compacto sp-centro", t("Volver", "Back"), () => salir(onCambiar));
     cuerpo.appendChild(volver);
   }
 
@@ -269,7 +269,7 @@ function construirResultado(semestre, filas, st, obtenerPlanPorId, onCambiar, re
 
   const hayParaArmar = grupos.some((g) => g.seleccionables.length > 0);
   if (!st.armando) {
-    const b = boton("btn btn-primary sp-boton-armar", t("Armar semestre futuro", "Build a future semester"), () => {
+    const b = boton("btn btn-primary btn-plan-compacto sp-centro", t("Armar semestre futuro", "Build a future semester"), () => {
       st.armando = true;
       st.seleccion = new Set();
       repintarVista();
@@ -404,7 +404,7 @@ function construirSeleccion({ semestre, grupos, planes, st, edicion, hayParaArma
   if (opciones.length) panel.appendChild(lista);
 
   const acciones = el("div", "sp-acciones");
-  const guardar = boton("btn btn-primary", edicion ? t("Guardar cambios", "Save changes") : t("Guardar semestre planeado", "Save planned semester"), () => {
+  const guardar = boton("btn btn-primary btn-plan-compacto", edicion ? t("Guardar cambios", "Save changes") : t("Guardar semestre planeado", "Save planned semester"), () => {
     if (!periodo || st.seleccion.size === 0) return;
     const nombre = (st.nombre != null ? st.nombre : edicion ? edicion.nombre : periodo.nombre).trim() || periodo.nombre;
     const elegidas = opciones.filter((o) => st.seleccion.has(claveMateria(o.plan.id, o.materia.codigo)));
@@ -413,7 +413,7 @@ function construirSeleccion({ semestre, grupos, planes, st, edicion, hayParaArma
     mostrarToast(t("Semestre planeado guardado", "Planned semester saved"));
     onGuardado();
   });
-  const cancelar = boton("btn btn-secondary", t("Cancelar", "Cancel"), onCancelar);
+  const cancelar = boton("btn btn-secondary btn-plan-compacto", t("Cancelar", "Cancel"), onCancelar);
   acciones.append(guardar, cancelar);
   panel.appendChild(acciones);
 
@@ -548,11 +548,11 @@ function construirCuerpoPlaneado(semestre, obtenerPlanPorId, onCambiar, onBorrar
   }
   const acciones = el("div", "sp-acciones");
   acciones.append(
-    boton("btn btn-secondary", t("Editar", "Edit"), (ev) => {
+    boton("btn btn-secondary btn-plan-compacto", t("Editar", "Edit"), (ev) => {
       ev.stopPropagation();
       iniciarEdicionPlaneado(semestre, onCambiar);
     }),
-    boton("btn btn-secondary", t("Eliminar", "Delete"), (ev) => {
+    boton("btn btn-danger btn-plan-compacto", t("Eliminar", "Delete"), (ev) => {
       ev.stopPropagation();
       onBorrar(semestre);
     })

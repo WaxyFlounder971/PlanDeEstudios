@@ -418,7 +418,7 @@ function construirEditorPeriodos(borrador, rerender) {
   });
 
   const agregar = el("div", "pe-proy-add");
-  const botonAgregar = el("button", "pe-btn-mini", t("+ Agregar período", "+ Add period"));
+  const botonAgregar = el("button", "btn btn-secondary btn-plan-compacto", t("+ Agregar período", "+ Add period"));
   botonAgregar.type = "button";
   botonAgregar.addEventListener("click", () => {
     borrador.push({
@@ -586,7 +586,7 @@ function construirProyeccion(plan, datos, st, rerender, animar) {
   const raiz = el("div", "pe-proy" + (animar ? " pe-fade" : ""));
   const cabecera = (titulo, textoBoton, acento, alTocar) => {
     const cab = el("div", "pe-proy-cab");
-    const boton = el("button", "pe-btn-mini" + (acento ? " acento" : ""), textoBoton);
+    const boton = el("button", "btn btn-plan-compacto " + (acento ? "btn-primary" : "btn-secondary"), textoBoton);
     boton.type = "button";
     boton.addEventListener("click", alTocar);
     cab.append(el("b", "", titulo), boton);
@@ -702,7 +702,7 @@ function construirExtrasEstadisticas(plan, rerender) {
 
   const acciones = el("div", "pe-acciones");
   const boton = (texto, activo, alTocar) => {
-    const b = el("button", "pe-btn-pill" + (activo ? " active" : ""), texto);
+    const b = el("button", "btn btn-secondary btn-plan-compacto" + (activo ? " active" : ""), texto);
     b.type = "button";
     b.setAttribute("aria-pressed", String(activo));
     b.addEventListener("click", alTocar);
