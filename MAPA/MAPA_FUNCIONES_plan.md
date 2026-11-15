@@ -160,13 +160,13 @@ Exporta:
 
 ### plan-vista-lista.js
 Propósito: orquestador de la Vista de Lista del plan de estudios — encabezado, panel de estadísticas, barra de acciones, expandir/contraer, carrusel entre planes, y el render principal `renderizarPlanEstudios`.
-Depende de: schema.js, storage-sync.js, storage.js, utils.js, plan-categorias.js, plan-esquema.js, plan-gestionar.js, plan-modo-edicion.js, plan-importacion-csv.js, plan-importacion.js, plan-mapa.js, plan-vista-lista-tarjetas.js
+Depende de: schema.js, storage-sync.js, storage.js, utils.js, plan-categorias.js, plan-esquema.js, plan-gestionar.js, plan-modo-edicion.js, plan-importacion-csv.js, plan-importacion.js, plan-mapa.js, plan-vista-lista-tarjetas.js, plan-proyeccion-vista.js
 Exporta:
 
 * `construirAnilloDonut(porcentaje, colorProgreso)` — Construye el SVG del anillo tipo donut de progreso (créditos aprobados) del panel de estadísticas.
 * `construirBarraAcciones()` — Construye la barra de acciones (orden, editar materias, añadir materia, etc.) sobre la lista de materias.
 * `construirEncabezadoPlan(planPrincipal)` — Construye el encabezado del plan (título, carrera, botones de editar/gestionar).
-* `construirPanelEstadisticas(plan)` — Construye el panel de estadísticas (materias y créditos totales/aprobados) del plan.
+* `construirPanelEstadisticas(plan)` — Construye el panel de estadísticas (materias y créditos totales/aprobados) del plan. Debajo de los anillos agrega los botones «Avance real» y «Proyección» con sus paneles (ver `plan-proyeccion-vista.js`).
 * `contraerTodasLasMaterias()` — Marca todas las materias visibles como contraídas y re-renderiza.
 * `contraerTodosLosBloques()` — Colapsa todos los bloques/grupos actuales y re-renderiza.
 * `expandirTodasLasMaterias()` — Marca todas las materias visibles como expandidas y re-renderiza.
@@ -188,3 +188,30 @@ Exporta:
 
 * `alternarModoEdicionPlan()` — Invierte `estado.modoEdicionPlan` y refresca el badge y las tarjetas del plan.
 * `renderizarBadgeModoEdicion()` — Muestra u oculta el badge fijo de la esquina inferior derecha según `estado.modoEdicionPlan`.
+
+### plan-proyeccion-vista.js
+Propósito: vista de «Avance real» y «Proyección» dentro de Estadísticas del plan. Botones bajo los anillos (cada uno abre su panel, pueden estar abiertos a la vez). Avance real: barra de círculos por bloque (verde = completo, amarillo = a medias, rojo = sin avance, azul = adelantado, triángulo = dónde deberías ir). Proyección: pestañas Ritmo, Rápido, Meta y Plan. La primera vez pide definir y confirmar los períodos («Define tus períodos» → «Continuar»); después «Editar períodos» / «Listo» en el mismo lugar. Los períodos se guardan por plan en `plan.parametros_universidad.proyeccion_periodos` (sin esa llave = primera vez; no requiere migración). Estado de UI en `estado.proyeccionPlan` (no se guarda). Se supone que lo que se cursa ahora se aprueba al cerrar el semestre actual; el atraso se mide con los semestres pasados de duración normal (un verano corto no cuenta como bloque) y el ritmo con todos los períodos cursados. Color de la franja de cada materia = el de su categoría. CSS con prefijo `.pe-` al final de design-system.css.
+Depende de: schema.js, i18n.js, storage-sync.js, storage.js, finanzas-selector.js (selector `.select-custom`), plan-proyeccion.js
+Exporta:
+
+* `construirExtrasEstadisticas(plan, rerender)` — Devuelve los nodos que van debajo de los anillos, en orden: panel de Avance real (si está abierto), botones, panel de Proyección (si está abierto). `rerender` repinta la sección (`renderizarPlanEstudios`).
+
+### plan-proyeccion.js
+Propósito: lógica pura (sin DOM, probada en `tests/plan-proyeccion-logica.mjs`) de la proyección del plan. Reutiliza `evaluarNodoRequisito` y `recorrerHojasArbol` de schema.js, así la proyección coincide con la luz de disponibilidad del plan. Tiene en cuenta correquisitos (se llevan en el mismo período o ya aprobados). Una materia que se desbloquea en un período se lleva desde el siguiente; cuando no caben todas se priorizan las que desbloquean más. No considera la oferta real por semestre.
+Depende de: schema.js
+Exporta:
+
+* `crearContexto(materias)` — Prepara materias, orden del plan, dependientes y créditos totales.
+* `crearPeriodosPorDefecto()` — Períodos de ejemplo de la primera vez (no se usan hasta confirmarlos).
+* `normalizarPeriodo(p)` / `normalizarPeriodos(lista)` — Dejan cada período coherente: mínimo absoluto ≤ mínimo deseado ≤ máximo deseado ≤ máximo absoluto.
+* `duracionMeses(p)` — Meses que dura un período.
+* `generarPeriodos(periodos, hoy, todos)` — Períodos futuros ordenados (el período en curso no entra; `todos` incluye los apagados).
+* `cumpleRequisitos(m, hecho)` / `cumpleCorrequisitos(ctx, m, hecho, enEstePeriodo)` — Evalúan los árboles Y/O de una materia.
+* `materiasDisponibles(ctx, aprobadas)` — Materias que ya se pueden llevar.
+* `materiasImposibles(ctx, aprobadas)` — Materias que nunca se podrían desbloquear (para avisar en vez de dar una fecha falsa).
+* `simularRuta(ctx, aprobadas, modo, periodos)` — Ruta período por período; modo `"todo"` (máximo absoluto) o `"rango"` (máximo deseado).
+* `calcularBloques(ctx, aprobadas, semestresCompletos)` — Estado de cada bloque y dónde deberías ir.
+* `calcularRitmo(datos, periodosFuturos)` — Créditos por período cursado y períodos que faltan.
+* `calcularMeta(ctx, aprobadas, periodos, fechaLimite, hoy)` — Si se llega a terminar a más tardar en una fecha (`imposible`, `limite`, `prerrequisitos`, `sobre`, `dentro`, `margen`).
+* `mejoraConPeriodosApagados(ctx, aprobadas, periodos, ruta, hoy)` — Cuánto se adelantaría sumando los períodos apagados.
+* `creditosDelConjunto(ctx, codigos)`, `mesesEntre(a, b)`, `MESES_ES`, `MESES_EN`, `ANIOS_HORIZONTE` — Auxiliares.

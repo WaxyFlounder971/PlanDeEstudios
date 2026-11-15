@@ -17,6 +17,7 @@ import { construirMiniPanelImportacion, obtenerPalabraOptativa, serializarRequis
 import { cancelarSeguimientoImportacion, construirEncabezadoCSV, construirPanelImportacion } from "./plan-importacion.js";
 import { construirTarjetaVista, inicializarEstadoMapaSiHaceFalta } from "./plan-mapa.js";
 import { construirContenidoBloques } from "./plan-vista-lista-tarjetas.js";
+import { construirExtrasEstadisticas } from "./plan-proyeccion-vista.js";
 
 /* Estado propio de esta sección, colgado del `estado` global de app.js. */
 /**
@@ -574,6 +575,8 @@ function construirAnilloDonut(porcentaje, colorProgreso) {
  * dos donuts — avance de Materias y avance de Créditos — comparando
  * aprobado vs. pendiente. Se coloca entre el encabezado del plan y el
  * buscador/categorías (ver orden en renderizarPlanEstudios).
+ * Debajo de los donuts van los botones "Avance real" (barra de bloques) y
+ * "Proyección" (Ritmo/Rápido/Meta/Plan), cada uno con su panel propio.
  */
 
 function construirPanelEstadisticas(plan) {
@@ -656,6 +659,12 @@ function construirPanelEstadisticas(plan) {
     }
 
     sec.appendChild(cuerpo);
+
+    // Debajo de los anillos: botones "Avance real" y "Proyección" y sus
+    // paneles (barra de bloques y proyección). Ver plan-proyeccion-vista.js.
+    if (totalMaterias > 0) {
+      construirExtrasEstadisticas(plan, renderizarPlanEstudios).forEach((nodo) => sec.appendChild(nodo));
+    }
   }
 
   return sec;
