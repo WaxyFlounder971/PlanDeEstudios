@@ -345,9 +345,9 @@ Exporta:
 * `migrarRequisitoAArbol(valorViejo)` - migra el formato viejo de requisitos (string/array plano) al árbol Y/O nuevo.
 
 *Semestres:*
-* `crearSemestre({ nombre, fecha_inicio, duracion_semanas, planesEstudioIds })` - crea un Semestre nuevo.
+* `crearSemestre({ nombre, fecha_inicio, duracion_semanas, planesEstudioIds })` - crea un Semestre nuevo (con `planeado: false`; `true` = semestre futuro armado en Semestres → Proyectar).
 * `LIMITE_SEMANAS_SEMESTRE` - tope de semanas por semestre (25).
-* `obtenerEstadoEfectivoSemestre(semestre)` - calcula en vivo si un semestre es "futuro"/"actual"/"pasado" (nunca se guarda el estado).
+* `obtenerEstadoEfectivoSemestre(semestre)` - calcula en vivo si un semestre es "futuro"/"actual"/"pasado" (nunca se guarda el estado). "futuro" = semestre planeado (`planeado: true`) cuya fecha de inicio aún no llega; al llegar pasa a "actual".
 * `obtenerPlanesActivos(configuracion)` - ids de los planes activos ahora mismo, según Modo Hardcore (hasta 3).
 * `obtenerEstadoEfectivoMateria(materia, planEstudioId, datos)` - estado efectivo de una materia del plan ("Cursando" se calcula en vivo, nunca se guarda).
 
@@ -378,7 +378,7 @@ Exporta:
 * `calcularObjetivoPasarRaspando(notaAprobacion)` - objetivo real de "pasar raspando" dado el redondeo al 5.
 * `resolverObjetivoPasarRaspando(params)` - igual que arriba pero respetando un override manual por plan.
 * `calcularNotaFinalVigenteMateria(mm, materia, plan, configuracion)` / `calcularNotaParaPromedio(mm, materia, plan, configuracion)` - nota final vigente de una matrícula, con y sin redondeo al 5, para dashboards.
-* `listarMatriculasResolubles(datos, incluirActuales = true)` - lista base de matrículas con nota resoluble, para alimentar los cálculos de promedio.
+* `listarMatriculasResolubles(datos, incluirActuales = true)` - lista base de matrículas con nota resoluble, para alimentar los cálculos de promedio. Omite los semestres planeados que aún no empiezan.
 * `calcularPromedioPonderado(entradas)` - Σ(nota×créditos)/Σcréditos sobre una lista ya filtrada.
 * `calcularPromedioPorSemestreYUniversidad(datos)` / `calcularPromedioPorPlan(datos)` / `calcularPromedioTotalCombinado(datos)` - los 3 niveles de promedio del dashboard (por semestre+universidad, por plan/carrera, combinado total). Agrupa por `plan.universidad.siglas` (con fallback a `nombre_completo` y luego "Sin universidad") desde la separación nombre_completo/siglas (2026-08-22).
 * `calcularEstadisticasAprobacion(datos, planId)` - % de cursos aprobados/reprobados (solo materias cerradas).
@@ -419,7 +419,7 @@ Exporta:
 * `obtenerHistorialProfesor(profesorId, datos)` - todas las materias matriculadas ligadas a un profesor, en todos los semestres.
 * `obtenerUniversidadesDeProfesor(profesorId, datos)` - universidades donde dio clases un profesor. Devuelve strings vía `plan.universidad.siglas` (fallback a `nombre_completo`), mismo criterio que `calcularPromedioPorSemestreYUniversidad`.
 * `obtenerMateriasCompartidasValidas(companero, datos)` - filtra las materias compartidas de un compañero a solo las que siguen apuntando a una matrícula real.
-* `obtenerIntentosMateria(materiaId, planEstudioId, datos)` - todos los intentos reales de cursar una materia, cruzando todos los semestres.
+* `obtenerIntentosMateria(materiaId, planEstudioId, datos)` - todos los intentos reales de cursar una materia, cruzando todos los semestres (sin los planeados que aún no empiezan).
 
 *Utilitarios generales de colección:*
 * `siguienteOrden(coleccion)` - próximo valor de `orden` para agregar algo al final (drag and drop).

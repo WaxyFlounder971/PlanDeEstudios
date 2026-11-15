@@ -209,6 +209,9 @@ Exporta:
 * `cumpleRequisitos(m, hecho)` / `cumpleCorrequisitos(ctx, m, hecho, enEstePeriodo)` — Evalúan los árboles Y/O de una materia.
 * `materiasDisponibles(ctx, aprobadas)` — Materias que ya se pueden llevar.
 * `materiasImposibles(ctx, aprobadas)` — Materias que nunca se podrían desbloquear (para avisar en vez de dar una fecha falsa).
+* `calcularDesbloqueo(ctx, aprobadas, cursando, simAprobadas, simReprobadas, excluir)` — Semestres → Proyectar: materias nuevas desbloqueadas, ya disponibles, a repetir y la lista de seleccionables (en orden del plan) según lo marcado en la simulación.
+* `clasificarCreditos(creditos, periodo)` — `"ok"` (rango deseado), `"warn"` (fuera) o `"bad"` (bajo el mínimo / sobre el máximo absoluto).
+* `fechaISO(fecha)` / `semanasDelPeriodo(periodo)` / `siguientePeriodoLibre(periodos, iniciosOcupados)` — Auxiliares para guardar un semestre planeado en el siguiente período libre.
 * `simularRuta(ctx, aprobadas, modo, periodos)` — Ruta período por período; modo `"todo"` (máximo absoluto) o `"rango"` (máximo deseado).
 * `calcularBloques(ctx, aprobadas, semestresCompletos)` — Estado de cada bloque y dónde deberías ir.
 * `calcularRitmo(datos, periodosFuturos)` — Créditos por período cursado y períodos que faltan.

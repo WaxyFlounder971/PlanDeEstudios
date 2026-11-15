@@ -1,6 +1,7 @@
 /* =========================================================================
    PLAN DE ESTUDIOS — PROYECCIÓN (lógica pura, sin DOM)
-   Todo lo que calcula el panel "Avance real" y "Proyección" de Estadísticas:
+   Todo lo que calcula el panel "Avance real" y "Proyección" de Estadísticas
+   (y las materias desbloqueadas / semestres planeados de Semestres → Proyectar):
    estado de los bloques, ritmo, ruta más rápida, plan sugerido y meta.
    No lee `estado` ni toca el DOM: recibe materias y conjuntos de códigos y
    devuelve datos, así se prueba en Node (tests/plan-proyeccion-logica.mjs).
@@ -312,19 +313,87 @@ function mejoraConPeriodosApagados(ctx, aprobadas, periodosConfig, rutaActual, h
   return { nombres: apagados.map((p) => p.nombre), fin: conTodos.fin, meses: mesesEntre(rutaActual.fin.end, conTodos.fin.end) };
 }
 
+/* ===================== Semestres: Proyectar y semestres planeados ===================== */
+
+/**
+ * "Materias desbloqueadas" y "Armar semestre futuro" (Semestres → Proyectar).
+ * Todo es simulación: nada de lo que entra aquí se guarda.
+ *   aprobadas      códigos aprobados de verdad (estado efectivo "aprobado")
+ *   cursando       códigos que se están cursando ahora (cualquier semestre actual)
+ *   simAprobadas   códigos marcados Aprobada en la simulación
+ *   simReprobadas  códigos marcados Reprobada en la simulación
+ *   excluir        códigos ya planeados en otro semestre futuro (no se vuelven a ofrecer)
+ * Usa las mismas reglas que la luz de disponibilidad del plan (cumpleRequisitos).
+ * Devuelve, en el orden del plan:
+ *   nuevas        recién desbloqueadas por lo que se marcó Aprobada
+ *   yaDisponibles ya se podían llevar antes de proyectar (y no se están cursando)
+ *   repetir       marcadas Reprobada: habría que volver a llevarlas
+ *   seleccionables  nuevas + yaDisponibles + repetir, cada una con su etiqueta
+ */
+function calcularDesbloqueo(ctx, aprobadas, cursando, simAprobadas, simReprobadas, excluir = new Set()) {
+  const hecho = new Set([...aprobadas, ...simAprobadas]);
+  const antes = new Set(materiasDisponibles(ctx, aprobadas).map((m) => m.codigo));
+  const despues = materiasDisponibles(ctx, hecho);
+  const ordenar = (lista) => lista.sort((a, b) => ctx.orden.get(a.codigo) - ctx.orden.get(b.codigo));
+
+  const nuevas = ordenar(despues.filter((m) => !antes.has(m.codigo) && !cursando.has(m.codigo)));
+  const yaDisponibles = ordenar(ctx.materias.filter((m) => antes.has(m.codigo) && !cursando.has(m.codigo) && !hecho.has(m.codigo)));
+  const repetir = ordenar(ctx.materias.filter((m) => simReprobadas.has(m.codigo) && !hecho.has(m.codigo)));
+
+  const seleccionables = [
+    ...nuevas.map((materia) => ({ materia, etiqueta: "nueva" })),
+    ...yaDisponibles.map((materia) => ({ materia, etiqueta: "disponible" })),
+    ...repetir.map((materia) => ({ materia, etiqueta: "repetir" })),
+  ]
+    .filter((x) => !excluir.has(x.materia.codigo))
+    .sort((a, b) => ctx.orden.get(a.materia.codigo) - ctx.orden.get(b.materia.codigo));
+  return { nuevas, yaDisponibles, repetir, seleccionables };
+}
+
+/**
+ * Color del contador de créditos al armar un semestre: "ok" dentro del rango
+ * deseado, "warn" fuera de él, "bad" bajo el mínimo absoluto o sobre el
+ * máximo absoluto. Sin período (null) no se juzga: "ok".
+ */
+function clasificarCreditos(creditos, periodo) {
+  if (!periodo) return "ok";
+  if (creditos < (periodo.amin || 0) || creditos > periodo.lim) return "bad";
+  if (creditos >= periodo.min && creditos <= periodo.max) return "ok";
+  return "warn";
+}
+
+/** "YYYY-MM-DD" en hora local (así un semestre planeado guarda el día exacto en que empieza el período). */
+function fechaISO(fecha) {
+  const p2 = (n) => String(n).padStart(2, "0");
+  return `${fecha.getFullYear()}-${p2(fecha.getMonth() + 1)}-${p2(fecha.getDate())}`;
+}
+
+/** Primer período futuro cuyo inicio no esté ocupado por otro semestre planeado. */
+function siguientePeriodoLibre(periodosFuturos, iniciosOcupados) {
+  return periodosFuturos.find((p) => !iniciosOcupados.has(fechaISO(p.start))) || null;
+}
+
+/** Semanas (redondeadas, mínimo 1) que dura un período futuro. */
+function semanasDelPeriodo(periodo) {
+  return Math.max(1, Math.round((periodo.end.getTime() - periodo.start.getTime() + 86400000) / (7 * 86400000)));
+}
+
 export {
   ANIOS_HORIZONTE,
   MESES_EN,
   MESES_ES,
   calcularBloques,
+  calcularDesbloqueo,
   calcularMeta,
   calcularRitmo,
+  clasificarCreditos,
   crearContexto,
   crearPeriodosPorDefecto,
   creditosDelConjunto,
   cumpleCorrequisitos,
   cumpleRequisitos,
   duracionMeses,
+  fechaISO,
   generarPeriodos,
   materiasDisponibles,
   materiasImposibles,
@@ -332,5 +401,7 @@ export {
   mesesEntre,
   normalizarPeriodo,
   normalizarPeriodos,
+  semanasDelPeriodo,
+  siguientePeriodoLibre,
   simularRuta,
 };

@@ -134,7 +134,8 @@ interactivo), `plan-modo-edicion.js` (badge/toggle de Modo Edición).
 ### `js/semestres/` — Semestres y matrícula
 `semestres.js` (alta/edición/listado, sincronía Matrícula↔Plan), `semestres-tarjetas.js`
 (tarjetas + motor de notas completo — criterios, asignaciones, proyecciones,
-conflictos), `semestres-dashboard.js` (Historial académico: aprobación + promedios).
+conflictos), `semestres-dashboard.js` (Historial académico: aprobación + promedios),
+`semestres-proyectar.js` (botón Proyectar, materias desbloqueadas y semestres planeados/futuros).
 
 ### `js/core/finanzas/` y `js/finanzas/` — Finanzas
 `js/core/finanzas/` contiene el modelo unificado, registro, cálculos de Disponible,
@@ -210,6 +211,7 @@ migraciones): el primero es login/sync/tema/perfil; el segundo llama a los
 | Alta de semestre, matricular materias, sincronía con el Plan | `semestres/semestres.js` |
 | Tarjeta de semestre/materia matriculada, motor de notas, criterios/asignaciones | `semestres/semestres-tarjetas.js` |
 | Dashboard de promedio/aprobación en Semestres | `semestres/semestres-dashboard.js` |
+| Proyectar, materias desbloqueadas, armar/editar semestre futuro (planeado) | `semestres/semestres-proyectar.js` (lógica pura en `plan/plan-proyeccion.js`) |
 | Mensajes semanales de Competencias y su sincronización | `tiempo-estudio/tiempo-estudio-competencias.js`, `tiempo-estudio/tiempo-estudio-competencias-gestion.js`, `worker - USO PARA CHAT GPT/src/index.js` |
 | Pagos de matrícula/beca heredados por semestre | `js/finanzas/finanzas-semestres.js` |
 | Gastos universitarios heredados y Beneficios | `js/finanzas/finanzas-gastos.js` |

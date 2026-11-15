@@ -37,6 +37,7 @@ import { ESTADOS_MATERIA, abrirModalResolverConflicto, abrirModalResolverConflic
 import { abrirModalRequisito, abrirModalAsignarProfesorDesdeHistorial } from "../plan/plan-detalle.js";
 import { renderizarPlanEstudios } from "../plan/plan-vista-lista.js";
 import { mostrarWrappedSemestre, semestreFinalizadoParaWrapped } from "./semestres-wrapped.js";
+import { construirBadgePlaneado, construirBotonProyectar, construirCuerpoPlaneado, construirVistaProyectar, estaProyectando } from "./semestres-proyectar.js";
 
 /**
  * 2026-08-09 (pedido explícito): tocar la tarjetita de un profesor DENTRO
@@ -3435,6 +3436,8 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
   inicializarEstadoTarjetasSemestresSiHaceFalta();
   _ultimoOnCambiarParaResize = onCambiar;
   const expandido = estado.semestresExpandidos.get(semestre.id) || false;
+  // Semestre planeado que todavía no empieza (Proyectar → Armar semestre futuro).
+  const planeadoFuturo = obtenerEstadoEfectivoSemestre(semestre) === "futuro";
 
   const card = document.createElement("div");
   card.className = "glass-card stack";
@@ -3502,6 +3505,7 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
     fecha.textContent = formatearFechaLarga(semestre.fecha_inicio);
     izquierda.appendChild(fecha);
   }
+  if (planeadoFuturo) izquierda.appendChild(construirBadgePlaneado());
   encabezado.appendChild(izquierda);
 
   const centro = document.createElement("div");
@@ -3552,7 +3556,11 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
 
   card.appendChild(encabezado);
 
-  if (expandido) {
+  if (expandido && planeadoFuturo) {
+    card.appendChild(construirCuerpoPlaneado(semestre, obtenerPlanPorId, onCambiar, onBorrar));
+  } else if (expandido && estaProyectando(semestre.id)) {
+    card.appendChild(construirVistaProyectar(semestre, obtenerPlanPorId, onCambiar));
+  } else if (expandido) {
     const filas = (semestre.materias_matriculadas || [])
       .map((mm) => {
         const plan = obtenerPlanPorId(mm.plan_estudio_id);
@@ -3573,6 +3581,9 @@ function construirTarjetaSemestre(semestre, obtenerPlanPorId, onCambiar, onEdita
         card.appendChild(construirTarjetaMateriaMatriculada(mm, materia, plan, semestre, onCambiar));
       });
     }
+    // Botón Proyectar: al final de las materias, solo en el semestre actual.
+    const botonProyectar = construirBotonProyectar(semestre, obtenerPlanPorId, onCambiar);
+    if (botonProyectar) card.appendChild(botonProyectar);
   }
 
   if (semestreFinalizadoParaWrapped(semestre)) {

@@ -31,6 +31,7 @@ import { desplazarYResaltarElemento, abrirConfirmacion, mostrarToast } from "../
 import { recalcularPlanesHardcore } from "../plan/plan-gestionar.js";
 import { construirTarjetaSemestre } from "./semestres-tarjetas.js";
 import { construirDashboardAcademico } from "./semestres-dashboard.js";
+import { iniciarEdicionPlaneado } from "./semestres-proyectar.js";
 // Import de vuelta a main.js (ciclo intencional, mismo patrón ya usado por
 // ui/componentes.js con togglePerfilPopover): main.js importa
 // renderizarSemestres de este archivo, y este archivo necesita
@@ -59,6 +60,13 @@ function obtenerSemestresActuales() {
   return (estado.datos.semestres || [])
     .filter((s) => obtenerEstadoEfectivoSemestre(s) === "actual")
     .sort((a, b) => String(b.fecha_inicio).localeCompare(String(a.fecha_inicio)));
+}
+
+/** Semestres planeados que todavía no empiezan, del más cercano al más lejano. */
+function obtenerSemestresFuturos() {
+  return (estado.datos.semestres || [])
+    .filter((s) => obtenerEstadoEfectivoSemestre(s) === "futuro")
+    .sort((a, b) => String(a.fecha_inicio).localeCompare(String(b.fecha_inicio)));
 }
 
 function obtenerSemestresPasados() {
@@ -904,7 +912,11 @@ function navegarAMateriaMatriculada(semestreId, mmId) {
  * consistente sin importar si el semestre es actual o pasado.
  */
 function obtenerSemestresOrdenCronologico() {
-  return [...(estado.datos.semestres || [])].sort((a, b) => String(a.fecha_inicio).localeCompare(String(b.fecha_inicio)));
+  // Los semestres planeados que aún no empiezan no son semestres reales todavía: se dejan fuera
+  // para que Horario, Agenda y Ajustes no los traten como un semestre en curso.
+  return [...(estado.datos.semestres || [])]
+    .filter((s) => obtenerEstadoEfectivoSemestre(s) !== "futuro")
+    .sort((a, b) => String(a.fecha_inicio).localeCompare(String(b.fecha_inicio)));
 }
 
 /** direccion: 1 = siguiente (más nuevo), -1 = anterior. Envuelve en los extremos. */
@@ -982,8 +994,11 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
   cont.appendChild(construirDashboardAcademico(renderizarSemestres));
 
   const actuales = obtenerSemestresActuales();
+  const futuros = obtenerSemestresFuturos();
   const pasados = obtenerSemestresPasados();
-  const onEditar = (semestre) => abrirModalAltaSemestre(semestre);
+  // Un semestre planeado se edita reabriendo su selección de materias; los demás, con el formulario de siempre.
+  const onEditar = (semestre) =>
+    obtenerEstadoEfectivoSemestre(semestre) === "futuro" ? iniciarEdicionPlaneado(semestre, renderizarSemestres) : abrirModalAltaSemestre(semestre);
   const onBorrar = (semestre) => abrirConfirmacionBorrarSemestre(semestre);
 
   if (actuales.length === 0) {
@@ -1012,27 +1027,16 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
     seccionActuales.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">${actuales.length === 1 ? "Semestre actual" : "Semestres actuales"}</h3>`;
     actuales.forEach((s) => seccionActuales.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar, true)));
 
-    const filaBotones = document.createElement("div");
-    filaBotones.className = "row";
-
-    const btnOtro = document.createElement("button");
-    btnOtro.type = "button";
-    btnOtro.className = "btn btn-secondary";
-    btnOtro.style.flex = "1";
-    btnOtro.textContent = "+ Agregar";
-    btnOtro.addEventListener("click", () => abrirModalAltaSemestre());
-    filaBotones.appendChild(btnOtro);
-
-    const btnEditar = document.createElement("button");
-    btnEditar.type = "button";
-    btnEditar.className = "btn " + (estado.modoEdicionSemestres ? "btn-primary" : "btn-secondary");
-    btnEditar.style.flex = "1";
-    btnEditar.textContent = estado.modoEdicionSemestres ? "Listo" : "Editar semestres";
-    btnEditar.addEventListener("click", alternarModoEdicionSemestres);
-    filaBotones.appendChild(btnEditar);
-
-    seccionActuales.appendChild(filaBotones);
     cont.appendChild(seccionActuales);
+  }
+
+  // Semestres futuros (planeados): sección nueva, solo si hay alguno.
+  if (futuros.length > 0) {
+    const seccionFuturos = document.createElement("section");
+    seccionFuturos.className = "glass-card stack";
+    seccionFuturos.innerHTML = `<h3 class="texto-encabezado-seccion" style="margin:0;">${futuros.length === 1 ? "Semestre futuro" : "Semestres futuros"}</h3>`;
+    futuros.forEach((s) => seccionFuturos.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar, true)));
+    cont.appendChild(seccionFuturos);
   }
 
   if (pasados.length > 0) {
@@ -1042,6 +1046,23 @@ function renderizarSemestres(omitirRestauracionScroll = false) {
     pasados.forEach((s) => seccionPasados.appendChild(construirTarjetaSemestre(s, obtenerPlanPorId, renderizarSemestres, onEditar, onBorrar, true)));
     cont.appendChild(seccionPasados);
   }
+
+  // Agregar y Editar semestres: al fondo de todo, fuera de cualquier tarjeta
+  // (texto gris en dos mitades, igual que las pestañas finales de Tiempo de estudio).
+  const pie = document.createElement("div");
+  pie.className = "te-pestanas-finales-materias sp-pie-semestres";
+  const btnAgregar = document.createElement("button");
+  btnAgregar.type = "button";
+  btnAgregar.className = "te-pestana-final-materias";
+  btnAgregar.textContent = "Agregar";
+  btnAgregar.addEventListener("click", () => abrirModalAltaSemestre());
+  const btnEditar = document.createElement("button");
+  btnEditar.type = "button";
+  btnEditar.className = "te-pestana-final-materias" + (estado.modoEdicionSemestres ? " activo" : "");
+  btnEditar.textContent = estado.modoEdicionSemestres ? "Listo" : "Editar semestres";
+  btnEditar.addEventListener("click", alternarModoEdicionSemestres);
+  pie.append(btnAgregar, btnEditar);
+  cont.appendChild(pie);
 
   // FIX REFORZADO (2026-08-06 — "el scroll fantasma sigue pasando, incluso
   // solo cada ~9-10s sin tocar nada"): el intervalo de 9s en main.js
@@ -1094,6 +1115,7 @@ export {
   navegarASemestre,
   obtenerSemestreAdyacente,
   obtenerSemestresActuales,
+  obtenerSemestresFuturos,
   obtenerSemestresOrdenCronologico,
   obtenerSemestresPasados,
   renderizarSemestres,

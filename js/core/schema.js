@@ -1449,6 +1449,14 @@ function crearSemestre({ nombre, fecha_inicio, duracion_semanas, planesEstudioId
     // "actual" | "pasado" = el usuario lo forzó a mano porque la detección
     // automática le falló (ej. fecha de inicio mal puesta).
     estado_manual: null,
+    // Semestres planeados (Plan de estudios → Semestres → Proyectar): true =
+    // semestre FUTURO armado a mano con "Armar semestre futuro". Mientras su
+    // fecha de inicio no llega, obtenerEstadoEfectivoSemestre devuelve
+    // "futuro" (no cuenta como cursando ni como aprobado). Al llegar la
+    // fecha pasa a ser un semestre actual normal; la marca queda guardada
+    // pero deja de tener efecto. Semestres anteriores a esta llave: false
+    // (ver migrarDatosAntiguos).
+    planeado: false,
     materias_matriculadas: [],
     // Semestres y Notas — Fase 1 (regla obligatoria de sincronización): tumba
     // propia para materias matriculadas borradas, igual que
@@ -1472,6 +1480,9 @@ function crearSemestre({ nombre, fecha_inicio, duracion_semanas, planesEstudioId
  * comentario en crearSemestre): se calcula siempre en el momento, así nunca
  * queda desactualizado por no haberse re-guardado.
  *
+ * Devuelve "actual" | "pasado" | "futuro" ("futuro" = semestre planeado que
+ * aún no empieza, ver crearSemestre → planeado).
+ *
  * Auto-cierre: sin el botón "Terminar semestre" todavía (Fase 6, depende de
  * notas), este cálculo por fecha es la ÚNICA forma en que un semestre pasa a
  * "pasado" en esta fase — al llegar a (duracion_semanas + 2) desde
@@ -1486,6 +1497,9 @@ function obtenerEstadoEfectivoSemestre(semestre) {
   }
   const inicio = new Date(semestre.fecha_inicio);
   if (isNaN(inicio.getTime())) return "actual"; // fecha inválida: no se puede calcular, no se fuerza a "pasado"
+  // Semestre planeado cuya fecha de inicio todavía no llega: ni actual ni
+  // pasado. Todo lo que compara contra "actual"/"pasado" lo deja fuera solo.
+  if (semestre.planeado === true && inicio.getTime() > Date.now()) return "futuro";
   const semanasTranscurridas = (Date.now() - inicio.getTime()) / (7 * 24 * 60 * 60 * 1000);
   // FIX (2026-08-02): antes el tope era el límite plano LIMITE_SEMANAS_SEMESTRE
   // (25) para CUALQUIER semestre, sin importar su duración real. Ahora usa la
@@ -2624,6 +2638,8 @@ function calcularNotaParaPromedio(mm, materia, plan, configuracion) {
 function listarMatriculasResolubles(datos, incluirActuales = true) {
   const resultado = [];
   (datos.semestres || []).forEach((semestre) => {
+    // Un semestre planeado todavía no empieza: no tiene notas ni cuenta.
+    if (obtenerEstadoEfectivoSemestre(semestre) === "futuro") return;
     if (!incluirActuales && obtenerEstadoEfectivoSemestre(semestre) === "actual") return;
     (semestre.materias_matriculadas || []).forEach((mm) => {
       const plan = (datos.planes_estudio || []).find((p) => p.id === mm.plan_estudio_id);
@@ -2876,6 +2892,7 @@ function crearCategoria({ nombre, color }) {
 function obtenerIntentosMateria(materiaId, planEstudioId, datos) {
   const resultado = [];
   (datos.semestres || []).forEach((semestre) => {
+    if (obtenerEstadoEfectivoSemestre(semestre) === "futuro") return; // planeado: aún no es un intento real
     (semestre.materias_matriculadas || []).forEach((mm) => {
       if (mm.materia_id === materiaId && mm.plan_estudio_id === planEstudioId) {
         resultado.push({ semestre, mm });
@@ -3264,6 +3281,8 @@ function migrarDatosAntiguos(datos) {
       if (!Array.isArray(semestre._eliminados_materias_matriculadas)) {
         semestre._eliminados_materias_matriculadas = [];
       }
+      // Semestres planeados: los semestres existentes quedan como no planeados.
+      if (typeof semestre.planeado !== "boolean") semestre.planeado = false;
       // Horario — Núcleo: relleno defensivo para semestres creados antes de
       // esta sección — mismo motivo que el resto de esta función (evitar
       // conflictos falsos de sync entre un dispositivo que ya tocó el

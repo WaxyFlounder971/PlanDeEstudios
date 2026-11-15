@@ -1,6 +1,6 @@
 // Pruebas de la lógica de proyección del plan (Node, sin DOM): requisitos Y/O, correquisitos, ruta rápida, plan sugerido, bloques, ritmo y meta.
 import assert from "node:assert/strict";
-import { calcularBloques, calcularMeta, calcularRitmo, crearContexto, crearPeriodosPorDefecto, generarPeriodos, materiasDisponibles, materiasImposibles, normalizarPeriodo, simularRuta } from "../js/plan/plan-proyeccion.js";
+import { calcularBloques, calcularDesbloqueo, calcularMeta, clasificarCreditos, fechaISO, semanasDelPeriodo, siguientePeriodoLibre, calcularRitmo, crearContexto, crearPeriodosPorDefecto, generarPeriodos, materiasDisponibles, materiasImposibles, normalizarPeriodo, simularRuta } from "../js/plan/plan-proyeccion.js";
 
 let ok = 0;
 const test = (n, f) => { f(); ok++; console.log("  ✓", n); };
@@ -128,6 +128,51 @@ test("meta: dentro, sobre el rango, sobre el límite y prerrequisitos", () => {
   assert.equal(calcularMeta(cadena, set(), cfg, new Date(2026, 11, 31), HOY).sinPeriodos, true);
   const rota = crearContexto([mat("A", 1, 3), mat("B", 2, 3, c("FUERA"))]);
   assert.equal(calcularMeta(rota, set(), cfg, limite, HOY).clave, "imposible");
+});
+
+console.log("Semestres: materias desbloqueadas y semestres planeados");
+test("desbloqueo: solo las nuevas, y las reprobadas no cuentan como aprobadas", () => {
+  // Se cursa A1 y A2. Aprobar A1 desbloquea B1 (no B2, que pide también A2).
+  let r = calcularDesbloqueo(ctx, set(), set("A1", "A2"), set("A1"), set("A2"));
+  assert.deepEqual(r.nuevas.map((m) => m.codigo), ["B1"]);
+  assert.deepEqual(r.repetir.map((m) => m.codigo), ["A2"]);
+  // Aprobar las dos desbloquea B1 y B2.
+  r = calcularDesbloqueo(ctx, set(), set("A1", "A2"), set("A1", "A2"), set());
+  assert.deepEqual(r.nuevas.map((m) => m.codigo), ["B1", "B2"]);
+  assert.deepEqual(r.repetir, []);
+  // Si nada se aprueba, nada se desbloquea.
+  r = calcularDesbloqueo(ctx, set(), set("A1", "A2"), set(), set("A1", "A2"));
+  assert.deepEqual(r.nuevas, []);
+});
+test("desbloqueo: las que ya estaban disponibles se suman a las seleccionables, en el orden del plan", () => {
+  // Con A1 aprobada de antes y A2 en curso: A2 aprobada desbloquea B2; B1 ya estaba disponible.
+  const r = calcularDesbloqueo(ctx, set("A1"), set("A2"), set("A2"), set());
+  assert.deepEqual(r.nuevas.map((m) => m.codigo), ["B2"]);
+  assert.deepEqual(r.yaDisponibles.map((m) => m.codigo), ["B1"]);
+  assert.deepEqual(r.seleccionables.map((x) => `${x.materia.codigo}:${x.etiqueta}`), ["B1:disponible", "B2:nueva"]);
+});
+test("desbloqueo: lo que se está cursando no se vuelve a ofrecer, y las reprobadas llevan etiqueta Repetir", () => {
+  const r = calcularDesbloqueo(ctx, set(), set("A1", "A2"), set("A1"), set("A2"));
+  assert.deepEqual(r.seleccionables.map((x) => `${x.materia.codigo}:${x.etiqueta}`), ["A2:repetir", "B1:nueva"]);
+  assert.deepEqual(calcularDesbloqueo(ctx, set(), set("A1", "A2"), set("A1"), set("A2"), set("B1")).seleccionables.map((x) => x.materia.codigo), ["A2"]);
+});
+test("créditos del semestre: verde en el rango deseado, ámbar fuera, rojo fuera del rango absoluto", () => {
+  const p = { amin: 6, lim: 18, min: 12, max: 16 };
+  assert.equal(clasificarCreditos(14, p), "ok");
+  assert.equal(clasificarCreditos(12, p), "ok");
+  assert.equal(clasificarCreditos(17, p), "warn");
+  assert.equal(clasificarCreditos(8, p), "warn");
+  assert.equal(clasificarCreditos(4, p), "bad");
+  assert.equal(clasificarCreditos(19, p), "bad");
+  assert.equal(clasificarCreditos(0, { amin: 0, lim: 18, min: 12, max: 16 }), "warn");
+  assert.equal(clasificarCreditos(7, null), "ok");
+});
+test("siguiente período libre salta los que ya tienen semestre planeado", () => {
+  const per = generarPeriodos(crearPeriodosPorDefecto(), HOY);
+  assert.equal(siguientePeriodoLibre(per, new Set()).nombre, per[0].nombre);
+  assert.equal(siguientePeriodoLibre(per, new Set([fechaISO(per[0].start)])).nombre, per[1].nombre);
+  assert.equal(fechaISO(new Date(2027, 1, 1)), "2027-02-01");
+  assert.equal(semanasDelPeriodo({ start: new Date(2027, 1, 1), end: new Date(2027, 5, 30) }), 21);
 });
 
 console.log(`\n${ok} pruebas OK`);
