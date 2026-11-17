@@ -1,0 +1,24 @@
+{
+  "idiomas": [
+    {
+      "id": "es",
+      "nombre": "Español",
+      "archivo": "espanol.json"
+    },
+    {
+      "id": "en",
+      "nombre": "English",
+      "archivo": "ingles.json"
+    },
+    {
+      "id": "it",
+      "nombre": "Italiano",
+      "archivo": "italiano.json"
+    },
+    {
+      "id": "fr",
+      "nombre": "Français",
+      "archivo": "frances.json"
+    }
+  ]
+}

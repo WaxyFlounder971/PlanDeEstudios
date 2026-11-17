@@ -1,0 +1,505 @@
+/* =========================================================================
+   FINANZAS — Shell (2026-08-10)
+   Nav principal → #seccion-finanzas. Contiene la vista de Resumen (default
+   al entrar) + 3 pestañas internas (Semestres / Gastos / Beneficios),
+   cada una delegada a su propio archivo por el límite de
+   800 líneas. Este archivo solo arma el shell (pestañas + contenedor) y
+   calcula los totales del Resumen — nada de CRUD acá.
+   ========================================================================= */
+
+import { MONEDAS_DISPONIBLES } from "../core/schema.js";
+import { calcularTotalesMovimientos, obtenerModulosFinanzas } from "../core/finanzas/finanzas-derivados.js";
+import { aplicarPerfilFinanzas, debeMostrarOnboardingFinanzas, omitirOnboardingFinanzas, pestanasVisiblesFinanzas } from "../core/finanzas/finanzas-perfiles.js";
+import { puedeAjustarSaldo, tiposDisponiblesRegistroRapido } from "../core/finanzas/finanzas-registro.js";
+import { marcarCambioPendiente } from "../core/storage/storage-sync.js";
+import { estado } from "../core/storage/storage.js";
+import { obtenerIdiomaActual, obtenerLocaleInterfaz, traducirTextoInterfaz } from "../core/i18n.js";
+import { construirGraficasResumenFinanzas } from "./finanzas-graficas.js";
+import { renderizarPestanaBeneficios } from "./finanzas-gastos.js";
+import { abrirModalMovimiento } from "./finanzas-movimiento-modal.js";
+import { renderizarPestanaMovimientos } from "./finanzas-movimientos.js";
+import { construirAnilloMeta, renderizarPestanaMetas } from "./finanzas-metas.js";
+import { renderizarPestanaPlan } from "./finanzas-plan.js";
+import { construirSelectorPerfil } from "./finanzas-modulos-ui.js";
+import { INFO_SECCIONES_FINANZAS, configurarNavegacionFinanzas, ocultarNavegacionFinanzas } from "./finanzas-navegacion.js";
+import { construirBloquesInicio, construirBotonPrivacidad, construirTarjetaGuiaFinanzas, reabrirGuiaFinanzas, hayProximos, montoVisible, privacidadActiva } from "./finanzas-inicio.js";
+import { construirBloqueSobresEnRiesgo, pestanaPresupuestoVisible, renderizarPestanaPresupuesto } from "./finanzas-presupuesto.js";
+import { abrirAjustarSaldo, abrirRegistroRapido, construirPasoSaldoInicial } from "./finanzas-registro-rapido.js";
+import { renderizarPestanaSemestresFinanzas, abrirSelectorSemestreParaFinanzas, iniciarEdicionMovimientoFinanzas } from "./finanzas-semestres.js";
+
+/**
+ * FIX (mismo bug de arranque "Cannot access 'estado' before initialization"
+ * visto en el resto de la app): este archivo YA tenía un guard
+ * (`if (estado.finanzasVistaActiva === undefined) ...`) para no pisar el
+ * valor en cada carga del módulo — pero ese guard seguía viviendo a nivel
+ * de módulo, así que la LECTURA de `estado.finanzasVistaActiva` (la
+ * condición del if) igual se ejecutaba apenas se cargaba el archivo. Evitar
+ * la reasignación no evita el problema real: cualquier acceso a `estado.X`
+ * — sea lectura o escritura — alcanza para el ReferenceError si `estado`
+ * sigue en su zona muerta temporal en ese punto del grafo de imports. Se
+ * mueve a una función lazy de verdad, llamada desde los 2 puntos de
+ * entrada exportados que la usan.
+ */
+function inicializarEstadoFinanzasSiHaceFalta() {
+  if (typeof estado.finanzasVistaActiva === "undefined") estado.finanzasVistaActiva = "resumen";
+}
+
+// v2.8.8: "Gastos estudiantiles" -> "Beneficios" (pedido explícito). El id
+// interno ("gastos-estudiantiles") se deja igual a propósito — cambiarlo
+// significaría migrar estado.finanzasVistaActiva para cuentas que hayan
+// quedado con ese valor guardado en memoria/sesión, sin ninguna ganancia
+// real ya que el id nunca se muestra, solo la etiqueta.
+const PESTANAS_FINANZAS = [
+  { id: "resumen", etiqueta: "Inicio" }, // antes "Resumen" (sesión 3); el id interno no cambia
+  { id: "semestres", etiqueta: "Semestres" },
+  { id: "plan", etiqueta: "Plan" },
+  { id: "gastos-u", etiqueta: "Movimientos" },
+  { id: "metas", etiqueta: "Metas" },
+  { id: "cuentas", etiqueta: "Cuentas" }, // sesión 7B: módulo opcional, apagado por defecto
+  { id: "deudas", etiqueta: "Deudas" }, // sesión 7A: módulo opcional, apagado por defecto
+  { id: "presupuesto", etiqueta: "Presupuesto" }, // sesión 5: sobres y categorías (con Gastos e ingresos encendido)
+  { id: "gastos-estudiantiles", etiqueta: "Beneficios" },
+];
+
+// v2.8.9: fechas NUNCA en bruto (nada de "2026-08-11" pelado) — en toda
+// Finanzas se muestran como "11 de agosto de 2026". Vive acá porque
+// finanzas-semestres.js y finanzas-gastos.js ya importan formatearMonto de
+// este mismo archivo — mismo lugar central para formato de datos de la
+// sección completa.
+const MESES_LARGOS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
+
+/** "YYYY-MM-DD" -> "11 de agosto de 2026". Vacío/null -> "". */
+function formatearFechaLarga(fechaIso) {
+  if (!fechaIso) return "";
+  const [anio, mes, dia] = fechaIso.split("-");
+  const nombreMes = MESES_LARGOS[Number(mes) - 1];
+  if (!nombreMes) return fechaIso; // formato inesperado — mejor mostrar algo que nada
+  if (obtenerIdiomaActual() === "en") {
+    return new Date(Number(anio), Number(mes) - 1, Number(dia)).toLocaleDateString(obtenerLocaleInterfaz(), {
+      month: "long", day: "numeric", year: "numeric",
+    });
+  }
+  return `${Number(dia)} de ${nombreMes} de ${anio}`;
+}
+
+/**
+ * BUG (2026-08-26, reportado por Krys): "cambio de divisa en Ajustes no se
+ * refleja en Finanzas, sigue mostrando colones". Causa confirmada: esta
+ * función (y su equivalente compacta en finanzas-graficas.js) tenían el
+ * símbolo "₡" hardcodeado y NUNCA leían configuracion.moneda_preferida ni
+ * MONEDAS_DISPONIBLES (schema.js) — el selector de Ajustes (config-
+ * ajustes.js/renderizarSelectorMoneda) sí guardaba bien el valor elegido,
+ * el problema era 100% del lado de lectura acá. Se centraliza la
+ * resolución del símbolo en esta única función para que formatearMonto y
+ * formatearMontoCompacto (finanzas-graficas.js) queden sincronizados con
+ * lo que sea que el usuario haya elegido.
+ */
+function obtenerSimboloMonedaActual() {
+  const monedaId = (estado.datos.configuracion && estado.datos.configuracion.moneda_preferida) || "CRC";
+  const moneda = MONEDAS_DISPONIBLES.find((m) => m.id === monedaId);
+  return moneda ? moneda.simbolo : "₡"; // fallback defensivo si algún día se borra una moneda del catálogo
+}
+
+/**
+ * Formato de monto consistente en toda la sección — los decimales solo
+ * aparecen si el monto los tiene (₡1 500 / ₡1 500,50, nunca ₡1 500,00),
+ * separador de miles local. El
+ * símbolo ahora sale de obtenerSimboloMonedaActual() (ver fix del bug de
+ * arriba) en vez de "₡" fijo.
+ *
+ * v2.8.8: para negativos (ej. el Balance del Resumen cuando hay más gasto
+ * que ingreso) el signo "-" se pone A MANO, antes del símbolo de moneda
+ * ("-₡100.00"), en vez de dejar que toLocaleString lo intercale donde el
+ * locale decida ("₡-100.00" se leía raro/ambiguo) — pedido explícito de
+ * que el signo quede explícito y claro antes del monto.
+ */
+function formatearMonto(numero) {
+  const n = Number(numero) || 0;
+  const centavos = Math.round(Math.abs(n) * 100); // se redondea a centavos primero: 0.1 + 0.2 no deja decimales fantasma
+  const decimales = centavos % 100 === 0 ? 0 : 2;
+  const signo = n < 0 && centavos !== 0 ? "-" : ""; // «-₡0» no existe
+  return signo + obtenerSimboloMonedaActual() + (centavos / 100).toLocaleString(obtenerLocaleInterfaz(), { minimumFractionDigits: decimales, maximumFractionDigits: decimales });
+}
+
+/**
+ * Único punto que calcula los totales del Resumen.
+ *
+ * Finanzas 2.0 (0B): ya no suma gastos_u ni finanzas_semestre; todo sale del
+ * modelo único (core/finanzas/finanzas-derivados.js → calcularTotalesMovimientos), que
+ * respeta módulos apagados, semestres borrados y pagos recurrentes "a la
+ * fecha". La forma del resultado NO cambia (el Resumen y las gráficas siguen
+ * igual hasta la etapa 0C):
+ *   - totalGastado  = todos los gastos (matrícula incluida; un gasto pagado con
+ *     una meta SÍ es gasto).
+ *   - totalBecas    = ingresos con origen "beca".
+ *   - totalIngresos = el resto de los ingresos (sin la beca).
+ *   - balanceNeto   = becas + ingresos − gastado. Ahorros y transferencias
+ *     nunca entran aquí.
+ */
+function calcularTotalesResumenFinanzas() {
+  const r = calcularTotalesMovimientos(estado.datos);
+  return { totalGastado: r.totalGastado, totalBecas: r.totalBecas, totalIngresos: r.totalIngresos, balanceNeto: r.balanceNeto, saldoLiquido: r.saldoLiquido, enMetas: r.enMetas };
+}
+
+/** Pestañas visibles: las de perfiles.js más Presupuesto cuando Gastos e ingresos está encendido (sesión 5). */
+function pestanasVisiblesConPresupuesto(modulos) {
+  let base = pestanasVisiblesFinanzas(modulos);
+  if (pestanaPresupuestoVisible(modulos) && !base.includes("presupuesto")) base = [...base, "presupuesto"];
+  if (modulos.cuentas && !base.includes("cuentas")) base = [...base, "cuentas"];
+  return modulos.deudas && !base.includes("deudas") ? [...base, "deudas"] : base;
+}
+
+/**
+ * Encabezado de la pantalla, con el MISMO lenguaje que Resumen, Agenda, Horario, Tiempo, Comunidad y Notas
+ * (`.app-encabezado`: panel, título centrado, acciones a los costados). Debajo del título, una frase de qué se hace ahí.
+ * Acciones: solo el ojo de «Ocultar importes», y solo en Inicio. La navegación (sub-barra en escritorio,
+ * barra inferior en teléfono) vive en finanzas-navegacion.js; aquí solo se le dice qué mostrar.
+ */
+function construirEncabezadoFinanzas() {
+  const info = INFO_SECCIONES_FINANZAS[estado.finanzasVistaActiva] || INFO_SECCIONES_FINANZAS.resumen;
+  const cab = document.createElement("header");
+  cab.className = "app-encabezado finanzas-cab";
+  const fila = document.createElement("div");
+  fila.className = "app-encabezado__fila";
+  const izq = document.createElement("div");
+  izq.className = "app-encabezado__izq"; // vacío a propósito: mantiene el título centrado
+  const centro = document.createElement("div");
+  centro.className = "app-encabezado__centro";
+  const h = document.createElement("h2");
+  h.className = "app-encabezado__titulo texto-encabezado-seccion";
+  h.textContent = traducirTextoInterfaz(info.etiqueta);
+  const p = document.createElement("p");
+  p.className = "app-encabezado__sub";
+  p.textContent = traducirTextoInterfaz(info.ayuda);
+  centro.append(h, p);
+  const der = document.createElement("div");
+  der.className = "app-encabezado__der";
+  if (estado.finanzasVistaActiva === "resumen") der.appendChild(construirBotonPrivacidad());
+  fila.append(izq, centro, der);
+  cab.appendChild(fila);
+
+  // 2026-11-13: versión angosta (<900px) — el encabezado de la página se oculta por CSS y título + subtítulo
+  // viven en la barra superior (ver js/ui/topbar-contexto.js), en lugar del logo «Wapper». El subtítulo largo
+  // se usa si cabe en una línea; si no, la versión corta. El ojo de «Ocultar importes» (solo en Inicio) pasa a
+  // la esquina superior derecha de la primera tarjeta (ver construirResumenFinanzas). En pantalla grande nada de esto se ve.
+  const ayudaCorta = AYUDA_CORTA_FINANZAS[estado.finanzasVistaActiva];
+  window.actualizarTopbarCtx?.("finanzas", {
+    titulo: traducirTextoInterfaz(info.etiqueta),
+    sub: [traducirTextoInterfaz(info.ayuda), ...(ayudaCorta ? [traducirTextoInterfaz(ayudaCorta)] : [])],
+  });
+  return cab;
+}
+
+/** Subtítulos cortos para la barra superior del teléfono (caben en una línea). */
+const AYUDA_CORTA_FINANZAS = {
+  resumen: "Cuánto tienes y qué viene",
+  "gastos-u": "Lo que gastas, ganas y ahorras",
+  cuentas: "Efectivo, bancos y tarjetas",
+  deudas: "Préstamos y gastos divididos",
+  plan: "Pagos e ingresos que vienen",
+  presupuesto: "Cuánto gastar por categoría",
+  metas: "Lo que ahorras y tu avance",
+  semestres: "Matrícula y becas",
+  "gastos-estudiantiles": "Ayudas y gastos estudiantiles",
+};
+
+/** Le pasa a la navegación qué secciones hay, cuál está activa y qué hacen los botones de acción. */
+function actualizarNavegacionFinanzas() {
+  const modulos = obtenerModulosFinanzas(estado.datos);
+  const visibles = pestanasVisiblesConPresupuesto(modulos);
+  const abrirNuevo = () => abrirRegistroRapido({ abrirFormularioCompleto: () => abrirModalMovimiento({ alGuardar: renderizarFinanzas }) });
+  const atajos = [
+    { tipo: "matricula", texto: "Pago de matrícula", icono: "matricula" },
+    { tipo: "beca", texto: "Ingreso de beca", icono: "beca" },
+  ].filter(({ tipo }) => modulos[tipo]).map(({ tipo, texto, icono }) => ({
+    texto,
+    icono,
+    alClick: () => abrirSelectorSemestreParaFinanzas(tipo, (semestreId) => {
+      estado.finanzasVistaActiva = "semestres";
+      renderizarFinanzas();
+      iniciarEdicionMovimientoFinanzas(tipo, semestreId, document.getElementById("finanzas-contenido"));
+    }),
+  }));
+  configurarNavegacionFinanzas({
+    visibles,
+    activa: estado.finanzasVistaActiva,
+    anadir: tiposDisponiblesRegistroRapido(estado.datos).length ? abrirNuevo : null,
+    atajos,
+    alAbrirGuia: () => {
+      reabrirGuiaFinanzas();
+      estado.finanzasVistaActiva = "resumen";
+      renderizarFinanzas();
+      window.scrollTo({ top: 0, behavior: "auto" });
+    },
+    alElegir: (id) => {
+      if (estado.finanzasVistaActiva === id) return;
+      estado.finanzasVistaActiva = id;
+      renderizarFinanzas();
+      window.scrollTo({ top: 0, behavior: "auto" });
+    },
+  });
+}
+
+/** Tarjeta principal del Resumen (0C): una cifra grande con texto y signo, y el desglose debajo. */
+function construirTarjetaPrincipalResumen(totales, modulos) {
+  const tarjeta = document.createElement("section");
+  tarjeta.className = "glass-card stack resumen-hero";
+
+  const usaPatrimonio = modulos.ahorros;
+  const cifraValor = usaPatrimonio ? totales.saldoLiquido + totales.enMetas : totales.balanceNeto;
+
+  const etiqueta = document.createElement("div");
+  etiqueta.className = "resumen-hero-etiqueta";
+  etiqueta.textContent = traducirTextoInterfaz(usaPatrimonio ? "Lo que tienes en total" : "Balance");
+  const cifra = document.createElement("div");
+  cifra.className = "resumen-hero-cifra" + (cifraValor < 0 ? " negativo" : "");
+  cifra.textContent = montoVisible(cifraValor);
+  tarjeta.append(etiqueta, cifra);
+
+  // Mi dinero y En metas como en 0C (con Ahorros); sin Ahorros, Mi dinero aparece si hay Gastos, Matrícula o Beca.
+  const verMiDinero = puedeAjustarSaldo(estado.datos);
+  if (usaPatrimonio || verMiDinero) {
+    const desglose = document.createElement("div");
+    desglose.className = "resumen-hero-desglose";
+    const chip = (clase, texto, monto) => {
+      const c = document.createElement("span");
+      c.className = "badge " + clase;
+      c.textContent = `${texto}: ${montoVisible(monto)}`;
+      return c;
+    };
+    desglose.appendChild(chip("badge-info", traducirTextoInterfaz("Mi dinero"), totales.saldoLiquido));
+    if (usaPatrimonio) desglose.appendChild(chip("badge-success", traducirTextoInterfaz("En metas"), totales.enMetas));
+    tarjeta.appendChild(desglose);
+  }
+  if (verMiDinero) {
+    const ajustar = document.createElement("button");
+    ajustar.type = "button";
+    ajustar.className = "btn-discreto";
+    ajustar.style.cssText = "align-self:center; font-size:0.85rem;";
+    ajustar.textContent = traducirTextoInterfaz("Ajustar saldo");
+    ajustar.addEventListener("click", () => abrirAjustarSaldo());
+    tarjeta.appendChild(ajustar);
+  }
+  return tarjeta;
+}
+
+/** Tira de anillos pequeños con las metas activas (solo si Ahorros está encendido y hay metas). */
+function construirTiraMetasResumen() {
+  const activas = (estado.datos.metas || []).filter((m) => !m.archivada && m.tipo !== "gasto");
+  if (!activas.length) return null;
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  const h = document.createElement("h3");
+  h.className = "texto-encabezado-seccion";
+  h.style.margin = "0";
+  h.textContent = traducirTextoInterfaz("Metas");
+  const tira = document.createElement("div");
+  tira.className = "resumen-metas-tira";
+  activas.slice(0, 6).forEach((meta) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.className = "resumen-meta-mini";
+    item.style.cssText = "background:none; border:0; color:inherit; cursor:pointer;";
+    const nombre = document.createElement("span");
+    nombre.textContent = `${meta.emoji || "🎯"} ${meta.nombre}`;
+    item.append(construirAnilloMeta(meta, estado.datos, 64), nombre);
+    item.addEventListener("click", () => { estado.finanzasVistaActiva = "metas"; renderizarFinanzas(); });
+    tira.appendChild(item);
+  });
+  sec.append(h, tira);
+  return sec;
+}
+
+/**
+ * Resumen (0C): tarjeta principal (patrimonio o balance) + anillo de gastado
+ * vs. disponible + tira de metas. Todo sale de calcularTotalesMovimientos.
+ */
+function construirResumenFinanzas() {
+  const totales = calcularTotalesResumenFinanzas();
+  const { totalGastado, totalBecas, totalIngresos } = totales;
+  const modulos = obtenerModulosFinanzas(estado.datos);
+  const sec = document.createElement("section");
+  sec.className = "stack";
+  // fix10: guía «Cómo funciona Finanzas» para quien llega por primera vez (se puede cerrar y reabrir desde Ajustes de Finanzas).
+  const guiaNuevos = construirTarjetaGuiaFinanzas();
+  if (guiaNuevos) sec.appendChild(guiaNuevos);
+
+  const hayMetas = modulos.ahorros && (estado.datos.metas || []).some((m) => !m.archivada && m.tipo !== "gasto");
+  if (totalBecas === 0 && totalGastado === 0 && totalIngresos === 0 && totales.saldoLiquido === 0 && !hayMetas && !hayProximos()) {
+    const vacio = document.createElement("p");
+    vacio.className = "muted";
+    vacio.style.margin = "0";
+    vacio.textContent = traducirTextoInterfaz(
+      "Todavía no hay ningún registro financiero. Entra a la pestaña Movimientos o Semestres para empezar."
+    );
+    sec.appendChild(vacio);
+    return sec;
+  }
+
+  // Inicio (sesión 3): privacidad, Disponible y Próximos van arriba; "Lo que tienes en total" y lo demás, debajo.
+  construirBloquesInicio().forEach((bloque) => sec.appendChild(bloque));
+  // Sesión 5: sobres por agotarse (solo ámbar y rojos; sin ninguno no ocupa lugar). Con Gastos apagado no hay sobres.
+  const sobresRiesgo = construirBloqueSobresEnRiesgo();
+  if (sobresRiesgo) sec.appendChild(sobresRiesgo);
+  sec.appendChild(construirTarjetaPrincipalResumen(totales, modulos));
+  // Teléfono (<900px): el ojo de «Ocultar importes» vive dentro de la primera tarjeta (Disponible o, si no hay, la principal),
+  // arriba a la derecha. En pantalla grande se oculta por CSS y queda el del encabezado.
+  const primeraTarjeta = sec.querySelector(".disponible-hero, .resumen-hero");
+  if (primeraTarjeta) {
+    const ojo = construirBotonPrivacidad();
+    ojo.classList.add("finanzas-ojo--tarjeta");
+    primeraTarjeta.appendChild(ojo);
+  }
+  // Con el modo privacidad las gráficas (que dibujan importes) se ocultan.
+  if (!privacidadActiva() && (totalBecas !== 0 || totalGastado !== 0 || totalIngresos !== 0)) {
+    sec.appendChild(construirGraficasResumenFinanzas(totalBecas, totalIngresos, totalGastado));
+  }
+  if (modulos.ahorros) {
+    const tira = construirTiraMetasResumen();
+    if (tira) sec.appendChild(tira);
+  }
+  return sec;
+}
+
+/** Onboarding por perfil: se muestra en lugar de Finanzas la primera vez (si no hay datos). */
+function construirOnboardingFinanzas() {
+  const sec = document.createElement("section");
+  sec.className = "glass-card stack";
+  const h = document.createElement("h2");
+  h.className = "texto-encabezado-seccion";
+  h.style.margin = "0";
+  h.textContent = traducirTextoInterfaz("¿Cómo quieres usar Finanzas?");
+  const p = document.createElement("p");
+  p.className = "muted";
+  p.style.margin = "0";
+  p.textContent = traducirTextoInterfaz("Elige lo que más se parece a ti. Puedes cambiarlo cuando quieras en Ajustes.");
+  const mapa = document.createElement("div");
+  mapa.className = "pill-grid-2";
+  mapa.setAttribute("aria-label", traducirTextoInterfaz("Qué puedes hacer en Finanzas"));
+  const funciones = [
+    ["Universidad", "Registra matrícula y becas por semestre, planifica cuotas y consulta Beneficios."],
+    ["Día a día", "Anota gastos, ingresos y ahorros; ordénalos por categoría, cuenta, fecha o semestre."],
+    ["Metas y presupuesto", "Sigue objetivos de ahorro y límites de gasto. Los aportes programados no mueven dinero automáticamente."],
+    ["Cuentas y deudas · opcional", "Separa efectivo, bancos y tarjetas; registra préstamos y gastos divididos. Puedes activarlos después."],
+    ["Plan y Disponible", "Anticipa pagos e ingresos. Inicio estima lo disponible según tus próximos compromisos y el plazo elegido."],
+    ["Importar y respaldar", "En Ajustes puedes importar movimientos, exportar CSV o respaldo y guardar formatos para leer mensajes bancarios."],
+  ];
+  funciones.forEach(([titulo, descripcion]) => {
+    const tarjeta = document.createElement("article");
+    tarjeta.className = "glass-card stack";
+    tarjeta.style.cssText = "gap:4px; padding:12px;";
+    const nombre = document.createElement("strong");
+    nombre.textContent = traducirTextoInterfaz(titulo);
+    const detalle = document.createElement("span");
+    detalle.className = "muted";
+    detalle.style.fontSize = "0.8rem";
+    detalle.textContent = traducirTextoInterfaz(descripcion);
+    tarjeta.append(nombre, detalle);
+    mapa.appendChild(tarjeta);
+  });
+  const selector = construirSelectorPerfil(null, (id) => {
+    aplicarPerfilFinanzas(estado.datos, id);
+    marcarCambioPendiente();
+    estado.finanzasVistaActiva = "resumen";
+    // Segundo paso: saldo inicial, solo si el perfil tiene "Mi dinero" (Gastos, Matrícula o Beca).
+    estado.finanzasPasoSaldoInicial = puedeAjustarSaldo(estado.datos);
+    renderizarFinanzas();
+    if (!estado.finanzasPasoSaldoInicial) setTimeout(() => window.iniciarGuiaFinanzas?.(), 220);
+  });
+  sec.append(h, p, mapa, selector);
+  const omitir = document.createElement("button");
+  omitir.type = "button";
+  omitir.className = "btn btn-secondary";
+  omitir.textContent = traducirTextoInterfaz("Ahora no, usar todo");
+  omitir.addEventListener("click", () => {
+    omitirOnboardingFinanzas(estado.datos);
+    marcarCambioPendiente();
+    renderizarFinanzas();
+    setTimeout(() => window.iniciarGuiaFinanzas?.(), 220);
+  });
+  sec.appendChild(omitir);
+  return sec;
+}
+
+/** Repinta solo el contenido de la pestaña activa, sin reconstruir el tab bar. */
+function renderizarContenidoFinanzasActivo() {
+  inicializarEstadoFinanzasSiHaceFalta();
+  const contenido = document.getElementById("finanzas-contenido");
+  if (!contenido) return;
+  contenido.innerHTML = "";
+
+  // Si la pestaña activa quedó oculta por un módulo apagado, se vuelve al Resumen.
+  if (!pestanasVisiblesConPresupuesto(obtenerModulosFinanzas(estado.datos)).includes(estado.finanzasVistaActiva)) {
+    estado.finanzasVistaActiva = "resumen";
+  }
+
+  if (estado.finanzasVistaActiva === "resumen") {
+    contenido.appendChild(construirResumenFinanzas());
+  } else if (estado.finanzasVistaActiva === "semestres") {
+    renderizarPestanaSemestresFinanzas(contenido);
+  } else if (estado.finanzasVistaActiva === "plan") {
+    renderizarPestanaPlan(contenido);
+  } else if (estado.finanzasVistaActiva === "gastos-u") {
+    renderizarPestanaMovimientos(contenido);
+  } else if (estado.finanzasVistaActiva === "metas") {
+    renderizarPestanaMetas(contenido);
+  } else if (estado.finanzasVistaActiva === "presupuesto") {
+    renderizarPestanaPresupuesto(contenido);
+  } else if (estado.finanzasVistaActiva === "cuentas") {
+    import("./finanzas-cuentas-ui.js").then((m) => { if (estado.finanzasVistaActiva === "cuentas" && contenido.isConnected) m.renderizarPestanaCuentas(contenido); });
+  } else if (estado.finanzasVistaActiva === "deudas") {
+    // Carga perezosa: con el módulo apagado esta pantalla ni se descarga (y no hay ciclo de imports con finanzas.js).
+    import("./finanzas-deudas-ui.js").then((m) => { if (estado.finanzasVistaActiva === "deudas" && contenido.isConnected) m.renderizarPestanaDeudas(contenido); });
+  } else if (estado.finanzasVistaActiva === "gastos-estudiantiles") {
+    renderizarPestanaBeneficios(contenido);
+  }
+}
+
+/**
+ * Punto de entrada de la sección — se llama desde main.js (al cargar/tras
+ * login) y desde storage-sync.js (cada sondeo remoto y pull-to-refresh),
+ * mismo patrón que renderizarSemestres/renderizarPlanEstudios. Se protege
+ * sola si #seccion-finanzas todavía no está en el DOM.
+ */
+function renderizarFinanzas() {
+  inicializarEstadoFinanzasSiHaceFalta();
+  const cont = document.getElementById("seccion-finanzas");
+  if (!cont) return;
+  cont.innerHTML = "";
+  window.actualizarTopbarCtx?.("finanzas", { titulo: traducirTextoInterfaz("Finanzas") }); // onboarding / saldo inicial: sin subtítulo
+
+  if (estado.finanzasPasoSaldoInicial) {
+    ocultarNavegacionFinanzas();
+    cont.appendChild(construirPasoSaldoInicial(() => {
+      estado.finanzasPasoSaldoInicial = false;
+      renderizarFinanzas();
+      setTimeout(() => window.iniciarGuiaFinanzas?.(), 220);
+    }));
+    return;
+  }
+
+  if (debeMostrarOnboardingFinanzas(estado.datos)) {
+    ocultarNavegacionFinanzas();
+    cont.appendChild(construirOnboardingFinanzas());
+    return;
+  }
+
+  // Resolver la pestaña activa ANTES de pintar el tab bar (si quedó oculta, vuelve al Resumen).
+  if (!pestanasVisiblesConPresupuesto(obtenerModulosFinanzas(estado.datos)).includes(estado.finanzasVistaActiva)) {
+    estado.finanzasVistaActiva = "resumen";
+  }
+  actualizarNavegacionFinanzas();
+  cont.appendChild(construirEncabezadoFinanzas());
+
+  const contenido = document.createElement("div");
+  contenido.id = "finanzas-contenido";
+  contenido.className = "stack";
+  cont.appendChild(contenido);
+
+  renderizarContenidoFinanzasActivo();
+}
+
+export { calcularTotalesResumenFinanzas, formatearFechaLarga, formatearMonto, obtenerSimboloMonedaActual, renderizarContenidoFinanzasActivo, renderizarFinanzas };

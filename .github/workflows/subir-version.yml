@@ -1,0 +1,63 @@
+name: Subir versión del Service Worker
+
+# Corre solo cuando algo llega a main (producción). En dev no hace nada.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  subir-version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Calcular y guardar la versión en main
+        id: v
+        run: |
+          set -e
+          ARCHIVO="service-worker.js"
+          PATRON='^const VERSION = "v[0-9]+\.[0-9]+\.[0-9]+";'
+          ACTUAL=$(grep -oE 'const VERSION = "v[0-9]+\.[0-9]+\.[0-9]+"' "$ARCHIVO" | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+')
+          ANTES="${{ github.event.before }}"
+          # ¿Este push ya trae un cambio manual de VERSION? Entonces se respeta.
+          CAMBIO_MANUAL=""
+          if [ -n "$ANTES" ] && [ "$ANTES" != "0000000000000000000000000000000000000000" ] && git cat-file -e "$ANTES^{commit}" 2>/dev/null; then
+            CAMBIO_MANUAL=$(git diff "$ANTES" HEAD -- "$ARCHIVO" | grep -E '^[+-]const VERSION' || true)
+          fi
+          if [ -n "$CAMBIO_MANUAL" ]; then
+            NUEVA="$ACTUAL"
+            echo "VERSION ya cambiada a mano: se queda en $NUEVA"
+          else
+            MAYOR=$(echo "$ACTUAL" | cut -d. -f1)
+            MENOR=$(echo "$ACTUAL" | cut -d. -f2)
+            PARCHE=$(echo "$ACTUAL" | cut -d. -f3)
+            NUEVA="$MAYOR.$MENOR.$((PARCHE + 1))"
+            sed -i -E "s/^const VERSION = \"v[0-9]+\.[0-9]+\.[0-9]+\";/const VERSION = \"$NUEVA\";/" "$ARCHIVO"
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add "$ARCHIVO"
+            git commit -m "Versión $NUEVA (automática)"
+            git push origin main
+          fi
+          echo "nueva=$NUEVA" >> "$GITHUB_OUTPUT"
+
+      - name: Copiar el mismo número a dev (evita conflictos al volver a unir)
+        run: |
+          set -e
+          NUEVA="${{ steps.v.outputs.nueva }}"
+          git fetch origin dev || { echo "No existe dev, se omite"; exit 0; }
+          git checkout dev
+          sed -i -E "s/^const VERSION = \"v[0-9]+\.[0-9]+\.[0-9]+\";/const VERSION = \"$NUEVA\";/" service-worker.js
+          if git diff --quiet; then echo "dev ya tenía $NUEVA"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add service-worker.js
+          git commit -m "Versión $NUEVA (copiada desde main)"
+          git pull --rebase origin dev
+          git push origin dev
