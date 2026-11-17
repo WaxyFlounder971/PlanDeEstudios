@@ -1,28 +1,22 @@
 {
-  "name": "App Académica",
-  "short_name": "App Académica",
-  "description": "Toda tu carrera en un solo lugar, disponible en todos tus dispositivos.",
+  "name": "Team Peaches Hub",
+  "short_name": "Peaches Hub",
+  "description": "Actividades, anuario y miembros de Team Peaches.",
   "start_url": ".",
   "scope": ".",
-  "share_target": {
-    "action": "./",
-    "method": "GET",
-    "enctype": "application/x-www-form-urlencoded",
-    "params": { "title": "title", "text": "text", "url": "url" }
-  },
   "display": "standalone",
-  "background_color": "#0A0E17",
-  "theme_color": "#2563EB",
+  "background_color": "#180E1D",
+  "theme_color": "#180E1D",
   "lang": "es",
   "icons": [
     {
-      "src": "imagenes/LogoAppFolder-192.png",
+      "src": "icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "imagenes/LogoAppFolder-512.png",
+      "src": "icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
